@@ -1,8 +1,9 @@
 import { NextResponse, NextRequest } from "next/server";
 // --- [IMPORTANTE] Usa imports do Next-Auth v4 ---
 import { getServerSession } from "next-auth/next";
-// --- [IMPORT CORRETO] ---
-import { authOptions } from "@/lib/auth";
+// --- [IMPORT CORRETO V4] ---
+// Importa do ficheiro da API route do NextAuth
+import { authOptions } from "../auth/[...nextauth]/route";
 // --- [FIM IMPORT] ---
 import prisma from '@/lib/prisma';
 import { Prisma, MediaType } from "@prisma/client";
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
         include: { media: true },
         skip: skip,
         take: pageSize,
-        orderBy: { media: { title: 'asc' } }
+        orderBy: { media: { title: 'asc' } } // Ordena pelo título da mídia
       }),
       prisma.mediaStatus.count({
         where: whereCondition,
@@ -117,11 +118,13 @@ export async function POST(request: Request) {
     if (mediaId) {
       const updatedStatus = await prisma.mediaStatus.update({
         where: {
+          // Usa o índice único composto userId_mediaId
           userId_mediaId: { userId: user.id, mediaId: mediaId, },
         },
         data: {
-          status: status,
+          status: status, // Atualiza o status principal
           // Atualiza isWeekly apenas se o valor for enviado (true ou false)
+          // Se for undefined (não enviado), mantém o valor existente no BD
           isWeekly: isWeekly !== undefined ? isWeekly : undefined,
         },
       });
@@ -129,22 +132,25 @@ export async function POST(request: Request) {
     }
 
     // Lógica de Criação (se mediaId NÃO existir)
-    // ... (restante do código POST permanece o mesmo) ...
     const isManualAdd = !tmdbId && !malId;
     let finalTmdbId = tmdbId; let finalMalId = malId;
+    // Cria um ID negativo único para itens manuais para evitar conflito de constraint
     if (isManualAdd) {
-        const fakeId = -Math.floor(Date.now() / 1000);
+        const fakeId = -Math.floor(Date.now() / 1000); // Timestamp negativo como ID
         if (mediaType === MediaType.MOVIE || mediaType === MediaType.SERIES) finalTmdbId = fakeId;
         else if (mediaType === MediaType.ANIME) finalMalId = fakeId;
     }
 
+    // Constrói a URL completa do poster para TMDB ou valida Imgur para manual
     let finalPosterPath = posterPath;
     if ((mediaType === MediaType.MOVIE || mediaType === MediaType.SERIES) && posterPath && !posterPath.startsWith('http')) {
         finalPosterPath = `https://image.tmdb.org/t/p/w500${posterPath}`;
     } else if (isManualAdd && posterPath && !posterPath.startsWith('https://i.imgur.com')) {
+        // Validação adicionada para garantir que posters manuais venham do Imgur
         return new NextResponse(JSON.stringify({ error: "URL inválida. Use 'Copiar Endereço da Imagem' no Imgur (i.imgur.com)." }), { status: 400 });
     }
 
+    // Define condições para encontrar/criar a Mídia baseada no tipo
     let whereCondition: Prisma.MediaWhereUniqueInput;
     let createData: Prisma.MediaCreateInput;
 
@@ -155,44 +161,51 @@ export async function POST(request: Request) {
         whereCondition = { mediaType_malId: { mediaType: MediaType.ANIME, malId: finalMalId }, };
         createData = { mediaType: MediaType.ANIME, malId: finalMalId, title: title, posterPath: finalPosterPath || "", releaseYear: releaseYear || null, };
     } else {
-        return new NextResponse("MediaType inválido", { status: 400 });
+        // Se mediaType não for reconhecido
+        return new NextResponse(JSON.stringify({ error: "MediaType inválido" }), { status: 400 });
     }
 
+    // Usa upsert para criar a Mídia se não existir, ou apenas encontrá-la se já existir
     const media = await prisma.media.upsert({
       where: whereCondition,
-      update: {},
-      create: createData,
+      update: {}, // Não atualiza nada na Mídia se ela já existir
+      create: createData, // Cria com os dados fornecidos se não existir
     });
 
+    // Usa upsert para criar o MediaStatus se for a primeira vez que o user adiciona esta Mídia,
+    // ou atualiza o 'status' e 'isWeekly' se já existir uma entrada para este user/mídia.
     const mediaStatus = await prisma.mediaStatus.upsert({
       where: { userId_mediaId: { userId: user.id, mediaId: media.id, }, },
       update: {
-        status: status,
-        isWeekly: isWeekly !== undefined ? isWeekly : undefined, // Atualiza se vier
+        status: status, // Atualiza o status
+        isWeekly: isWeekly !== undefined ? isWeekly : undefined, // Atualiza isWeekly se vier
       },
       create: {
         userId: user.id,
         mediaId: media.id,
-        status: status,
-        isWeekly: isWeekly ?? false, // Define ao criar (false por defeito)
+        status: status, // Define o status inicial
+        isWeekly: isWeekly ?? false, // Define isWeekly ao criar (false por defeito se não vier)
+        // Garante que campos de progresso começam nulos ao criar
         lastSeasonWatched: null,
         lastEpisodeWatched: null,
         lastEpisodeWatchedEnd: null,
       },
     });
 
+    // Retorna o MediaStatus criado ou atualizado
     return NextResponse.json(mediaStatus);
-
 
   } catch (error) {
     console.error("Erro ao salvar status da media:", error);
     const errorMessage = (error instanceof Error) ? error.message : "Erro desconhecido";
+    // Tratamento específico para erro de constraint única (P2002)
      if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-             const target = (error.meta?.target as string[])?.join(', ');
+             const target = (error.meta?.target as string[])?.join(', '); // Tenta obter o campo que falhou
              return new NextResponse(JSON.stringify({ error: `Já existe um item com ${target ? `o mesmo ${target}` : 'dados únicos'}.` }), { status: 409 }); // 409 Conflict
         }
     }
+    // Erro genérico
     return new NextResponse(JSON.stringify({ error: "Erro interno do servidor", details: errorMessage }), { status: 500 });
   }
 }

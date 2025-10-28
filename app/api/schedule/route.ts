@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
+// --- [IMPORT V4] ---
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "../auth/[...nextauth]/route"; // Importa da API route v4
+// --- [FIM IMPORT V4] ---
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client'; // Importa Prisma para tipos
 
 // --- GET: Busca todos os agendamentos futuros ---
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(authOptions); // Usa authOptions v4
   if (!session?.user?.email) {
     return new NextResponse("Não autorizado", { status: 401 });
   }
@@ -18,15 +21,17 @@ export async function GET(request: Request) {
       return new NextResponse("Usuário não encontrado", { status: 404 });
     }
 
+    // Busca itens do cronograma E inclui a 'media' associada
     const scheduleItems = await prisma.scheduleItem.findMany({
       where: {
         userId: user.id,
-        scheduledAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } 
+        // Apenas itens cuja DATA seja hoje ou no futuro
+        scheduledAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
       },
       include: {
-        media: true, 
+        media: true, // Inclui a mídia
       },
-      orderBy: [ 
+      orderBy: [ // Ordena por data e depois por hora
         { scheduledAt: 'asc' },
         { horario: 'asc' },
       ],
@@ -36,13 +41,13 @@ export async function GET(request: Request) {
 
   } catch (error) {
     console.error("Erro ao buscar cronograma:", error);
-    return new NextResponse("Erro interno", { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro interno ao buscar cronograma" }), { status: 500 });
   }
 }
 
 // --- POST: Adiciona um novo item ao agendamento ---
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(authOptions); // Usa authOptions v4
   if (!session?.user?.email) {
     return new NextResponse("Não autorizado", { status: 401 });
   }
@@ -56,39 +61,39 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { 
-      mediaId, 
-      scheduledAt, 
-      horario, 
-      // --- [MUDANÇA AQUI] ---
+    const {
+      mediaId,
+      scheduledAt,
+      horario,
+      // Recebe os campos de T/E (podem ser string vazia ou número)
       seasonNumber,
-      episodeNumber,    // Início
-      episodeNumberEnd  // Fim
-      // --- [FIM MUDANÇA] ---
+      episodeNumber,
+      episodeNumberEnd
     } = body;
 
     if (!mediaId || !scheduledAt) {
-      return new NextResponse("Dados insuficientes", { status: 400 });
+      return new NextResponse(JSON.stringify({ error: "Dados insuficientes (mediaId, scheduledAt)" }), { status: 400 });
     }
 
-    // --- [MUDANÇA AQUI] ---
-    // Converte os números (que podem ser "") para Int ou null
-    const finalSeason = seasonNumber ? parseInt(seasonNumber) : null;
-    const finalEpisode = episodeNumber ? parseInt(episodeNumber) : null;
-    const finalEpisodeEnd = episodeNumberEnd ? parseInt(episodeNumberEnd) : null;
-    // --- [FIM MUDANÇA] ---
+    // Converte os números (que podem ser "" ou null) para Int ou null
+    const finalSeason = seasonNumber ? parseInt(String(seasonNumber)) : null;
+    const finalEpisode = episodeNumber ? parseInt(String(episodeNumber)) : null;
+    const finalEpisodeEnd = episodeNumberEnd ? parseInt(String(episodeNumberEnd)) : null;
+
+    // Validação extra: Ep. Fim não pode ser menor que Ep. Início
+    if (finalEpisode !== null && finalEpisodeEnd !== null && finalEpisodeEnd < finalEpisode) {
+        return new NextResponse(JSON.stringify({ error: "Episódio final não pode ser menor que o inicial" }), { status: 400 });
+    }
 
     const newItem = await prisma.scheduleItem.create({
       data: {
         userId: user.id,
         mediaId: mediaId,
-        scheduledAt: new Date(scheduledAt),
-        horario: horario,
-        // --- [MUDANÇA AQUI] ---
+        scheduledAt: new Date(scheduledAt), // Garante que é um objeto Date
+        horario: horario || null, // Guarda null se vazio
         seasonNumber: finalSeason,
         episodeNumber: finalEpisode,
         episodeNumberEnd: finalEpisodeEnd,
-        // --- [FIM MUDANÇA] ---
       },
     });
 
@@ -96,14 +101,17 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error("Erro ao criar item no cronograma:", error);
-    return new NextResponse("Erro interno", { status: 500 });
+     // Adiciona tratamento para erros específicos do Prisma se necessário
+    if (error instanceof Prisma.PrismaClientValidationError) {
+        return new NextResponse(JSON.stringify({ error: "Dados inválidos fornecidos" }), { status: 400 });
+    }
+    return new NextResponse(JSON.stringify({ error: "Erro interno ao criar item no cronograma" }), { status: 500 });
   }
 }
 
 // --- DELETE: Remove um item do agendamento ---
 export async function DELETE(request: Request) {
-  // ... (código existente - sem mudanças)
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(authOptions); // Usa authOptions v4
   if (!session?.user?.email) {
     return new NextResponse("Não autorizado", { status: 401 });
   }
@@ -116,25 +124,32 @@ export async function DELETE(request: Request) {
       return new NextResponse("Usuário não encontrado", { status: 404 });
     }
 
+    // Extrai o ID do parâmetro de busca da URL
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
     if (!id) {
-      return new NextResponse("ID do item faltando", { status: 400 });
+      return new NextResponse(JSON.stringify({ error: "ID do item faltando na URL" }), { status: 400 });
     }
 
+    // Garante que o item pertence ao usuário antes de deletar
     await prisma.scheduleItem.delete({
       where: {
         id: id,
-        userId: user.id, 
+        userId: user.id, // Segurança: só permite deletar os próprios itens
       },
     });
 
-    return new NextResponse("Item removido", { status: 200 });
-  
+    // Retorna sucesso sem corpo (status 204) ou com mensagem simples (status 200)
+    return new NextResponse("Item removido com sucesso", { status: 200 });
+
   } catch (error) {
     console.error("Erro ao deletar item do cronograma:", error);
-    return new NextResponse("Erro interno", { status: 500 });
+    // Trata erro caso o item não seja encontrado (ex: já deletado)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+       return new NextResponse(JSON.stringify({ error: "Erro: Item a ser deletado não foi encontrado." }), { status: 404 });
+    }
+    return new NextResponse(JSON.stringify({ error: "Erro interno ao deletar item" }), { status: 500 });
   }
 }
 

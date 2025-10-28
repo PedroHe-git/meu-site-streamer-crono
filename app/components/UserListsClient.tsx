@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { SessionProvider } from "next-auth/react";
 import Image from "next/image";
 import { Media, MediaStatus } from '@prisma/client';
 import { Button } from "@/components/ui/button";

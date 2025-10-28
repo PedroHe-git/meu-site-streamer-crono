@@ -2,61 +2,66 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
 
-// --- [CORREÇÃO AQUI] ---
-// A função DEVE ser exportada com o nome do método HTTP (POST)
+// Função exportada como POST para lidar com pedidos de registo
 export async function POST(request: Request) {
-// --- [FIM DA CORREÇÃO] ---
-
   try {
+    // Lê os dados enviados no corpo do pedido (JSON)
     const body = await request.json();
     const { name, username, email, password } = body;
 
-    // Validação básica (poderia ser mais robusta com zod)
+    // Validação básica dos campos obrigatórios
     if (!name || !username || !email || !password) {
       return new NextResponse(JSON.stringify({ error: "Todos os campos são obrigatórios" }), { status: 400 });
     }
-     // Validação simples de username
+    // Validação simples do formato do username (apenas letras, números e underscore)
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-       return new NextResponse(JSON.stringify({ error: "Username pode conter apenas letras, números e underscores (_)." }), { status: 400 });
+       return new NextResponse(JSON.stringify({ error: "Username inválido (letras, números, _)." }), { status: 400 });
     }
 
-    // Verificar se o email ou username já existem
+    // Verifica se já existe um utilizador com o mesmo email
     const existingUserByEmail = await prisma.user.findUnique({
       where: { email: email },
     });
     if (existingUserByEmail) {
-      return new NextResponse(JSON.stringify({ error: "Email já registado" }), { status: 409 }); // 409 Conflict
+      // Retorna erro 409 Conflict se o email já estiver em uso
+      return new NextResponse(JSON.stringify({ error: "Email já registado" }), { status: 409 });
     }
+    // Verifica se já existe um utilizador com o mesmo username
     const existingUserByUsername = await prisma.user.findUnique({
       where: { username: username },
     });
      if (existingUserByUsername) {
-      return new NextResponse(JSON.stringify({ error: "Username já em uso" }), { status: 409 }); // 409 Conflict
+      // Retorna erro 409 Conflict se o username já estiver em uso
+      return new NextResponse(JSON.stringify({ error: "Username já em uso" }), { status: 409 });
     }
 
-
-    // Hash da senha
+    // Cria um hash seguro da senha antes de a guardar
+    // O '10' é o "custo" do hashing (número de rondas)
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Cria o utilizador
+    // Cria o novo utilizador na base de dados usando o Prisma Client
     const newUser = await prisma.user.create({
       data: {
         name,
         username,
         email,
-        hashedPassword,
+        hashedPassword, // Guarda a senha hashada
       },
     });
 
-    // Retorna o novo utilizador (sem a senha)
+    // Remove a senha hashada do objeto antes de o retornar na resposta
+    // (Boa prática de segurança)
     const { hashedPassword: _, ...userWithoutPassword } = newUser;
-    return NextResponse.json(userWithoutPassword, { status: 201 }); // 201 Created
+    // Retorna os dados do novo utilizador com status 201 Created
+    return NextResponse.json(userWithoutPassword, { status: 201 });
 
   } catch (error) {
+    // Captura quaisquer outros erros (ex: problema de conexão com BD)
     console.error("Erro no registo:", error);
+    // Retorna um erro genérico 500 Internal Server Error
     return new NextResponse(JSON.stringify({ error: "Erro interno do servidor" }), { status: 500 });
   }
 }
 
-// NOTA: Não exporte mais nada deste ficheiro (ex: default export)
+// Garante que apenas a função POST é exportada neste ficheiro de rota
 

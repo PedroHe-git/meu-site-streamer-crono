@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 // --- [IMPORTANTE] Usa imports do Next-Auth v4 ---
 import { getServerSession } from "next-auth/next";
-// --- [IMPORT CORRETO GARANTIDO] ---
-import { authOptions } from "@/lib/auth";
-// --- [FIM IMPORT] ---
+// --- [CORREÇÃO AQUI - Usa Alias] ---
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Usa alias @/app/api/...
+// --- [FIM CORREÇÃO] ---
 import prisma from '@/lib/prisma';
 import { Prisma } from "@prisma/client";
 
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const { scheduleItemId } = body;
 
     if (!scheduleItemId) {
-      return new NextResponse("ID do agendamento faltando", { status: 400 });
+      return new NextResponse(JSON.stringify({ error: "ID do agendamento faltando" }), { status: 400 });
     }
 
     // Transação para garantir consistência
@@ -78,17 +78,20 @@ export async function POST(request: Request) {
 
       console.log(`Item ${mediaStatus.isWeekly ? 'semanal' : 'normal'} (${scheduleItem.id}) concluído.`);
       // Retorna o status atualizado para confirmação no frontend
-      return updatedMediaStatus;
+      // Adicionamos scheduleItemDeleted para clareza no frontend (embora sempre seja true neste caso)
+      return { updatedMediaStatus, scheduleItemDeleted: !mediaStatus.isWeekly };
     });
 
+    // Retorna o resultado da transação
     return NextResponse.json(result);
 
   } catch (error) {
      console.error("Erro ao completar item:", error);
-     // Melhora o tratamento de erro para not found
+     // Trata erros específicos (ex: item não encontrado)
      if (error instanceof Error && (error.message.includes("não encontrado") || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025'))) {
         return new NextResponse(JSON.stringify({ error: "Erro: Item de agendamento ou status não encontrado." }), { status: 404 });
      }
+    // Erro genérico
     return new NextResponse(JSON.stringify({ error: "Erro interno ao completar item" }), { status: 500 });
   }
 }

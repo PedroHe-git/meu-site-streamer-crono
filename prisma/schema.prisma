@@ -4,45 +4,45 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider  = "postgresql" // Ou o seu provider (mysql, sqlite, etc.)
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  directUrl = env("DIRECT_URL") // Necessário se usar Neon DB ou similar
 }
 
-// Enums
 enum MovieStatusType {
   TO_WATCH
-  WATCHING // Adicionado
+  WATCHING
   WATCHED
-  DROPPED  // Adicionado
+  DROPPED
 }
 
 enum MediaType {
   MOVIE
   ANIME
-  SERIES // Adicionado
+  SERIES
 }
 
-// Modelos Principais
 model User {
-  id             String         @id @default(cuid())
+  id             String    @id @default(cuid())
   name           String?
-  email          String?        @unique
+  email          String?   @unique
   emailVerified  DateTime?
   image          String?
   hashedPassword String?
-  username       String         @unique
-  accounts       Account[]
-  sessions       Session[]
-  mediaStatuses  MediaStatus[]
-  scheduleItems  ScheduleItem[]
+  username       String    @unique
+
+  accounts Account[]
+  sessions Session[]
+
+  mediaStatuses MediaStatus[]
+  scheduleItems ScheduleItem[]
 }
 
 model Media {
   id            String         @id @default(cuid())
   mediaType     MediaType
-  tmdbId        Int? // @unique removido
-  malId         Int? // @unique removido
+  tmdbId        Int?
+  malId         Int?
   title         String
   posterPath    String?
   releaseYear   Int?
@@ -51,7 +51,6 @@ model Media {
 
   @@unique([mediaType, tmdbId])
   @@unique([mediaType, malId])
-  
 }
 
 model MediaStatus {
@@ -62,29 +61,21 @@ model MediaStatus {
   media   Media           @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   mediaId String
 
-
-  lastSeasonWatched   Int? // Visto até Temporada...
-  lastEpisodeWatched  Int? // Visto até Episódio...
-  lastEpisodeWatchedEnd Int? // Visto até Episódio (Fim do intervalo)
-
-
-  isWeekly          Boolean  @default(false)
+  lastSeasonWatched     Int?
+  lastEpisodeWatched    Int?
+  lastEpisodeWatchedEnd Int?
+  isWeekly              Boolean @default(false)
 
   @@unique([userId, mediaId])
 }
 
 model ScheduleItem {
-  id          String   @id @default(cuid())
-  scheduledAt DateTime
-  horario     String?
-
-  // --- [NOVO] ---
-  // Para guardar qual episódio está a ser agendado
-  // Ex: "Agendado: Temporada 1, Episódio 5"
-  seasonNumber    Int? // Ex: 1
-  episodeNumber   Int? // Ex: 5 (Início do intervalo)
-  episodeNumberEnd Int? // Ex: 10 (Fim do intervalo)
-  // --- [FIM NOVO] ---
+  id               String   @id @default(cuid())
+  scheduledAt      DateTime
+  horario          String?
+  seasonNumber     Int?
+  episodeNumber    Int?
+  episodeNumberEnd Int?
 
   user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId  String
@@ -92,7 +83,6 @@ model ScheduleItem {
   mediaId String
 }
 
-// Modelos NextAuth (Padrão)
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -105,8 +95,10 @@ model Account {
   token_type        String?
   scope             String?
   id_token          String? @db.Text
-  session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session_state     String? // Adicionado na v4 para alguns providers
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([provider, providerAccountId])
 }
 
@@ -115,13 +107,14 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
+
   @@unique([identifier, token])
 }
-
