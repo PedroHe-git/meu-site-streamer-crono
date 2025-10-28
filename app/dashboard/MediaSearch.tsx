@@ -1,0 +1,219 @@
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+import { MediaType } from "@prisma/client";
+// --- Importa componentes Shadcn ---
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+// --- FIM ---
+
+// Tipagem
+type NormalizedSearchResult = {
+  source: 'MOVIE' | 'ANIME' | 'SERIES';
+  sourceId: number;
+  title: string;
+  posterPath: string | null;
+  releaseYear: number | null;
+};
+type MediaSearchProps = { onMediaAdded: () => void; };
+
+export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
+  // Estados
+  const [query, setQuery] = useState("");
+  const [mediaType, setMediaType] = useState<"MOVIE" | "ANIME" | "SERIES">("MOVIE");
+  const [results, setResults] = useState<NormalizedSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualYear, setManualYear] = useState("");
+  const [manualPoster, setManualPoster] = useState("");
+  const [isWeekly, setIsWeekly] = useState(false);
+
+  // handleSearch (lógica interna sem mudanças)
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (showManualForm) setShowManualForm(false);
+    setLoading(true); setMessage(""); setResults([]);
+    try {
+      let apiUrl = "";
+      if (mediaType === "MOVIE") apiUrl = `/api/search?query=${query}`;
+      else if (mediaType === "ANIME") apiUrl = `/api/search-anime?query=${query}`;
+      else apiUrl = `/api/search-series?query=${query}`;
+      const res = await fetch(apiUrl);
+      if (!res.ok) throw new Error(`Falha na busca de ${mediaType}`);
+      const data = await res.json();
+      let normalizedData: NormalizedSearchResult[] = [];
+      if (mediaType === "MOVIE") { normalizedData = data.map((movie: any) => ({ source: 'MOVIE', sourceId: movie.id, title: movie.title, posterPath: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : null, releaseYear: movie.release_date ? parseInt(movie.release_date.split('-')[0]) : null, }));}
+      else if (mediaType === "ANIME") { normalizedData = data.map((anime: any) => ({ source: 'ANIME', sourceId: anime.mal_id, title: anime.title, posterPath: anime.images?.jpg?.image_url || null, releaseYear: anime.year, })); }
+      else { normalizedData = data.map((serie: any) => ({ source: 'SERIES', sourceId: serie.id, title: serie.name, posterPath: serie.poster_path ? `https://image.tmdb.org/t/p/w500${serie.poster_path}` : null, releaseYear: serie.first_air_date ? parseInt(serie.first_air_date.split('-')[0]) : null, })); }
+      setResults(normalizedData);
+    } catch (error) { setMessage(`Erro ao buscar ${mediaType}.`);
+    } finally { setLoading(false); }
+  };
+
+  // addToList (lógica interna sem mudanças)
+  const addToList = async (media: NormalizedSearchResult, status: "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED") => {
+    setMessage(`Adicionando "${media.title}"...`);
+    try {
+      const res = await fetch("/api/mediastatus", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mediaType: media.source,
+          tmdbId: (media.source === 'MOVIE' || media.source === 'SERIES') ? media.sourceId : null,
+          malId: media.source === 'ANIME' ? media.sourceId : null,
+          title: media.title, posterPath: media.posterPath, releaseYear: media.releaseYear, status: status,
+          isWeekly: (media.source === 'ANIME' || media.source === 'SERIES') ? isWeekly : false,
+        }),
+      });
+      if (!res.ok) { let errorMsg = "Falha ao adicionar"; try { const d = await res.json(); errorMsg = d.error || errorMsg; } catch (_) {} throw new Error(errorMsg); }
+      setMessage(`"${media.title}" adicionado!`); setIsWeekly(false); onMediaAdded(); setTimeout(() => setMessage(""), 2000);
+    } catch (error: any) { setMessage(`Erro: ${error.message || '?'}`); setTimeout(() => setMessage(""), 3000); }
+  };
+
+  // handleManualAdd (lógica interna sem mudanças)
+  const handleManualAdd = async (e: React.FormEvent, status: "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED") => {
+    e.preventDefault(); if (!manualTitle) { setMessage("Título obrigatório."); return; }
+    if (manualPoster && !manualPoster.startsWith('https://i.imgur.com/')) { setMessage("URL inválida (Imgur). Use 'Copiar Endereço da Imagem'."); setTimeout(() => setMessage(""), 4000); return; }
+    setMessage(`Adicionando "${manualTitle}"...`); setLoading(true);
+    try {
+      const res = await fetch("/api/mediastatus", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mediaType: mediaType, tmdbId: null, malId: null, title: manualTitle, posterPath: manualPoster || null, releaseYear: manualYear ? parseInt(manualYear) : null, status: status,
+          isWeekly: (mediaType === MediaType.ANIME || mediaType === MediaType.SERIES) ? isWeekly : false,
+        }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Falha manual"); }
+      setMessage(`"${manualTitle}" adicionado!`); onMediaAdded(); setShowManualForm(false); setManualTitle(""); setManualYear(""); setManualPoster(""); setIsWeekly(false); setTimeout(() => setMessage(""), 2000);
+    } catch (error: any) { setMessage(`Erro: ${error.message || '?'}`); setTimeout(() => setMessage(""), 3000);
+    } finally { setLoading(false); }
+  };
+
+  const placeholderText = mediaType === 'MOVIE' ? 'Filme' : mediaType === 'ANIME' ? 'Anime' : 'Série';
+
+  return (
+    <div>
+      {/* Formulário de Busca (Com Shadcn) */}
+      <form onSubmit={handleSearch} className="space-y-3">
+        <div className="flex gap-2">
+          <Select
+              value={mediaType}
+              onValueChange={(value: "MOVIE" | "ANIME" | "SERIES") => {
+                  setMediaType(value);
+                  setIsWeekly(false);
+              }}
+          >
+              <SelectTrigger className="w-[120px] flex-shrink-0">
+                  <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                  <SelectItem value="MOVIE">Filme</SelectItem>
+                  <SelectItem value="ANIME">Anime</SelectItem>
+                  <SelectItem value="SERIES">Série</SelectItem>
+              </SelectContent>
+          </Select>
+          <Input
+            type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder={`Buscar ${placeholderText}...`} required className="flex-grow"
+          />
+        </div>
+        <Button type="submit" disabled={loading} className="w-full">
+          {loading && !showManualForm ? "Buscando..." : "Buscar"}
+        </Button>
+      </form>
+
+      {/* Botão Toggle Adição Manual (Com Shadcn) */}
+      <div className="text-center mt-3">
+        <Button
+          type="button" variant="link"
+          onClick={() => { setShowManualForm(!showManualForm); setIsWeekly(false); }}
+          disabled={loading} className="text-sm text-indigo-600 h-auto p-0"
+        >
+          {showManualForm ? "Cancelar Adição Manual" : "Não encontrou? Adicione manualmente"}
+        </Button>
+      </div>
+
+      {/* Formulário Manual (Com Shadcn) */}
+      {showManualForm && (
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-4 mt-4 p-4 border border-slate-200 rounded-md bg-slate-50">
+          <h3 className="font-semibold text-lg text-gray-800">Adicionar Mídia Manualmente</h3>
+          <div>
+            <Label>Tipo</Label>
+             <Select value={mediaType} onValueChange={(value: any) => { setMediaType(value); setIsWeekly(false); }}>
+                <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="MOVIE">Filme</SelectItem>
+                    <SelectItem value="ANIME">Anime</SelectItem>
+                    <SelectItem value="SERIES">Série</SelectItem>
+                </SelectContent>
+            </Select>
+          </div>
+          <div>
+             <Label htmlFor="manualTitle">Título (Obrigatório)</Label>
+             <Input id="manualTitle" type="text" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder={`Ex: O Filme da Minha Vida`} required className="mt-1" />
+          </div>
+          <div>
+             <Label htmlFor="manualYear">Ano (Opcional)</Label>
+             <Input id="manualYear" type="number" value={manualYear} onChange={(e) => setManualYear(e.target.value)} placeholder="Ex: 2025" className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="manualPoster">URL Pôster (Opc. - Imgur)</Label>
+            <p className="text-xs text-gray-500 mb-1"> Use &lsquo;Copiar Endereço da Imagem&rsquo; no <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">Imgur</a>. </p>
+            <Input id="manualPoster" type="text" value={manualPoster} onChange={(e) => setManualPoster(e.target.value)} placeholder="https://i.imgur.com/..." className="mt-1" />
+          </div>
+         {/* Checkbox Semanal (Com Shadcn) */}
+         {(mediaType === MediaType.ANIME || mediaType === MediaType.SERIES) && (
+             <div className="flex items-center space-x-2 pt-2">
+                <Checkbox id="isWeeklyManual" checked={isWeekly} onCheckedChange={(checked) => setIsWeekly(Boolean(checked))} />
+                <Label htmlFor="isWeeklyManual" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                   Marcar como item semanal?
+                </Label>
+             </div>
+          )}
+          {/* Botões Ação Manual (Com Shadcn) */}
+          <div className="flex gap-2 pt-2">
+              <Button onClick={(e) => handleManualAdd(e, "TO_WATCH")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. Para Ver"} </Button>
+              <Button onClick={(e) => handleManualAdd(e, "WATCHING")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. A Ver"} </Button>
+              <Button onClick={(e) => handleManualAdd(e, "WATCHED")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. Já Vi"} </Button>
+          </div>
+        </form>
+      )}
+
+      {/* Mensagem */}
+      {message && <p className="mt-2 text-sm text-gray-500">{message}</p>}
+
+      {/* Lista de Resultados (Com Shadcn) */}
+      <ul className="mt-4 space-y-2 max-h-96 overflow-y-auto">
+         {/* Checkbox Semanal acima da lista (Com Shadcn) */}
+         {(mediaType === MediaType.ANIME || mediaType === MediaType.SERIES) && results.length > 0 && (
+            <div className="flex items-center space-x-2 mb-2 p-2 bg-slate-50 rounded border border-slate-200">
+               <Checkbox id="isWeeklySearch" checked={isWeekly} onCheckedChange={(checked) => setIsWeekly(Boolean(checked))} />
+               <Label htmlFor="isWeeklySearch" className="text-sm font-medium"> Marcar itens adicionados como semanais? </Label>
+            </div>
+          )}
+        {results.map((media) => (
+          <li key={`${media.source}-${media.sourceId}`} className="flex items-center justify-between gap-2 p-2 border border-slate-200 rounded-md" >
+             {/* Imagem e Título */}
+             <div className="flex items-center gap-3 overflow-hidden"> <Image src={ media.posterPath || "/poster-placeholder.png" } width={40} height={60} alt={media.title} className="rounded flex-shrink-0" unoptimized={true} priority={false}/> <span className="text-sm truncate" title={media.title}>{media.title}</span> </div>
+            {/* Botões Adicionar (Com Shadcn) */}
+            <div className="flex flex-col gap-1 flex-shrink-0">
+               <Button onClick={() => addToList(media, "TO_WATCH")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Para Ver </Button>
+               {(media.source === 'ANIME' || media.source === 'SERIES') && (
+                  <Button onClick={() => addToList(media, "WATCHING")} size="sm" variant="outline" className="h-6 px-2 text-xs"> A Ver </Button>
+               )}
+               <Button onClick={() => addToList(media, "WATCHED")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Já Vi </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
