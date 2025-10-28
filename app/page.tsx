@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth/next";
 // --- [IMPORT CORRETO v4] ---
 // Importa do ficheiro da API route onde authOptions é definido na v4
-import { authOptions } from "./api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authOptions";
 // --- [FIM IMPORT] ---
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ export default async function HomePage() {
         Bem-vindo ao MeuCronograma!
       </h1>
       <p className="text-lg md:text-xl text-slate-600 mb-10 max-w-2xl">
-        Organize facilmente os filmes, séries e animes que você quer assistir. Crie listas, agende sessões e nunca mais perca o fio à meada.
+        Organize facilmente os filmes, séries e animes que você quer assistir. Crie listas, agende sessões e nunca mais perca o fio da meada.
       </p>
       <div className="flex flex-col sm:flex-row gap-4">
         <Button asChild size="lg">

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 // --- [IMPORTANTE] Usa imports do Next-Auth v4 ---
 import { getServerSession } from "next-auth/next";
 // --- [CORREÇÃO AQUI - Usa Alias] ---
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Usa alias @/app/api/...
+import { authOptions } from "@/lib/authOptions";
 // --- [FIM CORREÇÃO] ---
 import prisma from '@/lib/prisma';
 import { Prisma } from "@prisma/client";

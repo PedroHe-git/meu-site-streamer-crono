@@ -3,7 +3,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { getServerSession } from "next-auth/next";
 // --- [IMPORT CORRETO V4] ---
 // Importa do ficheiro da API route do NextAuth
-import { authOptions } from "../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authOptions";
 // --- [FIM IMPORT] ---
 import prisma from '@/lib/prisma';
 import { Prisma, MediaType } from "@prisma/client";

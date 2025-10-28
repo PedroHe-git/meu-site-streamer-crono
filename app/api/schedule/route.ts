@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 // --- [IMPORT V4] ---
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]/route"; // Importa da API route v4
+import { authOptions } from "@/lib/authOptions";
 // --- [FIM IMPORT V4] ---
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client'; // Importa Prisma para tipos
