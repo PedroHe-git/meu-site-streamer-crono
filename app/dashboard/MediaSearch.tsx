@@ -34,7 +34,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
   const [manualPoster, setManualPoster] = useState("");
   const [isWeekly, setIsWeekly] = useState(false);
 
-  // handleSearch (lógica interna sem mudanças)
+  // handleSearch
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (showManualForm) setShowManualForm(false);
@@ -56,7 +56,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
     } finally { setLoading(false); }
   };
 
-  // addToList (lógica interna sem mudanças)
+  // addToList
   const addToList = async (media: NormalizedSearchResult, status: "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED") => {
     setMessage(`Adicionando "${media.title}"...`);
     try {
@@ -71,11 +71,23 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
         }),
       });
       if (!res.ok) { let errorMsg = "Falha ao adicionar"; try { const d = await res.json(); errorMsg = d.error || errorMsg; } catch (_) {} throw new Error(errorMsg); }
-      setMessage(`"${media.title}" adicionado!`); setIsWeekly(false); onMediaAdded(); setTimeout(() => setMessage(""), 2000);
+      
+      // --- BLOCO DE SUCESSO ---
+      setMessage(`"${media.title}" adicionado!`);
+      setIsWeekly(false);
+      onMediaAdded();
+      
+      // --- CORREÇÃO APLICADA ---
+      setResults([]); // Limpa a lista de resultados
+      setQuery("");   // Limpa a barra de busca
+      // --- FIM DA CORREÇÃO ---
+      
+      setTimeout(() => setMessage(""), 2000);
+      
     } catch (error: any) { setMessage(`Erro: ${error.message || '?'}`); setTimeout(() => setMessage(""), 3000); }
   };
 
-  // handleManualAdd (lógica interna sem mudanças)
+  // handleManualAdd
   const handleManualAdd = async (e: React.FormEvent, status: "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED") => {
     e.preventDefault(); if (!manualTitle) { setMessage("Título obrigatório."); return; }
     if (manualPoster && !manualPoster.startsWith('https://i.imgur.com/')) { setMessage("URL inválida (Imgur). Use 'Copiar Endereço da Imagem'."); setTimeout(() => setMessage(""), 4000); return; }
@@ -89,7 +101,23 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
         }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Falha manual"); }
-      setMessage(`"${manualTitle}" adicionado!`); onMediaAdded(); setShowManualForm(false); setManualTitle(""); setManualYear(""); setManualPoster(""); setIsWeekly(false); setTimeout(() => setMessage(""), 2000);
+      
+      // --- BLOCO DE SUCESSO ---
+      setMessage(`"${manualTitle}" adicionado!`);
+      onMediaAdded();
+      setShowManualForm(false);
+      setManualTitle("");
+      setManualYear("");
+      setManualPoster("");
+      setIsWeekly(false);
+
+      // --- CORREÇÃO APLICADA ---
+      setResults([]); // Limpa a lista de resultados
+      setQuery("");   // Limpa a barra de busca
+      // --- FIM DA CORREÇÃO ---
+
+      setTimeout(() => setMessage(""), 2000);
+
     } catch (error: any) { setMessage(`Erro: ${error.message || '?'}`); setTimeout(() => setMessage(""), 3000);
     } finally { setLoading(false); }
   };
@@ -108,14 +136,14 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                   setIsWeekly(false);
               }}
           >
-              <SelectTrigger className="w-[120px] flex-shrink-0">
-                  <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                  <SelectItem value="MOVIE">Filme</SelectItem>
-                  <SelectItem value="ANIME">Anime</SelectItem>
-                  <SelectItem value="SERIES">Série</SelectItem>
-              </SelectContent>
+            <SelectTrigger className="w-[120px] flex-shrink-0">
+                <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="MOVIE">Filme</SelectItem>
+                <SelectItem value="ANIME">Anime</SelectItem>
+                <SelectItem value="SERIES">Série</SelectItem>
+            </SelectContent>
           </Select>
           <Input
             type="text" value={query} onChange={(e) => setQuery(e.target.value)}
@@ -144,7 +172,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
           <h3 className="font-semibold text-lg text-gray-800">Adicionar Mídia Manualmente</h3>
           <div>
             <Label>Tipo</Label>
-             <Select value={mediaType} onValueChange={(value: any) => { setMediaType(value); setIsWeekly(false); }}>
+              <Select value={mediaType} onValueChange={(value: any) => { setMediaType(value); setIsWeekly(false); }}>
                 <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
@@ -156,26 +184,26 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
             </Select>
           </div>
           <div>
-             <Label htmlFor="manualTitle">Título (Obrigatório)</Label>
-             <Input id="manualTitle" type="text" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder={`Ex: O Filme da Minha Vida`} required className="mt-1" />
+              <Label htmlFor="manualTitle">Título (Obrigatório)</Label>
+              <Input id="manualTitle" type="text" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder={`Ex: O Filme da Minha Vida`} required className="mt-1" />
           </div>
           <div>
-             <Label htmlFor="manualYear">Ano (Opcional)</Label>
-             <Input id="manualYear" type="number" value={manualYear} onChange={(e) => setManualYear(e.target.value)} placeholder="Ex: 2025" className="mt-1" />
+              <Label htmlFor="manualYear">Ano (Opcional)</Label>
+              <Input id="manualYear" type="number" value={manualYear} onChange={(e) => setManualYear(e.target.value)} placeholder="Ex: 2025" className="mt-1" />
           </div>
           <div>
             <Label htmlFor="manualPoster">URL Pôster (Opc. - Imgur)</Label>
             <p className="text-xs text-gray-500 mb-1"> Use &lsquo;Copiar Endereço da Imagem&rsquo; no <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">Imgur</a>. </p>
             <Input id="manualPoster" type="text" value={manualPoster} onChange={(e) => setManualPoster(e.target.value)} placeholder="https://i.imgur.com/..." className="mt-1" />
           </div>
-         {/* Checkbox Semanal (Com Shadcn) */}
-         {(mediaType === MediaType.ANIME || mediaType === MediaType.SERIES) && (
-             <div className="flex items-center space-x-2 pt-2">
+          {/* Checkbox Semanal (Com Shadcn) */}
+          {(mediaType === MediaType.ANIME || mediaType === MediaType.SERIES) && (
+              <div className="flex items-center space-x-2 pt-2">
                 <Checkbox id="isWeeklyManual" checked={isWeekly} onCheckedChange={(checked) => setIsWeekly(Boolean(checked))} />
                 <Label htmlFor="isWeeklyManual" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                   Marcar como item semanal?
+                    Marcar como item semanal?
                 </Label>
-             </div>
+              </div>
           )}
           {/* Botões Ação Manual (Com Shadcn) */}
           <div className="flex gap-2 pt-2">
@@ -191,24 +219,24 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
 
       {/* Lista de Resultados (Com Shadcn) */}
       <ul className="mt-4 space-y-2 max-h-96 overflow-y-auto">
-         {/* Checkbox Semanal acima da lista (Com Shadcn) */}
-         {(mediaType === MediaType.ANIME || mediaType === MediaType.SERIES) && results.length > 0 && (
+          {/* Checkbox Semanal acima da lista (Com Shadcn) */}
+          {(mediaType === MediaType.ANIME || mediaType === MediaType.SERIES) && results.length > 0 && (
             <div className="flex items-center space-x-2 mb-2 p-2 bg-slate-50 rounded border border-slate-200">
-               <Checkbox id="isWeeklySearch" checked={isWeekly} onCheckedChange={(checked) => setIsWeekly(Boolean(checked))} />
-               <Label htmlFor="isWeeklySearch" className="text-sm font-medium"> Marcar itens adicionados como semanais? </Label>
+                <Checkbox id="isWeeklySearch" checked={isWeekly} onCheckedChange={(checked) => setIsWeekly(Boolean(checked))} />
+                <Label htmlFor="isWeeklySearch" className="text-sm font-medium"> Marcar itens adicionados como semanais? </Label>
             </div>
           )}
         {results.map((media) => (
           <li key={`${media.source}-${media.sourceId}`} className="flex items-center justify-between gap-2 p-2 border border-slate-200 rounded-md" >
-             {/* Imagem e Título */}
-             <div className="flex items-center gap-3 overflow-hidden"> <Image src={ media.posterPath || "/poster-placeholder.png" } width={40} height={60} alt={media.title} className="rounded flex-shrink-0" unoptimized={true} priority={false}/> <span className="text-sm truncate" title={media.title}>{media.title}</span> </div>
+              {/* Imagem e Título */}
+              <div className="flex items-center gap-3 overflow-hidden"> <Image src={ media.posterPath || "/poster-placeholder.png" } width={40} height={60} alt={media.title} className="rounded flex-shrink-0" unoptimized={true} priority={false}/> <span className="text-sm truncate" title={media.title}>{media.title}</span> </div>
             {/* Botões Adicionar (Com Shadcn) */}
             <div className="flex flex-col gap-1 flex-shrink-0">
-               <Button onClick={() => addToList(media, "TO_WATCH")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Para Ver </Button>
-               {(media.source === 'ANIME' || media.source === 'SERIES') && (
+                <Button onClick={() => addToList(media, "TO_WATCH")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Para Ver </Button>
+                {(media.source === 'ANIME' || media.source === 'SERIES') && (
                   <Button onClick={() => addToList(media, "WATCHING")} size="sm" variant="outline" className="h-6 px-2 text-xs"> A Ver </Button>
-               )}
-               <Button onClick={() => addToList(media, "WATCHED")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Já Vi </Button>
+                )}
+                <Button onClick={() => addToList(media, "WATCHED")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Já Vi </Button>
             </div>
           </li>
         ))}
@@ -216,4 +244,3 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
     </div>
   );
 }
-

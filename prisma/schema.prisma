@@ -1,4 +1,9 @@
 // prisma/schema.prisma
+// Versão CORRIGIDA e SIMPLIFICADA
+// Removemos cor(profileThemeColor) e banner(profileBannerUrl)
+// Mantemos 'bio'
+// Mantemos os @map OBRIGATÓRIOS para o Next-Auth v4 Adapter v1
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -27,82 +32,82 @@ enum UserRole {
   CREATOR
   VISITOR
 }
-
 // --- FIM ENUMS ---
 
-// --- MODELO USER ---
+// --- MODELO USER (Simplificado + @map) ---
 model User {
   id             String    @id @default(cuid())
   name           String?
   email          String?   @unique
-  emailVerified  DateTime?
-  image          String?
+  emailVerified  DateTime? @map("email_verified") // Mapeado
+  image          String?   // Campo do Avatar (ainda presente)
   hashedPassword String?
   username       String    @unique
   role           UserRole  @default(VISITOR)
 
+  // --- Campos de Personalização ---
+  bio              String?   @db.Text // Mantido
+
+  // Relações
   accounts      Account[]
   sessions      Session[]
   mediaStatuses MediaStatus[]
   scheduleItems ScheduleItem[]
-}
 
+  @@map("users") 
+}
 // --- FIM USER ---
 
-// --- OUTROS MODELOS ---
+// --- SEUS MODELOS (Sem mudanças) ---
 model Media {
-  id          String    @id @default(cuid())
-  mediaType   MediaType
-  tmdbId      Int?
-  malId       Int?
-  title       String
-  posterPath  String?
-  releaseYear Int?
-
+  id            String         @id @default(cuid())
+  mediaType     MediaType
+  tmdbId        Int?
+  malId         Int?
+  title         String
+  posterPath    String?
+  releaseYear   Int?
   mediaStatuses MediaStatus[]
   scheduleItems ScheduleItem[]
-
   @@unique([mediaType, tmdbId])
   @@unique([mediaType, malId])
 }
 
 model MediaStatus {
-  id                    String          @id @default(cuid())
-  status                MovieStatusType
-  userId                String
-  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mediaId               String
-  media                 Media           @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  lastSeasonWatched     Int?
-  lastEpisodeWatched    Int?
+  id                  String          @id @default(cuid())
+  status              MovieStatusType
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId             String
+  media               Media           @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  lastSeasonWatched   Int?
+  lastEpisodeWatched  Int?
   lastEpisodeWatchedEnd Int?
-  isWeekly              Boolean         @default(false)
-
+  isWeekly            Boolean         @default(false)
   @@unique([userId, mediaId])
 }
 
 model ScheduleItem {
-  id               String   @id @default(cuid())
-  scheduledAt      DateTime
-  horario          String?
-  seasonNumber     Int?
-  episodeNumber    Int?
-  episodeNumberEnd Int?
-  userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mediaId          String
-  media            Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  id                String    @id @default(cuid())
+  scheduledAt       DateTime
+  horario           String?
+  seasonNumber      Int?
+  episodeNumber     Int?
+  episodeNumberEnd  Int?
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId           String
+  media             Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 }
+// --- FIM SEUS MODELOS ---
 
-// --- FIM OUTROS MODELOS ---
-
-// --- MODELOS NEXT-AUTH V4 ---
+// --- MODELOS NEXT-AUTH V4 (Com @map) ---
 model Account {
   id                String  @id @default(cuid())
-  userId            String
+  userId            String  @map("user_id")
   type              String
   provider          String
-  providerAccountId String
+  providerAccountId String  @map("provider_account_id")
   refresh_token     String? @db.Text
   access_token      String? @db.Text
   expires_at        Int?
@@ -110,26 +115,27 @@ model Account {
   scope             String?
   id_token          String? @db.Text
   session_state     String?
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([provider, providerAccountId])
+  @@map("accounts")
 }
 
 model Session {
   id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("sessions")
 }
 
 model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
-
   @@unique([identifier, token])
+  @@map("verification_tokens")
 }
-
 // --- FIM MODELOS NEXT-AUTH V4 ---
+
+
