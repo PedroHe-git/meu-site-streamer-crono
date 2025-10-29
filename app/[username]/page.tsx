@@ -7,9 +7,10 @@ import Image from "next/image";
 import UserListsClient from '@/app/components/UserListsClient';
 import { FiRefreshCw } from 'react-icons/fi';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import Link from 'next/link';
 import { cn } from "@/lib/utils";
+
 
 // Tipagem
 type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
@@ -121,12 +122,18 @@ export default async function PublicProfilePage({ params, searchParams }: { para
                   <CardTitle className="text-2xl md:text-3xl" style={{ color: themeColor }}>
                       Cronograma da Semana
                   </CardTitle>
-                  <div className="flex gap-2">
-                      <Link href={prevWeekLink} passHref legacyBehavior>
-                          <Button variant="outline" size="sm" as="a">&larr; Anterior</Button>
+                 <div className="flex gap-2">
+                      <Link 
+                        href={prevWeekLink} 
+                        className={buttonVariants({ variant: "outline", size: "sm" })}
+                      >
+                        &larr; Anterior
                       </Link>
-                      <Link href={nextWeekLink} passHref legacyBehavior>
-                          <Button variant="outline" size="sm" as="a">Próxima &rarr;</Button>
+                      <Link 
+                        href={nextWeekLink} 
+                        className={buttonVariants({ variant: "outline", size: "sm" })}
+                      >
+                        Próxima &rarr;
                       </Link>
                   </div>
               </div>
