@@ -1,85 +1,82 @@
 "use client";
 
 import Link from "next/link";
+// --- Usa imports v4 ---
 import { useSession, signIn, signOut } from "next-auth/react";
-import Image from "next/image"; // Importa o Image
+// --- FIM ---
+import Image from "next/image";
+import { Button } from "@/components/ui/button"; // Importa Button para consistência
 
 export default function Navbar() {
   const { data: session, status } = useSession();
-  
-  // @ts-ignore
-  const username = session?.user?.username; // Agora isto vai funcionar!
+
+  // --- [NOVO] Verifica a role do utilizador ---
+  // A role vem da sessão (adicionada pelos callbacks do NextAuth)
+  // @ts-ignore (Ignora erro de tipo temporário até definirmos melhor o tipo Session)
+  const userRole = session?.user?.role;
+  const isCreator = userRole === "CREATOR";
+  // --- [FIM NOVO] ---
 
   return (
     <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
-      <div className="container mx-auto px-4 py-3 flex justify-between items-center max-w-7xl">
+      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
 
-        {/* Logo / Título do Site */}
         <Link href="/" className="text-2xl font-bold text-slate-900 hover:text-indigo-600">
           MeuCronograma
         </Link>
 
-        {/* Links de Navegação */}
         <div className="flex items-center gap-4">
 
           {status === "loading" && (
             <span className="text-gray-500 text-sm">A carregar...</span>
           )}
 
-          {/* --- [MUDANÇA AQUI] --- */}
-          {/* Se o utilizador NÃO estiver logado */}
           {status === "unauthenticated" && (
             <>
-              {/* Aponta para a página de registo personalizada */}
-              <Link href="/auth/register" className="text-slate-600 hover:text-slate-900 text-sm font-medium">
-                Registar
-              </Link>
-              {/* Aponta para a página de login personalizada */}
-              <Link
-                href="/auth/signin"
-                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
-              >
-                Login
-              </Link>
+              <Button variant="ghost" asChild className="h-9 px-3 text-sm">
+                 <Link href="/auth/register">Registar</Link>
+              </Button>
+              <Button asChild className="h-9 px-4 text-sm">
+                 <Link href="/auth/signin">Login</Link>
+              </Button>
             </>
           )}
-          {/* --- [FIM DA MUDANÇA] --- */}
 
-          {/* Se o utilizador ESTIVER logado */}
-          {status === "authenticated" && session.user && (
+          {status === "authenticated" && session?.user && (
             <>
-              <Link
-                href={`/${username}`} // O username agora existe na sessão
-                className="text-slate-600 hover:text-slate-900 text-sm"
-              >
-                Minha Página
-              </Link>
+              {/* --- [MUDANÇA AQUI] Renderização Condicional --- */}
+              {/* Só mostra links Dashboard/Minha Página se for CREATOR */}
+              {isCreator && (
+                <>
+                  {/* Link para a Página Pública */}
+                  {/* @ts-ignore */}
+                  {session.user.username && (
+                     <Button variant="ghost" asChild className="h-9 px-3 text-sm">
+                         <Link href={`/${session.user.username}`}>Minha Página</Link>
+                     </Button>
+                  )}
+                  {/* Link para o Dashboard */}
+                   <Button variant="ghost" asChild className="h-9 px-3 text-sm">
+                       <Link href="/dashboard">Dashboard</Link>
+                   </Button>
+                </>
+              )}
+              {/* --- [FIM MUDANÇA] --- */}
 
-              <Link
-                href="/dashboard"
-                className="text-slate-600 hover:text-slate-900 text-sm"
-              >
-                Dashboard
-              </Link>
+              {/* Avatar (sempre visível se logado) */}
+              {session.user.image && (
+                 <Image src={session.user.image} alt={session.user.name || "Avatar"} width={32} height={32} className="rounded-full" />
+              )}
 
-              <button
+              {/* Botão de Logout (sempre visível se logado) */}
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => signOut({ callbackUrl: '/' })}
-                className="bg-slate-200 text-slate-800 px-4 py-2 rounded-md text-sm font-medium hover:bg-slate-300"
+                className="h-9 px-3 text-sm"
               >
                 Logout
-              </button>
-              
-              {/* --- [NOVO] Adiciona o Avatar --- */}
-              {session.user.image && (
-                <Image
-                  src={session.user.image}
-                  alt={session.user.name || "Avatar"}
-                  width={32}
-                  height={32}
-                  className="rounded-full"
-                />
-              )}
-              {/* --- [FIM NOVO] --- */}
+              </Button>
             </>
           )}
         </div>
@@ -87,3 +84,4 @@ export default function Navbar() {
     </nav>
   );
 }
+

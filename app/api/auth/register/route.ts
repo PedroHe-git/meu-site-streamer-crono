@@ -1,67 +1,53 @@
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import bcrypt from "bcrypt";
+    import { NextResponse } from "next/server";
+    import prisma from "@/lib/prisma";
+    import bcrypt from "bcrypt";
+    // Não precisa importar UserRole aqui
 
-// Função exportada como POST para lidar com pedidos de registo
-export async function POST(request: Request) {
-  try {
-    // Lê os dados enviados no corpo do pedido (JSON)
-    const body = await request.json();
-    const { name, username, email, password } = body;
+    export async function POST(request: Request) {
+      try {
+        const body = await request.json();
+        const { name, username, email, password, role } = body; // Recebe 'role' como string
 
-    // Validação básica dos campos obrigatórios
-    if (!name || !username || !email || !password) {
-      return new NextResponse(JSON.stringify({ error: "Todos os campos são obrigatórios" }), { status: 400 });
+        // Validação básica
+        if (!name || !username || !email || !password || !role) { return new NextResponse(JSON.stringify({ error: "Todos os campos são obrigatórios" }), { status: 400 }); }
+        // Valida usando strings
+        if (role !== "CREATOR" && role !== "VISITOR") { return new NextResponse(JSON.stringify({ error: "Função (role) inválida" }), { status: 400 }); }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {  return new NextResponse(JSON.stringify({ error: "Username inválido (letras, números, _)." }), { status: 400 }); }
+
+        // Verifica se já existe
+        const existingUserByEmail = await prisma.user.findUnique({ where: { email } }); if (existingUserByEmail) { return new NextResponse(JSON.stringify({ error: "Email já registado" }), { status: 409 }); }
+        const existingUserByUsername = await prisma.user.findUnique({ where: { username } }); if (existingUserByUsername) { return new NextResponse(JSON.stringify({ error: "Username já em uso" }), { status: 409 }); }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Cria o utilizador (passa a string 'role')
+        const newUser = await prisma.user.create({
+          data: {
+            name,
+            username,
+            email,
+            hashedPassword,
+            role: role, // Prisma mapeia a string para o enum
+          },
+        });
+
+        // Exclui a senha hashada da resposta
+        const { hashedPassword: _, ...userWithoutPassword } = newUser;
+        return NextResponse.json(userWithoutPassword, { status: 201 });
+
+      } catch (error) {
+        console.error("Erro no registo:", error);
+        // Tratamento de erro específico se o Prisma não reconhecer a string da role
+        if (error instanceof Error && error.message.includes("Argument `role` is invalid")) {
+             return new NextResponse(JSON.stringify({ error: "Erro interno: A função (role) fornecida não é válida no schema do banco de dados." }), { status: 500 });
+        }
+        // Tratamento de erro mais genérico do Prisma (pode ser útil)
+        if (error instanceof Error && 'code' in error && error.code === 'P2002') { // Prisma unique constraint error
+            return new NextResponse(JSON.stringify({ error: "Erro: Dados duplicados (email ou username já existem)." }), { status: 409 });
+        }
+        // Erro genérico
+        return new NextResponse(JSON.stringify({ error: "Erro interno do servidor durante o registo." }), { status: 500 });
+      }
     }
-    // Validação simples do formato do username (apenas letras, números e underscore)
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-       return new NextResponse(JSON.stringify({ error: "Username inválido (letras, números, _)." }), { status: 400 });
-    }
-
-    // Verifica se já existe um utilizador com o mesmo email
-    const existingUserByEmail = await prisma.user.findUnique({
-      where: { email: email },
-    });
-    if (existingUserByEmail) {
-      // Retorna erro 409 Conflict se o email já estiver em uso
-      return new NextResponse(JSON.stringify({ error: "Email já registado" }), { status: 409 });
-    }
-    // Verifica se já existe um utilizador com o mesmo username
-    const existingUserByUsername = await prisma.user.findUnique({
-      where: { username: username },
-    });
-     if (existingUserByUsername) {
-      // Retorna erro 409 Conflict se o username já estiver em uso
-      return new NextResponse(JSON.stringify({ error: "Username já em uso" }), { status: 409 });
-    }
-
-    // Cria um hash seguro da senha antes de a guardar
-    // O '10' é o "custo" do hashing (número de rondas)
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Cria o novo utilizador na base de dados usando o Prisma Client
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        username,
-        email,
-        hashedPassword, // Guarda a senha hashada
-      },
-    });
-
-    // Remove a senha hashada do objeto antes de o retornar na resposta
-    // (Boa prática de segurança)
-    const { hashedPassword: _, ...userWithoutPassword } = newUser;
-    // Retorna os dados do novo utilizador com status 201 Created
-    return NextResponse.json(userWithoutPassword, { status: 201 });
-
-  } catch (error) {
-    // Captura quaisquer outros erros (ex: problema de conexão com BD)
-    console.error("Erro no registo:", error);
-    // Retorna um erro genérico 500 Internal Server Error
-    return new NextResponse(JSON.stringify({ error: "Erro interno do servidor" }), { status: 500 });
-  }
-}
-
-// Garante que apenas a função POST é exportada neste ficheiro de rota
+    
 

@@ -4,11 +4,12 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql" // Ou o seu provider (mysql, sqlite, etc.)
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Necessário se usar Neon DB ou similar
+  directUrl = env("DIRECT_URL")
 }
 
+// --- ENUMS (Nível Superior) ---
 enum MovieStatusType {
   TO_WATCH
   WATCHING
@@ -22,6 +23,14 @@ enum MediaType {
   SERIES
 }
 
+enum UserRole {
+  CREATOR
+  VISITOR
+}
+
+// --- FIM ENUMS ---
+
+// --- MODELO USER ---
 model User {
   id             String    @id @default(cuid())
   name           String?
@@ -30,22 +39,26 @@ model User {
   image          String?
   hashedPassword String?
   username       String    @unique
+  role           UserRole  @default(VISITOR)
 
-  accounts Account[]
-  sessions Session[]
-
+  accounts      Account[]
+  sessions      Session[]
   mediaStatuses MediaStatus[]
   scheduleItems ScheduleItem[]
 }
 
+// --- FIM USER ---
+
+// --- OUTROS MODELOS ---
 model Media {
-  id            String         @id @default(cuid())
-  mediaType     MediaType
-  tmdbId        Int?
-  malId         Int?
-  title         String
-  posterPath    String?
-  releaseYear   Int?
+  id          String    @id @default(cuid())
+  mediaType   MediaType
+  tmdbId      Int?
+  malId       Int?
+  title       String
+  posterPath  String?
+  releaseYear Int?
+
   mediaStatuses MediaStatus[]
   scheduleItems ScheduleItem[]
 
@@ -54,17 +67,16 @@ model Media {
 }
 
 model MediaStatus {
-  id      String          @id @default(cuid())
-  status  MovieStatusType
-  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId  String
-  media   Media           @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  mediaId String
-
+  id                    String          @id @default(cuid())
+  status                MovieStatusType
+  userId                String
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId               String
+  media                 Media           @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   lastSeasonWatched     Int?
   lastEpisodeWatched    Int?
   lastEpisodeWatchedEnd Int?
-  isWeekly              Boolean @default(false)
+  isWeekly              Boolean         @default(false)
 
   @@unique([userId, mediaId])
 }
@@ -76,13 +88,15 @@ model ScheduleItem {
   seasonNumber     Int?
   episodeNumber    Int?
   episodeNumberEnd Int?
-
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId  String
-  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  mediaId String
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId          String
+  media            Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 }
 
+// --- FIM OUTROS MODELOS ---
+
+// --- MODELOS NEXT-AUTH V4 ---
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -95,7 +109,7 @@ model Account {
   token_type        String?
   scope             String?
   id_token          String? @db.Text
-  session_state     String? // Adicionado na v4 para alguns providers
+  session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -107,8 +121,7 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -118,3 +131,5 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+// --- FIM MODELOS NEXT-AUTH V4 ---
