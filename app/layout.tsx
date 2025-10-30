@@ -6,6 +6,7 @@ import AuthProvider from "./components/AuthProvider";
 import Navbar from "./components/Navbar";
 import { ThemeProvider } from "@/app/components/theme-provider";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({ subsets: ["latin"] });
 
