@@ -98,6 +98,7 @@ model ScheduleItem {
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   mediaId           String
   media             Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  isCompleted       Boolean   @default(false)
 }
 // --- FIM SEUS MODELOS ---
 

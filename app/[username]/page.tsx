@@ -10,10 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import Link from 'next/link';
 import { cn } from "@/lib/utils";
+// Importa os componentes de Abas
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
-// Tipagem (Tudo igual)
+// Tipagem
 type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
 type DaySchedule = { date: Date; dayName: string; items: ScheduleItemWithMedia[]; };
@@ -23,13 +24,15 @@ const PAGE_SIZE_PUBLIC = 20;
 
 export default async function PublicProfilePage({ params, searchParams }: { params: { username: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
 
-  // --- [LÓGICA DE BUSCA DE DADOS - SEM MUDANÇAS] ---
+  // --- LÓGICA DE BUSCA DE DADOS ---
   const { username } = params;
   const decodedUsername = decodeURIComponent(username);
 
-  // Lógica da Semana (Variável 'weekOffset' é a chave)
+  // Lógica da Semana (Com limite de -1 semana)
   const rawOffset = Number(searchParams.weekOffset) || 0;
-  const weekOffset = Math.max(-1, rawOffset);
+  // [REGRA] Limita a navegação a no máximo 1 semana no passado (-1)
+  const weekOffset = Math.max(-1, rawOffset); 
+  
   const today = new Date();
   const targetDate = addDays(today, weekOffset * 7);
   const weekOptions = { locale: ptBR, weekStartsOn: 1 as const };
@@ -50,12 +53,13 @@ export default async function PublicProfilePage({ params, searchParams }: { para
 
   if (!user) { notFound(); }
 
-  // Busca Schedule
+  // Busca Schedule (Busca todos os itens, concluídos ou não)
   const scheduleItemsDb = await prisma.scheduleItem.findMany({
     where: { userId: user.id, scheduledAt: { gte: startOfThisWeek, lte: endOfThisWeek } },
     include: { media: true }, 
     orderBy: [{ scheduledAt: 'asc' }, { horario: 'asc' }],
   });
+  // O tipo 'ScheduleItemWithMedia' agora inclui 'isCompleted'
   const scheduleItems = scheduleItemsDb as ScheduleItemWithMedia[];
 
   // Função fetchInitialList
@@ -88,12 +92,7 @@ export default async function PublicProfilePage({ params, searchParams }: { para
   // Links da semana
   const prevWeekLink = `/${username}?weekOffset=${weekOffset - 1}`;
   const nextWeekLink = `/${username}?weekOffset=${weekOffset + 1}`;
-  
-  // --- [NOVO LINK] ---
-  // O link da semana atual é apenas a URL base do perfil (sem offset)
-  const currentWeekLink = `/${username}`;
-  // --- [FIM NOVO LINK] ---
-  
+  const currentWeekLink = `/${username}`; // Link para "Semana Atual"
   // --- [FIM DA LÓGICA DE BUSCA DE DADOS] ---
 
 
@@ -101,7 +100,7 @@ export default async function PublicProfilePage({ params, searchParams }: { para
     <div className={cn("bg-background text-foreground")}>
       <div className={cn("container mx-auto max-w-5xl px-4 pb-8 md:px-6 md:pb-12 lg:px-8 lg:py-16 pt-8 md:pt-12 lg:pt-16")}>
 
-        {/* Cabeçalho (Permanece igual) */}
+        {/* Cabeçalho */}
         <div className="text-center mb-12">
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2">
               {user.name || user.username}
@@ -124,34 +123,29 @@ export default async function PublicProfilePage({ params, searchParams }: { para
           {/* Conteúdo da Aba "Cronograma" */}
           <TabsContent value="schedule">
             <Card>
-              {/* --- [MUDANÇAS AQUI] --- */}
               <CardHeader>
-                  {/* Atualizado para 'flex-col sm:flex-row' para melhor responsividade */}
                   <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                       
-                      {/* 1. Título Destacado */}
                       <CardTitle className="text-2xl md:text-3xl text-primary">
                           Cronograma
-                          {/* Verifica se o offset é 0 */}
                           {weekOffset === 0 ? (
                             <span className="text-lg md:text-xl text-muted-foreground ml-2">(Semana Atual)</span>
                           ) : (
-                            // Opcional: Mostra a data de início da semana selecionada
                             <span className="text-lg md:text-xl text-muted-foreground ml-2">(Semana de {format(startOfThisWeek, "dd/MM")})</span>
                           )}
                       </CardTitle>
                       
-                      {/* 2. Botões de Navegação Atualizados */}
                       <div className="flex gap-2">
-                        {weekOffset > -1 &&(
-                          <Link 
-                            href={prevWeekLink} 
-                            className={buttonVariants({ variant: "outline", size: "sm" })}
-                          >
-                            &larr; Anterior
-                          </Link>
-                        )}
-                          {/* O botão "Semana Atual" só aparece se NÃO estivermos nela */}
+                          {/* Só mostra o botão "Anterior" se não estivermos no limite (-1) */}
+                          {weekOffset > -1 && (
+                            <Link 
+                              href={prevWeekLink} 
+                              className={buttonVariants({ variant: "outline", size: "sm" })}
+                            >
+                              &larr; Anterior
+                            </Link>
+                          )}
+
                           {weekOffset !== 0 && (
                             <Link 
                               href={currentWeekLink} 
@@ -170,7 +164,6 @@ export default async function PublicProfilePage({ params, searchParams }: { para
                       </div>
                   </div>
               </CardHeader>
-              {/* --- [FIM DAS MUDANÇAS] --- */}
 
                 <CardContent className="space-y-6">
                   {daysOfWeek.map(day => (
@@ -183,7 +176,16 @@ export default async function PublicProfilePage({ params, searchParams }: { para
                           {day.items.map(item => {
                               const isItemWeekly = false; 
                               return !item.media ? null : ( 
-                              <li key={item.id} className="flex items-start gap-4">
+
+                              // --- [MUDANÇA AQUI] ---
+                              // Adiciona 'cn' e a classe 'opacity-50' se 'item.isCompleted' for true
+                              <li 
+                                key={item.id} 
+                                className={cn(
+                                  "flex items-start gap-4 transition-opacity", 
+                                  item.isCompleted && "opacity-50"
+                                )}
+                              >
                                   <Image src={ item.media.posterPath || "/poster-placeholder.png" } width={50} height={75} alt={item.media.title} className="rounded shadow-sm flex-shrink-0" unoptimized={true} />
                                   <div className="flex-grow">
                                       <span className="font-semibold text-lg text-foreground line-clamp-2 flex items-center gap-1" title={item.media.title}>
@@ -193,6 +195,8 @@ export default async function PublicProfilePage({ params, searchParams }: { para
                                   </div>
                                   {item.horario && ( <div className="flex-shrink-0 text-right"> <span className="text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap"> {item.horario} </span> </div> )}
                               </li>
+                              // --- [FIM DA MUDANÇA] ---
+
                               );
                           })}
                         </ul>
@@ -203,7 +207,7 @@ export default async function PublicProfilePage({ params, searchParams }: { para
             </Card>
           </TabsContent>
 
-          {/* Conteúdo da Aba "Listas" (Permanece igual) */}
+          {/* Conteúdo da Aba "Listas" */}
           <TabsContent value="lists">
             <UserListsClient
               username={decodedUsername}

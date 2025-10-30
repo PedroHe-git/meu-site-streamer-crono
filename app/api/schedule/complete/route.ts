@@ -72,8 +72,9 @@ export async function POST(request: Request) {
       });
 
       // 5. Deleta o ScheduleItem (SEMPRE, pois o episódio/intervalo foi concluído)
-      await tx.scheduleItem.delete({
+      await tx.scheduleItem.update({
         where: { id: scheduleItem.id, },
+        data: { isCompleted: true }
       });
 
       console.log(`Item ${mediaStatus.isWeekly ? 'semanal' : 'normal'} (${scheduleItem.id}) concluído.`);

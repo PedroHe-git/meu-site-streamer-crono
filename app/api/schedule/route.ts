@@ -26,7 +26,8 @@ export async function GET(request: Request) {
       where: {
         userId: user.id,
         // Apenas itens cuja DATA seja hoje ou no futuro
-        scheduledAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) }
+        scheduledAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+        isCompleted: false
       },
       include: {
         media: true, // Inclui a mídia

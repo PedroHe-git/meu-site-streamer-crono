@@ -78,16 +78,30 @@ export const authOptions: NextAuthOptions = {
           if (!credentials?.email || !credentials?.password) { throw new Error("Email e senha são obrigatórios"); }
           const user = await prisma.user.findUnique({ where: { email: credentials.email }, });
           if (!user || !user.hashedPassword) { throw new Error("Utilizador não encontrado ou registado com outro método"); }
-          const isPasswordCorrect = await bcrypt.compare( credentials.password, user.hashedPassword );
-          if (!isPasswordCorrect) { throw new Error("Senha incorreta"); }
-          console.log(`[Authorize Success] Autenticação OK para ${credentials.email}`);
-          return {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              username: user.username,
-              role: user.role,
-          };
+          // ... (dentro de authorize)
+
+      const isPasswordCorrect = await bcrypt.compare( credentials.password, user.hashedPassword );
+      if (!isPasswordCorrect) { 
+        throw new Error("Senha incorreta"); 
+      }
+
+      // --- [NOVA VERIFICAÇÃO AQUI] ---
+      // A senha está correta, mas o email foi verificado?
+      // O campo 'emailVerified' será 'null' se não estiver verificado.
+      if (!user.emailVerified) {
+        throw new Error("Por favor, verifique seu email antes de fazer login.");
+      }
+      // --- [FIM DA VERIFICAÇÃO] ---
+
+      console.log(`[Authorize Success] Autenticação OK para ${credentials.email}`);
+      // Retorna o objeto correto para o callback JWT
+      return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          username: user.username,
+          role: user.role,
+      };
       }
     }),
   ],
