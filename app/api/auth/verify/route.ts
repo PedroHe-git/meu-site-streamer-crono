@@ -5,23 +5,28 @@ import prisma from '@/lib/prisma';
 import { URL } from 'url'; // Importa a classe URL
 
 export async function GET(request: Request) {
-  // Usamos a classe URL para pegar os parâmetros da request
+
+  console.log("VERIFY API: Rota de verificação iniciada.");
   const { searchParams } = new URL(request.url);
   const token = searchParams.get('token');
 
   if (!token) {
+    console.error("VERIFY API: Erro - Token faltando.");
     // Redireciona para o login com um erro de token faltando
     return NextResponse.redirect(new URL('/auth/signin?error=token_missing', request.url));
   }
 
   try {
-    // 1. Encontra o token no banco de dados
+    console.log(`VERIFY API: Buscando token no banco: ${token}`);
     const verificationToken = await prisma.verificationToken.findUnique({
       where: { token: token },
     });
 
+    console.log("VERIFY API: Token encontrado:", verificationToken);
+
     if (!verificationToken) {
       // Token não existe
+      console.error("VERIFY API: Erro - Token inválido.");
       return NextResponse.redirect(new URL('/auth/signin?error=token_invalid', request.url));
     }
 
@@ -58,7 +63,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/auth/signin?verified=true', request.url));
 
   } catch (error) {
-    console.error("Erro na verificação de email:", error);
+    console.error("VERIFY API: Erro fatal no bloco try/catch:", error);
     return NextResponse.redirect(new URL('/auth/signin?error=verification_failed', request.url));
   }
 }
