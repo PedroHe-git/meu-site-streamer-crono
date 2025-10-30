@@ -4,20 +4,20 @@ import path from 'path';
 const cspValue = [
   "default-src 'self';",
 
-  // ✅ Permite scripts do nosso domínio, eval(), scripts inline, Clarity e Vercel Analytics
-  "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.clarity.ms *.vercel-insights.com;",
+  // ✅ Libera scripts do domínio principal, scripts.clarity.ms e Vercel
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.clarity.ms https://scripts.clarity.ms *.vercel-insights.com;",
 
-  // Permite estilos do nosso domínio, inline, e Google Fonts
+  // ✅ Estilos
   "style-src 'self' 'unsafe-inline' fonts.googleapis.com;",
 
-  // ✅ Permite imagens do nosso domínio, data:, TMDB, MyAnimeList, Imgur e Clarity
-  "img-src 'self' data: image.tmdb.org cdn.myanimelist.net i.imgur.com https://www.clarity.ms;",
+  // ✅ Libera imagens (incluindo c.clarity.ms)
+  "img-src 'self' data: image.tmdb.org cdn.myanimelist.net i.imgur.com https://www.clarity.ms https://c.clarity.ms;",
 
-  // Permite fontes do nosso domínio e Google Fonts
+  // ✅ Fontes
   "font-src 'self' fonts.gstatic.com;",
 
-  // ✅ Permite ligações (fetch/XHR) para o nosso domínio, Neon, Jikan, Clarity e Vercel
-  "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms vitals.vercel-insights.com;",
+  // ✅ Permite conexões do Clarity (envio de dados)
+  "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms vitals.vercel-insights.com;",
 
   "frame-src 'self';",
 ].join(' ');
@@ -29,8 +29,6 @@ const securityHeaders = [
   },
 ];
 
-// ----------------------------------------
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -38,19 +36,16 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "image.tmdb.org",
-        port: "",
         pathname: "/t/p/**",
       },
       {
         protocol: "https",
         hostname: "cdn.myanimelist.net",
-        port: "",
         pathname: "/images/anime/**",
       },
       {
         protocol: "https",
         hostname: "i.imgur.com",
-        port: "",
         pathname: "/**",
       },
     ],
