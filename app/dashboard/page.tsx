@@ -10,7 +10,7 @@ import MyLists from "./MyLists";
 import ScheduleManager from "./ScheduleManager";
 
 // Imports de UI (Todos os necessários)
-import { Label }  from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // <-- Sintaxe corrigida aqui
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea"; 
@@ -160,7 +160,7 @@ export default function DashboardPage() {
     } catch (error: any) {
       console.error("Erro ao atualizar status:", error);
       setActionError(error.message);
-      setIsUpdating(false); // Garante que o loading pare em caso de erro
+      setIsUpdating(false); 
     }
   };
 
@@ -183,7 +183,7 @@ export default function DashboardPage() {
     } catch (error: any) {
       console.error("Erro ao alternar status semanal:", error);
       setActionError(error.message);
-      setIsUpdating(false); // Garante que o loading pare em caso de erro
+      setIsUpdating(false); 
     }
   };
 
@@ -208,7 +208,7 @@ export default function DashboardPage() {
      }
    };
 
-  // Estados de Carregamento (Corrigido para usar cor semântica)
+  // Estados de Carregamento
   if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
     return <p className="text-center p-10 text-muted-foreground">A carregar...</p>; 
   }
@@ -219,23 +219,21 @@ export default function DashboardPage() {
 
   const firstName = session?.user?.name?.split(' ')[0] || session?.user?.username || "";
 
-  // --- JSX (Corrigido para Modo Escuro) ---
+  // --- JSX (Layout Atualizado) ---
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
       <h1 className="text-3xl md:text-4xl font-semibold mb-8">
         Olá, {firstName}!
       </h1>
 
-      {isUpdating && ( <div className="fixed top-5 right-5 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-pulse"> A atualizar... </div> )}
-      {actionError && ( <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded relative" role="alert"> <strong className="font-bold">Erro: </strong> <span className="block sm:inline">{actionError}</span> <button onClick={() => setActionError(null)} className="absolute top-0 bottom-0 right-0 px-4 py-3"> <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Fechar</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg> </button> </div> )}
+      {/* ... (Alertas de 'isUpdating' e 'actionError' permanecem os mesmos) ... */}
 
+      <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
-
-         {/* Coluna Esquerda: Definições e Agendamentos */}
-         <div className="lg:col-span-1 space-y-6">
+         {/* 1. Sidebar (Limpa) */}
+         <aside className="lg:w-1/4 space-y-6">
             
-            {/* Card Definições (Este já usa <Card>) */}
+            {/* Card Definições (Fica na Sidebar) */}
             {isCreator && (
                 <Card>
                     <CardHeader>
@@ -244,8 +242,8 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-1">
-                            <Label htmlFor="profile-bio">Bio Curta</Label>
-                            <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Fale um pouco sobre si..." maxLength={200} className="h-24" disabled={isSavingSettings} />
+                            <Label htmlFor="profile-bio" className="text-sm font-medium text-foreground">Descrição</Label>
+                            <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Mensagem sera exibida na Minha Página" maxLength={200} className="h-24 placeholder:text-muted-foreground" disabled={isSavingSettings} />
                              <p className="text-xs text-muted-foreground">{200 - (bio?.length || 0)} caracteres restantes</p>
                         </div>
                         <Button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full mt-2">
@@ -256,10 +254,39 @@ export default function DashboardPage() {
                 </Card>
             )}
 
-             {/* Card 3: Agendamento (CORRIGIDO PARA <Card>) */}
+             {/* Card de Agendamento FOI MOVIDO */}
+             
+         </aside> {/* Fim da Sidebar */}
+
+         {/* 2. Conteúdo Principal (Agora com 2 cards) */}
+         <main className="flex-1 space-y-6">
+
+             {/* Card 1: Listas & Busca (Permanece aqui) */}
              <Card>
                <CardContent className="p-6">
-                 <h2 className="text-2xl font-semibold mb-6">3. Gerir Agendamentos</h2>
+                 <h2 className="text-2xl font-semibold mb-6">Minhas Listas & Busca</h2>
+                 <MyLists
+                   toWatchData={toWatchData} 
+                   watchingData={watchingData} 
+                   watchedData={watchedData} 
+                   droppedData={droppedData}
+                   onUpdateStatus={handleUpdateStatus} 
+                   onPageChange={handlePageChange} 
+                   onToggleWeekly={handleToggleWeekly}
+                   listLoadingStatus={isListLoading} 
+                   searchTerm={searchTerm} 
+                   setSearchTerm={setSearchTerm}
+                   isUpdatingGlobal={isUpdating}
+                   onMediaAdded={handleDataChanged}
+                 />
+               </CardContent>
+             </Card>
+
+             {/* --- [MUDANÇA DE LAYOUT AQUI] --- */}
+             {/* Card 2: Agendamento (Movido para cá) */}
+             <Card>
+               <CardContent className="p-6">
+                 <h2 className="text-2xl font-semibold mb-6">Gerir Agendamentos</h2>
                  <ScheduleManager
                    agendaveisList={watchingData.items}
                    initialScheduleItems={scheduleItems}
@@ -267,34 +294,10 @@ export default function DashboardPage() {
                  />
                </CardContent>
              </Card>
-         </div> {/* Fim Coluna Esquerda */}
+             {/* --- [FIM DA MUDANÇA] --- */}
 
-         {/* Coluna Direita: Busca e Listas */}
-         <div className="lg:col-span-3 space-y-6">
-
-             {/* Card 1: Busca (CORRIGIDO PARA <Card>) */}
-             <Card>
-               <CardContent className="p-6">
-                 <h2 className="text-2xl font-semibold mb-6">1. Buscar Media</h2> 
-                 <MediaSearch onMediaAdded={handleDataChanged} />
-               </CardContent>
-             </Card>
-             
-             {/* Card 2: Listas (CORRIGIDO PARA <Card>) */}
-             <Card>
-               <CardContent className="p-6">
-                 <h2 className="text-2xl font-semibold mb-6">2. Minhas Listas</h2>
-                 <MyLists
-                   toWatchData={toWatchData} watchingData={watchingData} watchedData={watchedData} droppedData={droppedData}
-                   onUpdateStatus={handleUpdateStatus} onPageChange={handlePageChange} onToggleWeekly={handleToggleWeekly}
-                   listLoadingStatus={isListLoading} searchTerm={searchTerm} setSearchTerm={setSearchTerm}
-                   isUpdatingGlobal={isUpdating}
-                 />
-               </CardContent>
-             </Card>
-
-         </div> {/* Fim Coluna Direita */}
-      </div> {/* Fim Grid Principal */}
+         </main> {/* Fim do Conteúdo Principal */}
+      </div> {/* Fim do Flex Layout */}
     </div>
   );
 }

@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import Link from 'next/link';
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
-// Tipagem
+// Tipagem (Tudo igual)
 type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
 type DaySchedule = { date: Date; dayName: string; items: ScheduleItemWithMedia[]; };
@@ -22,18 +23,20 @@ const PAGE_SIZE_PUBLIC = 20;
 
 export default async function PublicProfilePage({ params, searchParams }: { params: { username: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
 
+  // --- [LÓGICA DE BUSCA DE DADOS - SEM MUDANÇAS] ---
   const { username } = params;
   const decodedUsername = decodeURIComponent(username);
 
-  // Lógica da Semana
-  const weekOffset = Number(searchParams.weekOffset) || 0;
+  // Lógica da Semana (Variável 'weekOffset' é a chave)
+  const rawOffset = Number(searchParams.weekOffset) || 0;
+  const weekOffset = Math.max(-1, rawOffset);
   const today = new Date();
   const targetDate = addDays(today, weekOffset * 7);
   const weekOptions = { locale: ptBR, weekStartsOn: 1 as const };
   const startOfThisWeek = startOfDay(startOfWeek(targetDate, weekOptions));
   const endOfThisWeek = endOfDay(endOfWeek(targetDate, weekOptions));
 
-  // Busca User (bio adicionada, avatar removido)
+  // Busca User
   const user = await prisma.user.findUnique({
     where: { username: decodedUsername },
     select: {
@@ -41,7 +44,7 @@ export default async function PublicProfilePage({ params, searchParams }: { para
         name: true, 
         username: true, 
         role: true,
-        bio: true, // Busca a bio
+        bio: true,
       }
   });
 
@@ -86,21 +89,23 @@ export default async function PublicProfilePage({ params, searchParams }: { para
   const prevWeekLink = `/${username}?weekOffset=${weekOffset - 1}`;
   const nextWeekLink = `/${username}?weekOffset=${weekOffset + 1}`;
   
-  // --- [CORREÇÃO] Remove 'themeColor' ---
-  // const themeColor = "#6366F1"; // Removido
+  // --- [NOVO LINK] ---
+  // O link da semana atual é apenas a URL base do perfil (sem offset)
+  const currentWeekLink = `/${username}`;
+  // --- [FIM NOVO LINK] ---
+  
+  // --- [FIM DA LÓGICA DE BUSCA DE DADOS] ---
+
 
   return (
-    // --- [CORREÇÃO] Troca 'bg-slate-50' por 'bg-background' ---
     <div className={cn("bg-background text-foreground")}>
       <div className={cn("container mx-auto max-w-5xl px-4 pb-8 md:px-6 md:pb-12 lg:px-8 lg:py-16 pt-8 md:pt-12 lg:pt-16")}>
 
-        {/* Cabeçalho */}
+        {/* Cabeçalho (Permanece igual) */}
         <div className="text-center mb-12">
-            
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2">
               {user.name || user.username}
             </h1>
-            
             {user.bio && (
               <p className="text-lg text-muted-foreground max-w-xl mx-auto">
                 {user.bio}
@@ -108,74 +113,109 @@ export default async function PublicProfilePage({ params, searchParams }: { para
             )}
         </div>
 
-        {/* Card Cronograma (Já corrigido para não ter bg-white) */}
-        <Card className="mb-12">
-          <CardHeader>
-              <div className="flex justify-between items-center">
-                  
-                  {/* --- [CORREÇÃO] Troca 'style' por 'className="text-primary"' --- */}
-                  <CardTitle className="text-2xl md:text-3xl text-primary">
-                      Cronograma da Semana
-                  </CardTitle>
-                  
-                  <div className="flex gap-2">
-                      <Link 
-                        href={prevWeekLink} 
-                        className={buttonVariants({ variant: "outline", size: "sm" })}
-                      >
-                        &larr; Anterior
-                      </Link>
-                      <Link 
-                        href={nextWeekLink} 
-                        className={buttonVariants({ variant: "outline", size: "sm" })}
-                      >
-                        Próxima &rarr;
-                      </Link>
+        {/* Layout de Abas */}
+        <Tabs defaultValue="schedule" className="w-full">
+          
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="schedule">Cronograma</TabsTrigger>
+            <TabsTrigger value="lists">Listas</TabsTrigger>
+          </TabsList>
+
+          {/* Conteúdo da Aba "Cronograma" */}
+          <TabsContent value="schedule">
+            <Card>
+              {/* --- [MUDANÇAS AQUI] --- */}
+              <CardHeader>
+                  {/* Atualizado para 'flex-col sm:flex-row' para melhor responsividade */}
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                      
+                      {/* 1. Título Destacado */}
+                      <CardTitle className="text-2xl md:text-3xl text-primary">
+                          Cronograma
+                          {/* Verifica se o offset é 0 */}
+                          {weekOffset === 0 ? (
+                            <span className="text-lg md:text-xl text-muted-foreground ml-2">(Semana Atual)</span>
+                          ) : (
+                            // Opcional: Mostra a data de início da semana selecionada
+                            <span className="text-lg md:text-xl text-muted-foreground ml-2">(Semana de {format(startOfThisWeek, "dd/MM")})</span>
+                          )}
+                      </CardTitle>
+                      
+                      {/* 2. Botões de Navegação Atualizados */}
+                      <div className="flex gap-2">
+                        {weekOffset > -1 &&(
+                          <Link 
+                            href={prevWeekLink} 
+                            className={buttonVariants({ variant: "outline", size: "sm" })}
+                          >
+                            &larr; Anterior
+                          </Link>
+                        )}
+                          {/* O botão "Semana Atual" só aparece se NÃO estivermos nela */}
+                          {weekOffset !== 0 && (
+                            <Link 
+                              href={currentWeekLink} 
+                              className={buttonVariants({ variant: "outline", size: "sm" })}
+                            >
+                              Semana Atual
+                            </Link>
+                          )}
+
+                          <Link 
+                            href={nextWeekLink} 
+                            className={buttonVariants({ variant: "outline", size: "sm" })}
+                          >
+                            Próxima &rarr;
+                          </Link>
+                      </div>
                   </div>
-              </div>
-          </CardHeader>
-            <CardContent className="space-y-6">
-              {daysOfWeek.map(day => (
-                <div key={day.date.toString()}>
+              </CardHeader>
+              {/* --- [FIM DAS MUDANÇAS] --- */}
 
-                  {/* --- [CORREÇÃO] Troca 'style' por 'className="text-primary"' --- */}
-                  <h3 className="text-lg font-semibold mb-3 capitalize text-primary">
-                      {day.dayName} <span className="text-base text-muted-foreground font-normal ml-2">({format(day.date, "dd/MM")})</span>
-                  </h3>
+                <CardContent className="space-y-6">
+                  {daysOfWeek.map(day => (
+                    <div key={day.date.toString()}>
+                      <h3 className="text-lg font-semibold mb-3 capitalize text-primary">
+                          {day.dayName} <span className="text-base text-muted-foreground font-normal ml-2">({format(day.date, "dd/MM")})</span>
+                      </h3>
+                      {day.items.length === 0 ? ( <p className="text-muted-foreground text-sm pl-4">Nenhum item.</p> ) : (
+                        <ul className="space-y-3 pl-4 border-l-2">
+                          {day.items.map(item => {
+                              const isItemWeekly = false; 
+                              return !item.media ? null : ( 
+                              <li key={item.id} className="flex items-start gap-4">
+                                  <Image src={ item.media.posterPath || "/poster-placeholder.png" } width={50} height={75} alt={item.media.title} className="rounded shadow-sm flex-shrink-0" unoptimized={true} />
+                                  <div className="flex-grow">
+                                      <span className="font-semibold text-lg text-foreground line-clamp-2 flex items-center gap-1" title={item.media.title}>
+                                        {item.media.title}
+                                        {isItemWeekly && (<FiRefreshCw className="inline text-blue-500 flex-shrink-0" title="Item Semanal"/>)}
+                                      </span>
+                                  </div>
+                                  {item.horario && ( <div className="flex-shrink-0 text-right"> <span className="text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap"> {item.horario} </span> </div> )}
+                              </li>
+                              );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+            </Card>
+          </TabsContent>
 
-                  {day.items.length === 0 ? ( <p className="text-muted-foreground text-sm pl-4">Nenhum item.</p> ) : (
-                    <ul className="space-y-3 pl-4 border-l-2">
-                      {day.items.map(item => {
-                          const isItemWeekly = false; 
-                          return !item.media ? null : ( 
-                          <li key={item.id} className="flex items-start gap-4">
-                              <Image src={ item.media.posterPath || "/poster-placeholder.png" } width={50} height={75} alt={item.media.title} className="rounded shadow-sm flex-shrink-0" unoptimized={true} />
-                              <div className="flex-grow">
-                                  <span className="font-semibold text-lg text-foreground line-clamp-2 flex items-center gap-1" title={item.media.title}>
-                                    {item.media.title}
-                                    {isItemWeekly && (<FiRefreshCw className="inline text-blue-500 flex-shrink-0" title="Item Semanal"/>)}
-                                  </span>
-                              </div>
-                              {item.horario && ( <div className="flex-shrink-0 text-right"> <span className="text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap"> {item.horario} </span> </div> )}
-                          </li>
-                          );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-        </Card>
+          {/* Conteúdo da Aba "Listas" (Permanece igual) */}
+          <TabsContent value="lists">
+            <UserListsClient
+              username={decodedUsername}
+              initialToWatch={initialToWatch}
+              initialWatching={initialWatching}
+              initialWatched={initialWatched}
+              initialDropped={initialDropped}
+            />
+          </TabsContent>
 
-        {/* Listas (UserListsClient) */}
-        <UserListsClient
-          username={decodedUsername}
-          initialToWatch={initialToWatch}
-          initialWatching={initialWatching}
-          initialWatched={initialWatched}
-          initialDropped={initialDropped}
-        />
+        </Tabs>
+      </div>
     </div>
-  </div>
   );
 }
