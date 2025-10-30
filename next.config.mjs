@@ -17,7 +17,7 @@ const cspValue = [
   "font-src 'self' fonts.gstatic.com;",
 
   // ✅ Permite conexões do Clarity (envio de dados)
-  "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms vitals.vercel-insights.com;",
+  "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms https://i.clarity.ms vitals.vercel-insights.com;",
 
   "frame-src 'self';",
 ].join(' ');
