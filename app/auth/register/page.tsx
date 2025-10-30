@@ -50,7 +50,7 @@ function RegisterForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Falha ao registar"); 
+        throw new Error(data.error || "Falha ao registrar"); 
       }
 
       setSuccess("Registro concluído! Por favor, verifique seu email para ativar sua conta.");
@@ -155,7 +155,7 @@ function RegisterForm() {
            {error && <p className="text-sm text-red-600">{error}</p>}
 
            <Button type="submit" disabled={isLoading} className="w-full">
-             {isLoading ? "A registar..." : "Registar"}
+             {isLoading ? "A registrar..." : "Registrar"}
            </Button>
          </form>
        </CardContent>
