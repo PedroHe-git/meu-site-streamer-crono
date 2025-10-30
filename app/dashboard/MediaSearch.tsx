@@ -72,16 +72,11 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
       });
       if (!res.ok) { let errorMsg = "Falha ao adicionar"; try { const d = await res.json(); errorMsg = d.error || errorMsg; } catch (_) {} throw new Error(errorMsg); }
       
-      // --- BLOCO DE SUCESSO ---
       setMessage(`"${media.title}" adicionado!`);
       setIsWeekly(false);
       onMediaAdded();
-      
-      // --- CORREÇÃO APLICADA ---
-      setResults([]); // Limpa a lista de resultados
-      setQuery("");   // Limpa a barra de busca
-      // --- FIM DA CORREÇÃO ---
-      
+      setResults([]);
+      setQuery("");
       setTimeout(() => setMessage(""), 2000);
       
     } catch (error: any) { setMessage(`Erro: ${error.message || '?'}`); setTimeout(() => setMessage(""), 3000); }
@@ -102,7 +97,6 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Falha manual"); }
       
-      // --- BLOCO DE SUCESSO ---
       setMessage(`"${manualTitle}" adicionado!`);
       onMediaAdded();
       setShowManualForm(false);
@@ -110,12 +104,8 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
       setManualYear("");
       setManualPoster("");
       setIsWeekly(false);
-
-      // --- CORREÇÃO APLICADA ---
-      setResults([]); // Limpa a lista de resultados
-      setQuery("");   // Limpa a barra de busca
-      // --- FIM DA CORREÇÃO ---
-
+      setResults([]);
+      setQuery("");
       setTimeout(() => setMessage(""), 2000);
 
     } catch (error: any) { setMessage(`Erro: ${error.message || '?'}`); setTimeout(() => setMessage(""), 3000);
@@ -126,7 +116,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
 
   return (
     <div>
-      {/* Formulário de Busca (Com Shadcn) */}
+      {/* Formulário de Busca */}
       <form onSubmit={handleSearch} className="space-y-3">
         <div className="flex gap-2">
           <Select
@@ -147,7 +137,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
           </Select>
           <Input
             type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Buscar ${placeholderText}...`} required className="flex-grow"
+            placeholder={`Buscar ${placeholderText}...`} required className="flex-grow placeholder:text-muted-foreground" // Adicionado placeholder color
           />
         </div>
         <Button type="submit" disabled={loading} className="w-full">
@@ -155,24 +145,25 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
         </Button>
       </form>
 
-      {/* Botão Toggle Adição Manual (Com Shadcn) */}
+      {/* Botão Toggle Adição Manual */}
       <div className="text-center mt-3">
         <Button
           type="button" variant="link"
           onClick={() => { setShowManualForm(!showManualForm); setIsWeekly(false); }}
-          disabled={loading} className="text-sm text-indigo-600 h-auto p-0"
+          disabled={loading} 
+          className="text-sm text-primary h-auto p-0" // Cor corrigida
         >
           {showManualForm ? "Cancelar Adição Manual" : "Não encontrou? Adicione manualmente"}
         </Button>
       </div>
 
-      {/* Formulário Manual (Com Shadcn) */}
+      {/* Formulário Manual (Corrigido com Cores de Texto) */}
       {showManualForm && (
-        <form onSubmit={(e) => e.preventDefault()} className="space-y-4 mt-4 p-4 border border-slate-200 rounded-md bg-slate-50">
-          <h3 className="font-semibold text-lg text-gray-800">Adicionar Mídia Manualmente</h3>
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-4 mt-4 p-4 border rounded-md bg-secondary">
+          <h3 className="font-semibold text-lg text-foreground">Adicionar Mídia Manualmente</h3>
           <div>
-            <Label>Tipo</Label>
-              <Select value={mediaType} onValueChange={(value: any) => { setMediaType(value); setIsWeekly(false); }}>
+            <Label className="text-sm font-medium text-foreground">Tipo</Label> 
+            <Select value={mediaType} onValueChange={(value: any) => { setMediaType(value); setIsWeekly(false); }}>
                 <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
@@ -184,28 +175,26 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
             </Select>
           </div>
           <div>
-              <Label htmlFor="manualTitle">Título (Obrigatório)</Label>
-              <Input id="manualTitle" type="text" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder={`Ex: O Filme da Minha Vida`} required className="mt-1" />
+            <Label htmlFor="manualTitle" className="text-sm font-medium text-foreground">Título (Obrigatório)</Label> 
+            <Input id="manualTitle" type="text" value={manualTitle} onChange={(e) => setManualTitle(e.target.value)} placeholder={`Ex: O Filme da Minha Vida`} required className="mt-1 placeholder:text-muted-foreground" /> 
           </div>
           <div>
-              <Label htmlFor="manualYear">Ano (Opcional)</Label>
-              <Input id="manualYear" type="number" value={manualYear} onChange={(e) => setManualYear(e.target.value)} placeholder="Ex: 2025" className="mt-1" />
+            <Label htmlFor="manualYear" className="text-sm font-medium text-foreground">Ano (Opcional)</Label> 
+            <Input id="manualYear" type="number" value={manualYear} onChange={(e) => setManualYear(e.target.value)} placeholder="Ex: 2025" className="mt-1 placeholder:text-muted-foreground" /> 
           </div>
           <div>
-            <Label htmlFor="manualPoster">URL Pôster (Opc. - Imgur)</Label>
-            <p className="text-xs text-gray-500 mb-1"> Use &lsquo;Copiar Endereço da Imagem&rsquo; no <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">Imgur</a>. </p>
-            <Input id="manualPoster" type="text" value={manualPoster} onChange={(e) => setManualPoster(e.target.value)} placeholder="https://i.imgur.com/..." className="mt-1" />
+            <Label htmlFor="manualPoster" className="text-sm font-medium text-foreground">URL Pôster (Opc. - Imgur)</Label> 
+            <p className="text-xs text-muted-foreground mb-1"> Use &lsquo;Copiar Endereço da Imagem&rsquo; no <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-primary underline">Imgur</a>. </p>
+            <Input id="manualPoster" type="text" value={manualPoster} onChange={(e) => setManualPoster(e.target.value)} placeholder="https://i.imgur.com/..." className="mt-1 placeholder:text-muted-foreground" /> 
           </div>
-          {/* Checkbox Semanal (Com Shadcn) */}
           {(mediaType === MediaType.ANIME || mediaType === MediaType.SERIES) && (
               <div className="flex items-center space-x-2 pt-2">
                 <Checkbox id="isWeeklyManual" checked={isWeekly} onCheckedChange={(checked) => setIsWeekly(Boolean(checked))} />
-                <Label htmlFor="isWeeklyManual" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                <Label htmlFor="isWeeklyManual" className="text-sm font-medium text-foreground leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                     Marcar como item semanal?
                 </Label>
               </div>
           )}
-          {/* Botões Ação Manual (Com Shadcn) */}
           <div className="flex gap-2 pt-2">
               <Button onClick={(e) => handleManualAdd(e, "TO_WATCH")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. Para Ver"} </Button>
               <Button onClick={(e) => handleManualAdd(e, "WATCHING")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. A Ver"} </Button>
@@ -215,22 +204,26 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
       )}
 
       {/* Mensagem */}
-      {message && <p className="mt-2 text-sm text-gray-500">{message}</p>}
+      {message && <p className="mt-2 text-sm text-muted-foreground">{message}</p>}
 
-      {/* Lista de Resultados (Com Shadcn) */}
+      {/* Lista de Resultados */}
       <ul className="mt-4 space-y-2 max-h-96 overflow-y-auto">
-          {/* Checkbox Semanal acima da lista (Com Shadcn) */}
           {(mediaType === MediaType.ANIME || mediaType === MediaType.SERIES) && results.length > 0 && (
-            <div className="flex items-center space-x-2 mb-2 p-2 bg-slate-50 rounded border border-slate-200">
+            <div className="flex items-center space-x-2 mb-2 p-2 bg-muted rounded border">
                 <Checkbox id="isWeeklySearch" checked={isWeekly} onCheckedChange={(checked) => setIsWeekly(Boolean(checked))} />
-                <Label htmlFor="isWeeklySearch" className="text-sm font-medium"> Marcar itens adicionados como semanais? </Label>
+                {/* Corrigido Label aqui também */}
+                <Label htmlFor="isWeeklySearch" className="text-sm font-medium text-foreground"> Marcar itens adicionados como semanais? </Label>
             </div>
           )}
+          
         {results.map((media) => (
-          <li key={`${media.source}-${media.sourceId}`} className="flex items-center justify-between gap-2 p-2 border border-slate-200 rounded-md" >
-              {/* Imagem e Título */}
-              <div className="flex items-center gap-3 overflow-hidden"> <Image src={ media.posterPath || "/poster-placeholder.png" } width={40} height={60} alt={media.title} className="rounded flex-shrink-0" unoptimized={true} priority={false}/> <span className="text-sm truncate" title={media.title}>{media.title}</span> </div>
-            {/* Botões Adicionar (Com Shadcn) */}
+          <li key={`${media.source}-${media.sourceId}`} className="flex items-center justify-between gap-2 p-2 border bg-card rounded-md" >
+            
+            <div className="flex items-center gap-3 overflow-hidden"> 
+              <Image src={ media.posterPath || "/poster-placeholder.png" } width={40} height={60} alt={media.title} className="rounded flex-shrink-0" unoptimized={true} priority={false}/> 
+              <span className="text-sm truncate text-foreground" title={media.title}>{media.title}</span> 
+            </div>
+            
             <div className="flex flex-col gap-1 flex-shrink-0">
                 <Button onClick={() => addToList(media, "TO_WATCH")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Para Ver </Button>
                 {(media.source === 'ANIME' || media.source === 'SERIES') && (

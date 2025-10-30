@@ -33,7 +33,6 @@ export default async function PublicProfilePage({ params, searchParams }: { para
   const startOfThisWeek = startOfDay(startOfWeek(targetDate, weekOptions));
   const endOfThisWeek = endOfDay(endOfWeek(targetDate, weekOptions));
 
-  // --- CORREÇÃO AQUI ---
   // Busca User (bio adicionada, avatar removido)
   const user = await prisma.user.findUnique({
     where: { username: decodedUsername },
@@ -42,11 +41,9 @@ export default async function PublicProfilePage({ params, searchParams }: { para
         name: true, 
         username: true, 
         role: true,
-        bio: true, // 1. Corrigido: Busca a bio
-        // 'image' foi removido conforme solicitação
+        bio: true, // Busca a bio
       }
   });
-  // --- FIM DA CORREÇÃO ---
 
   if (!user) { notFound(); }
 
@@ -89,40 +86,39 @@ export default async function PublicProfilePage({ params, searchParams }: { para
   const prevWeekLink = `/${username}?weekOffset=${weekOffset - 1}`;
   const nextWeekLink = `/${username}?weekOffset=${weekOffset + 1}`;
   
-  // Define cor tema (default, já que não está no schema)
-  const themeColor = "#6366F1"; // Default Indigo
+  // --- [CORREÇÃO] Remove 'themeColor' ---
+  // const themeColor = "#6366F1"; // Removido
 
   return (
-    <div className={cn("bg-slate-50 text-foreground")}>
+    // --- [CORREÇÃO] Troca 'bg-slate-50' por 'bg-background' ---
+    <div className={cn("bg-background text-foreground")}>
       <div className={cn("container mx-auto max-w-5xl px-4 pb-8 md:px-6 md:pb-12 lg:px-8 lg:py-16 pt-8 md:pt-12 lg:pt-16")}>
 
         {/* Cabeçalho */}
         <div className="text-center mb-12">
             
-            {/* --- CORREÇÃO AQUI --- */}
-            {/* Bloco do Avatar REMOVIDO conforme solicitado */}
-            
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2">
               {user.name || user.username}
             </h1>
             
-            {/* 2. Corrigido: Bio adicionada para exibição */}
             {user.bio && (
               <p className="text-lg text-muted-foreground max-w-xl mx-auto">
                 {user.bio}
               </p>
             )}
-            {/* --- FIM DA CORREÇÃO --- */}
         </div>
 
-        {/* Card Cronograma */}
-        <Card className="mb-12 bg-white">
+        {/* Card Cronograma (Já corrigido para não ter bg-white) */}
+        <Card className="mb-12">
           <CardHeader>
               <div className="flex justify-between items-center">
-                  <CardTitle className="text-2xl md:text-3xl" style={{ color: themeColor }}>
+                  
+                  {/* --- [CORREÇÃO] Troca 'style' por 'className="text-primary"' --- */}
+                  <CardTitle className="text-2xl md:text-3xl text-primary">
                       Cronograma da Semana
                   </CardTitle>
-                 <div className="flex gap-2">
+                  
+                  <div className="flex gap-2">
                       <Link 
                         href={prevWeekLink} 
                         className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -141,13 +137,16 @@ export default async function PublicProfilePage({ params, searchParams }: { para
             <CardContent className="space-y-6">
               {daysOfWeek.map(day => (
                 <div key={day.date.toString()}>
-                  <h3 className="text-lg font-semibold mb-3 capitalize" style={{ color: themeColor }}>
+
+                  {/* --- [CORREÇÃO] Troca 'style' por 'className="text-primary"' --- */}
+                  <h3 className="text-lg font-semibold mb-3 capitalize text-primary">
                       {day.dayName} <span className="text-base text-muted-foreground font-normal ml-2">({format(day.date, "dd/MM")})</span>
                   </h3>
+
                   {day.items.length === 0 ? ( <p className="text-muted-foreground text-sm pl-4">Nenhum item.</p> ) : (
                     <ul className="space-y-3 pl-4 border-l-2">
                       {day.items.map(item => {
-                          const isItemWeekly = false; // 'isWeekly' não está no schema simples
+                          const isItemWeekly = false; 
                           return !item.media ? null : ( 
                           <li key={item.id} className="flex items-start gap-4">
                               <Image src={ item.media.posterPath || "/poster-placeholder.png" } width={50} height={75} alt={item.media.title} className="rounded shadow-sm flex-shrink-0" unoptimized={true} />
@@ -156,7 +155,6 @@ export default async function PublicProfilePage({ params, searchParams }: { para
                                     {item.media.title}
                                     {isItemWeekly && (<FiRefreshCw className="inline text-blue-500 flex-shrink-0" title="Item Semanal"/>)}
                                   </span>
-                                  {/* T/E não existe no ScheduleItem do schema simples */}
                               </div>
                               {item.horario && ( <div className="flex-shrink-0 text-right"> <span className="text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap"> {item.horario} </span> </div> )}
                           </li>
@@ -173,9 +171,9 @@ export default async function PublicProfilePage({ params, searchParams }: { para
         <UserListsClient
           username={decodedUsername}
           initialToWatch={initialToWatch}
-          initialWatching={initialWatching} // Passa lista vazia
+          initialWatching={initialWatching}
           initialWatched={initialWatched}
-          initialDropped={initialDropped} // Passa lista vazia
+          initialDropped={initialDropped}
         />
     </div>
   </div>

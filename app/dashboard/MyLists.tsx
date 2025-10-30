@@ -12,14 +12,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
 
-// Tipagem (sem mudanças)
+// Tipagem
 type MediaStatusWithMedia = MediaStatus & { media: Media };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 type ListTab = StatusKey;
 type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; page: number; pageSize: number; };
 type MyListsProps = { /* ... (props iguais) ... */ toWatchData: PaginatedListData; watchingData: PaginatedListData; watchedData: PaginatedListData; droppedData: PaginatedListData; onUpdateStatus: (item: MediaStatusWithMedia, newStatus: StatusKey) => void; onPageChange: (listStatus: StatusKey, newPage: number) => void; onToggleWeekly: (item: MediaStatusWithMedia) => void; listLoadingStatus: Record<StatusKey, boolean>; searchTerm: string; setSearchTerm: (term: string) => void; isUpdatingGlobal: boolean; };
 
-// ActionButton (sem mudanças)
+// ActionButton (Deixamos as cores de ação, pois são intencionais)
 type ActionButtonProps = { /* ... */ onClick: () => void; label: string; colorClass: string; disabled: boolean; };
 function ActionButton({ onClick, label, colorClass, disabled }: ActionButtonProps) { /* ... (igual) ... */ return ( <Button onClick={onClick} disabled={disabled} size="sm" className={`h-6 px-2 text-xs ${colorClass} hover:${colorClass}/90`} > {label} </Button> ); }
 
@@ -38,7 +38,7 @@ export default function MyLists({
   const isLoadingCurrentList = listLoadingStatus[activeTab];
   const totalPages = Math.ceil(currentData.totalCount / currentData.pageSize);
 
-  // renderListItem (sem mudanças na lógica, apenas texto de progresso)
+  // renderListItem
   const renderListItem = (item: MediaStatusWithMedia, listStatus: StatusKey) => {
     let actionButtons;
     const isUpdating = isUpdatingGlobal || isLoadingCurrentList;
@@ -50,7 +50,8 @@ export default function MyLists({
       case "WATCHING":
         actionButtons = (
           <div className="flex flex-col sm:flex-row gap-1 items-center">
-            {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-gray-600 cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
+            {/* [CORREÇÃO] Troca 'text-gray-600' por 'text-muted-foreground' */}
+            {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
             <ActionButton label="Abandonar" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "DROPPED")} />
             <ActionButton label="Pausar" colorClass="bg-yellow-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
           </div>
@@ -62,24 +63,26 @@ export default function MyLists({
     const showProgress = isSerieOrAnime && (item.lastSeasonWatched !== null || item.lastEpisodeWatched !== null);
 
     return (
-      <li key={item.id} className="flex items-center justify-between gap-2 p-2 border-b border-slate-100 last:border-b-0">
+      // [CORREÇÃO] Troca 'border-slate-100' por 'border-b'
+      <li key={item.id} className="flex items-center justify-between gap-2 p-2 border-b last:border-b-0">
         <div className="flex items-center gap-3 overflow-hidden">
           <Image src={item.media.posterPath || "/poster-placeholder.png"} width={40} height={60} alt={item.media.title} className="rounded flex-shrink-0" unoptimized={true} />
           <div className="flex flex-col overflow-hidden">
-            <span className="text-sm truncate font-medium flex items-center gap-1" title={item.media.title}>
+            {/* [CORREÇÃO] Adiciona 'text-foreground' */}
+            <span className="text-sm truncate font-medium flex items-center gap-1 text-foreground" title={item.media.title}>
               {item.media.title}
               {isWeekly && item.status === 'WATCHING' && ( <FiRefreshCw className="text-blue-500 flex-shrink-0" title="Item Semanal" /> )}
             </span>
-            {/* --- [MUDANÇA TEXTO] --- */}
+            
             {showProgress && item.status !== 'TO_WATCH' && (
-              <span className="text-xs font-bold text-indigo-600">
+              // [CORREÇÃO] Troca 'text-indigo-600' por 'text-primary'
+              <span className="text-xs font-bold text-primary">
                 {item.status === 'WATCHING' && isWeekly ? 'Progresso:' : 'Visto até:'}
                 {item.lastSeasonWatched && ` T${item.lastSeasonWatched}`}
                 {item.lastEpisodeWatched && !item.lastEpisodeWatchedEnd && ` E${item.lastEpisodeWatched}`}
                 {item.lastEpisodeWatched && item.lastEpisodeWatchedEnd && ` E${item.lastEpisodeWatched}-${item.lastEpisodeWatchedEnd}`}
               </span>
             )}
-            {/* --- [FIM MUDANÇA TEXTO] --- */}
           </div>
         </div>
         <div className="flex-shrink-0">{actionButtons}</div>
@@ -88,25 +91,59 @@ export default function MyLists({
   };
 
   // Função para renderizar o conteúdo de uma aba
-  const renderTabContent = (statusKey: StatusKey) => { /* ... (igual) ... */ const data = paginatedDataMap[statusKey]; const isLoading = listLoadingStatus[statusKey]; const totalPages = Math.ceil(data.totalCount / data.pageSize); return ( <div className="mt-4"> <div className="min-h-[200px] relative"> {isLoading && ( <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-md"> <span className="text-slate-500">A carregar...</span> </div> )} {!isLoading && data.items.length === 0 ? ( <p className="text-slate-500 text-sm text-center py-10"> {searchTerm ? "Nenhum item encontrado." : "Nenhum item nesta lista."} </p> ) : ( <ul className="space-y-1"> {!isLoading && data.items.map(item => renderListItem(item, statusKey))} </ul> )} </div> {!isLoading && totalPages > 1 && ( <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-200 text-sm"> <Button onClick={() => onPageChange(statusKey, data.page - 1)} disabled={data.page <= 1 || isLoading} variant="outline" size="sm"> &larr; Anterior </Button> <span> Página {data.page} de {totalPages} </span> <Button onClick={() => onPageChange(statusKey, data.page + 1)} disabled={data.page >= totalPages || isLoading} variant="outline" size="sm"> Próxima &rarr; </Button> </div> )} </div> ); };
+  const renderTabContent = (statusKey: StatusKey) => { 
+    const data = paginatedDataMap[statusKey]; 
+    const isLoading = listLoadingStatus[statusKey]; 
+    const totalPages = Math.ceil(data.totalCount / data.pageSize); 
+    return ( 
+      <div className="mt-4"> 
+        <div className="min-h-[200px] relative"> 
+          {isLoading && ( 
+            // [CORREÇÃO] Troca 'bg-white bg-opacity-75' por 'bg-background/75'
+            <div className="absolute inset-0 bg-background/75 flex items-center justify-center z-10 rounded-md"> 
+              {/* [CORREÇÃO] Troca 'text-slate-500' por 'text-muted-foreground' */}
+              <span className="text-muted-foreground">A carregar...</span> 
+            </div> 
+          )} 
+          {!isLoading && data.items.length === 0 ? ( 
+            // [CORREÇÃO] Troca 'text-slate-500' por 'text-muted-foreground'
+            <p className="text-muted-foreground text-sm text-center py-10"> 
+              {searchTerm ? "Nenhum item encontrado." : "Nenhum item nesta lista."} 
+            </p> 
+          ) : ( 
+            <ul className="space-y-1"> 
+              {!isLoading && data.items.map(item => renderListItem(item, statusKey))} 
+            </ul> 
+          )} 
+        </div> 
+        {!isLoading && totalPages > 1 && ( 
+          // [CORREÇÃO] Troca 'border-slate-200' por 'border-t'
+          <div className="flex justify-between items-center mt-4 pt-4 border-t text-sm"> 
+            <Button onClick={() => onPageChange(statusKey, data.page - 1)} disabled={data.page <= 1 || isLoading} variant="outline" size="sm"> &larr; Anterior </Button> 
+            {/* [CORREÇÃO] Adiciona 'text-muted-foreground' */}
+            <span className="text-muted-foreground"> Página {data.page} de {totalPages} </span> 
+            <Button onClick={() => onPageChange(statusKey, data.page + 1)} disabled={data.page >= totalPages || isLoading} variant="outline" size="sm"> Próxima &rarr; </Button> 
+          </div> 
+        )} 
+      </div> 
+    ); 
+  };
 
   return (
     <div className="flex flex-col">
-      {/* Barra de Pesquisa (igual) */}
-       <div className="mb-4"> <Input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Filtrar listas..." /> </div>
+      {/* Barra de Pesquisa (Shadcn <Input> já é compatível) */}
+        <div className="mb-4"> <Input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Filtrar listas..." /> </div>
 
-      {/* Abas Shadcn (Atualiza Nomes) */}
+      {/* Abas Shadcn (Já são compatíveis) */}
       <Tabs defaultValue="TO_WATCH" className="w-full">
         <TabsList className="grid w-full grid-cols-4 h-auto mb-4">
-           {/* --- [MUDANÇA NOMES] --- */}
           <TabsTrigger value="TO_WATCH" className="text-xs sm:text-sm px-1 h-full whitespace-normal">Para Assistir ({toWatchData.totalCount})</TabsTrigger>
           <TabsTrigger value="WATCHING" className="text-xs sm:text-sm px-1 h-full whitespace-normal">Assistindo ({watchingData.totalCount})</TabsTrigger>
           <TabsTrigger value="WATCHED" className="text-xs sm:text-sm px-1 h-full whitespace-normal">Já Assistido ({watchedData.totalCount})</TabsTrigger>
           <TabsTrigger value="DROPPED" className="text-xs sm:text-sm px-1 h-full whitespace-normal">Abandonados ({droppedData.totalCount})</TabsTrigger>
-           {/* --- [FIM MUDANÇA NOMES] --- */}
         </TabsList>
 
-        {/* Conteúdo das Abas (igual) */}
+        {/* Conteúdo das Abas */}
         <TabsContent value="TO_WATCH">{renderTabContent("TO_WATCH")}</TabsContent>
         <TabsContent value="WATCHING">{renderTabContent("WATCHING")}</TabsContent>
         <TabsContent value="WATCHED">{renderTabContent("WATCHED")}</TabsContent>
@@ -115,4 +152,3 @@ export default function MyLists({
     </div>
   );
 }
-

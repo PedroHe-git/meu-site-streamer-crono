@@ -9,13 +9,11 @@ import MediaSearch from "./MediaSearch";
 import MyLists from "./MyLists";
 import ScheduleManager from "./ScheduleManager";
 
-// Imports de UI (Avatar e cn removidos)
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+// Imports de UI (Todos os necessários)
+import { Label }  from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea"; 
-// import { cn } from "@/lib/utils"; 
 
 // Tipagem
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
@@ -23,12 +21,10 @@ type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; page: number; pageSize: number; };
 
-// Constante themeColors REMOVIDA
-
 export default function DashboardPage() {
   const { data: session, status } = useSession();
 
-  // Estados (sem avatar, cor, banner)
+  // Estados
   const [toWatchData, setToWatchData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchingData, setWatchingData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchedData, setWatchedData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
@@ -42,7 +38,7 @@ export default function DashboardPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Estados Definições Perfil (Somente Bio)
+  // Estados Definições Perfil (Bio)
   // @ts-ignore
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
@@ -51,7 +47,7 @@ export default function DashboardPage() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
 
-  // Efeito para carregar definições (Somente Bio)
+  // Efeito para carregar definições (Bio)
   useEffect(() => {
     if (session?.user) {
       // @ts-ignore
@@ -59,8 +55,9 @@ export default function DashboardPage() {
     }
   }, [session?.user]);
   
- const fetchListData = useCallback(async (listStatus: StatusKey, page: number = 1, search: string = "") => {
-    // ... (lógica fetchListData igual)
+  // --- Funções de Busca (Corrigido) ---
+
+  const fetchListData = useCallback(async (listStatus: StatusKey, page: number = 1, search: string = "") => {
     setIsListLoading(prev => ({ ...prev, [listStatus]: true }));
     try {
       const params = new URLSearchParams({ status: listStatus, page: page.toString(), pageSize: pageSize.toString(), });
@@ -82,23 +79,20 @@ export default function DashboardPage() {
     }
   }, [pageSize]);
 
-  // fetchScheduleData
-   const fetchScheduleData = async () => {
-     // ... (lógica fetchScheduleData igual)
+  const fetchScheduleData = async () => {
     try {
-       const resSchedule = await fetch("/api/schedule");
-       if (!resSchedule.ok) { throw new Error('Falha ao buscar schedule'); }
-       const scheduleData = await resSchedule.json();
-       setScheduleItems(scheduleData);
-     } catch (error) {
-       console.error("Erro ao buscar schedule:", error);
-       setScheduleItems([]);
-     }
-   };
+      const resSchedule = await fetch("/api/schedule");
+      if (!resSchedule.ok) { throw new Error('Falha ao buscar schedule'); }
+      const scheduleData = await resSchedule.json();
+      setScheduleItems(scheduleData);
+    } catch (error) {
+      console.error("Erro ao buscar schedule:", error);
+      setScheduleItems([]);
+    }
+  };
 
-  // Efeito Inicial (busca tudo ao autenticar)
+  // Efeito Inicial (Corrigido)
   useEffect(() => {
-    // ... (lógica useEffect igual)
     if (status === "authenticated") {
       setIsLoadingData(true);
       Promise.all([
@@ -109,28 +103,27 @@ export default function DashboardPage() {
         fetchScheduleData()
       ]).finally(() => setIsLoadingData(false));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, fetchListData]); // fetchListData está na dependência
 
-   // Efeito SearchTerm (busca página 1 ao pesquisar)
-   useEffect(() => {
-     // ... (lógica useEffect igual)
-     const handler = setTimeout(() => {
-       if (status === "authenticated") {
-         fetchListData("TO_WATCH", 1, searchTerm);
-         fetchListData("WATCHING", 1, searchTerm);
-         fetchListData("WATCHED", 1, searchTerm);
-         fetchListData("DROPPED", 1, searchTerm);
-       }
-     }, 500);
-     return () => clearTimeout(handler);
-   // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [searchTerm, status]);
+  // Efeito SearchTerm (Corrigido)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (status === "authenticated") {
+        fetchListData("TO_WATCH", 1, searchTerm);
+        fetchListData("WATCHING", 1, searchTerm);
+        fetchListData("WATCHED", 1, searchTerm);
+        fetchListData("DROPPED", 1, searchTerm);
+      }
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchTerm, status, fetchListData]); // fetchListData está na dependência
   
-   const handleDataChanged = useCallback(() => {
-    // Força o recarregamento de todas as listas e do agendamento
-    // Usa o searchTerm atual e volta para a página 1
-    setIsUpdating(true); // Mostra um feedback visual (opcional)
+  const paginatedDataMap: Record<StatusKey, PaginatedListData> = { TO_WATCH: toWatchData, WATCHING: watchingData, WATCHED: watchedData, DROPPED: droppedData, };
+
+  // --- Funções de Ação (Corrigido) ---
+
+  const handleDataChanged = useCallback(() => {
+    setIsUpdating(true);
     Promise.all([
       fetchListData("TO_WATCH", 1, searchTerm),
       fetchListData("WATCHING", 1, searchTerm),
@@ -140,88 +133,66 @@ export default function DashboardPage() {
     ]).finally(() => {
       setIsUpdating(false);
     });
-  // Adiciona 'fetchListData' e 'searchTerm' como dependências
-  }, [fetchListData, searchTerm]);
+  }, [fetchListData, searchTerm]); 
 
   const handlePageChange = (listStatus: StatusKey, newPage: number) => {
     const data = paginatedDataMap[listStatus];
     const totalPages = Math.ceil(data.totalCount / pageSize);
-
-    // Validação para não buscar páginas que não existem
     if (newPage >= 1 && (newPage <= totalPages || totalPages === 0)) {
       fetchListData(listStatus, newPage, searchTerm);
     }
   };
 
   const handleUpdateStatus = async (item: MediaStatusWithMedia, newStatus: StatusKey) => {
-    setIsUpdating(true); // Ativa o loading global
+    setIsUpdating(true);
     setActionError(null);
-    
     try {
       const res = await fetch("/api/mediastatus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mediaId: item.mediaId, // ID da mídia para atualização
-          status: newStatus,     // O novo status
+          mediaId: item.mediaId,
+          status: newStatus,
         }),
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || `Falha ao atualizar status`);
-      }
-      handleDataChanged();
-      } catch (error: any) {
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || `Falha ao atualizar status`); }
+      handleDataChanged(); 
+    } catch (error: any) {
       console.error("Erro ao atualizar status:", error);
-      setActionError(error.message); // Mostra o erro na tela
-    } finally {
-      // O 'setIsUpdating(false)' será chamado pelo 'finally' do handleDataChanged
+      setActionError(error.message);
+      setIsUpdating(false); // Garante que o loading pare em caso de erro
     }
   };
 
   const handleToggleWeekly = async (item: MediaStatusWithMedia) => {
     setIsUpdating(true);
     setActionError(null);
-    const newIsWeekly = !item.isWeekly; // O valor oposto
-    
+    const newIsWeekly = !item.isWeekly;
     try {
       const res = await fetch("/api/mediastatus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mediaId: item.mediaId,   // ID da mídia
-          status: item.status,     // Mantém o status atual
-          isWeekly: newIsWeekly, // Envia o novo valor
+          mediaId: item.mediaId,
+          status: item.status,
+          isWeekly: newIsWeekly,
         }),
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Falha ao alternar status semanal");
-      }
-
-      // Se funcionou, recarrega os dados
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Falha ao alternar status semanal"); }
       handleDataChanged();
-
     } catch (error: any) {
       console.error("Erro ao alternar status semanal:", error);
       setActionError(error.message);
-    } finally {
-      // O 'setIsUpdating(false)' será chamado pelo 'finally' do handleDataChanged
+      setIsUpdating(false); // Garante que o loading pare em caso de erro
     }
   };
 
-
-  const paginatedDataMap: Record<StatusKey, PaginatedListData> = { TO_WATCH: toWatchData, WATCHING: watchingData, WATCHED: watchedData, DROPPED: droppedData, };
-  
-
-  // Funções Definições Perfil (Somente Bio)
+  // Função Definições Perfil (Bio)
    const handleSaveSettings = async () => {
      if (!isCreator) return;
      setIsSavingSettings(true); setSettingsMessage("A guardar..."); setActionError(null);
      try {
-       const payload = { bio: bio }; // Envia apenas a bio
+       const payload = { bio: bio };
        const res = await fetch('/api/profile/settings', {
          method: 'PUT', headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify(payload),
@@ -237,15 +208,21 @@ export default function DashboardPage() {
      }
    };
 
-  // Estados de Carregamento
-  if (status === "loading" || (status === "authenticated" && isLoadingData)) { return <p className="text-center p-10 text-slate-500">A carregar...</p>; }
-  if (status === "unauthenticated") { if (typeof window !== 'undefined') { redirect("/auth/signin"); } return <p className="text-center p-10 text-slate-500">Redirecionando...</p>; }
+  // Estados de Carregamento (Corrigido para usar cor semântica)
+  if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
+    return <p className="text-center p-10 text-muted-foreground">A carregar...</p>; 
+  }
+  if (status === "unauthenticated") { 
+    if (typeof window !== 'undefined') { redirect("/auth/signin"); } 
+    return <p className="text-center p-10 text-muted-foreground">Redirecionando...</p>; 
+  }
 
   const firstName = session?.user?.name?.split(' ')[0] || session?.user?.username || "";
 
+  // --- JSX (Corrigido para Modo Escuro) ---
   return (
-    <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl text-slate-800">
-      <h1 className="text-3xl md:text-4xl font-semibold mb-8 text-slate-800">
+    <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+      <h1 className="text-3xl md:text-4xl font-semibold mb-8">
         Olá, {firstName}!
       </h1>
 
@@ -258,7 +235,7 @@ export default function DashboardPage() {
          {/* Coluna Esquerda: Definições e Agendamentos */}
          <div className="lg:col-span-1 space-y-6">
             
-            {/* Card Definições (Só para CREATOR, Somente Bio) */}
+            {/* Card Definições (Este já usa <Card>) */}
             {isCreator && (
                 <Card>
                     <CardHeader>
@@ -266,15 +243,11 @@ export default function DashboardPage() {
                         <CardDescription>Ajuste a sua página pública.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {/* Bio */}
                         <div className="space-y-1">
                             <Label htmlFor="profile-bio">Bio Curta</Label>
                             <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Fale um pouco sobre si..." maxLength={200} className="h-24" disabled={isSavingSettings} />
                              <p className="text-xs text-muted-foreground">{200 - (bio?.length || 0)} caracteres restantes</p>
                         </div>
-                        
-                        {/* --- [REMOVIDO] Cor e Banner --- */}
-
                         <Button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full mt-2">
                            {isSavingSettings ? "A guardar..." : "Guardar Definições"}
                         </Button>
@@ -283,33 +256,45 @@ export default function DashboardPage() {
                 </Card>
             )}
 
-             {/* Card 3: Agendamento */}
-             <div className="bg-white shadow-lg rounded-xl p-6">
-               <h2 className="text-2xl font-semibold mb-6 text-slate-700">3. Gerir Agendamentos</h2>
-               <ScheduleManager
-                 agendaveisList={watchingData.items}
-                 initialScheduleItems={scheduleItems}
-                 onScheduleChanged={handleDataChanged}
-               />
-             </div>
+             {/* Card 3: Agendamento (CORRIGIDO PARA <Card>) */}
+             <Card>
+               <CardContent className="p-6">
+                 <h2 className="text-2xl font-semibold mb-6">3. Gerir Agendamentos</h2>
+                 <ScheduleManager
+                   agendaveisList={watchingData.items}
+                   initialScheduleItems={scheduleItems}
+                   onScheduleChanged={handleDataChanged}
+                 />
+               </CardContent>
+             </Card>
          </div> {/* Fim Coluna Esquerda */}
 
          {/* Coluna Direita: Busca e Listas */}
          <div className="lg:col-span-3 space-y-6">
-             <div className="bg-white shadow-lg rounded-xl p-6"> <h2 className="text-2xl font-semibold mb-6 text-slate-700">1. Buscar Media</h2> <MediaSearch onMediaAdded={handleDataChanged} /> </div>
-             <div className="bg-white shadow-lg rounded-xl p-6">
-                 <h2 className="text-2xl font-semibold mb-6 text-slate-700">2. Minhas Listas</h2>
+
+             {/* Card 1: Busca (CORRIGIDO PARA <Card>) */}
+             <Card>
+               <CardContent className="p-6">
+                 <h2 className="text-2xl font-semibold mb-6">1. Buscar Media</h2> 
+                 <MediaSearch onMediaAdded={handleDataChanged} />
+               </CardContent>
+             </Card>
+             
+             {/* Card 2: Listas (CORRIGIDO PARA <Card>) */}
+             <Card>
+               <CardContent className="p-6">
+                 <h2 className="text-2xl font-semibold mb-6">2. Minhas Listas</h2>
                  <MyLists
                    toWatchData={toWatchData} watchingData={watchingData} watchedData={watchedData} droppedData={droppedData}
                    onUpdateStatus={handleUpdateStatus} onPageChange={handlePageChange} onToggleWeekly={handleToggleWeekly}
                    listLoadingStatus={isListLoading} searchTerm={searchTerm} setSearchTerm={setSearchTerm}
                    isUpdatingGlobal={isUpdating}
                  />
-             </div>
-         </div> {/* Fim Coluna Direita */}
+               </CardContent>
+             </Card>
 
+         </div> {/* Fim Coluna Direita */}
       </div> {/* Fim Grid Principal */}
     </div>
   );
 }
-
