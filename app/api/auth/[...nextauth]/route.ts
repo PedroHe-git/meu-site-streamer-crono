@@ -4,8 +4,7 @@ import NextAuth from "next-auth";
 // 1. Importe as opções do seu arquivo da pasta 'lib'
 import { authOptions } from "@/lib/authOptions"; 
 
-export const runtime = 'nodejs';
-export const region = 'gru1';
+
 
 // 2. Crie o handler usando as opções importadas
 const handler = NextAuth(authOptions);
