@@ -11,7 +11,7 @@ const cspValue = [
   "style-src 'self' 'unsafe-inline' fonts.googleapis.com;",
 
   // ✅ Libera imagens (incluindo c.clarity.ms)
-  "img-src 'self' data: image.tmdb.org cdn.myanimelist.net i.imgur.com https://www.clarity.ms https://c.clarity.ms;",
+  "img-src 'self' data: image.tmdb.org cdn.myanimelist.net i.imgur.com https://www.clarity.ms https://c.clarity.ms c.bing.com;",
 
   // ✅ Fontes
   "font-src 'self' fonts.gstatic.com;",
