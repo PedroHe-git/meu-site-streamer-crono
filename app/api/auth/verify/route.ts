@@ -6,7 +6,7 @@ import prisma from '@/lib/prisma';
 
 // --- [ADIÇÕES CORRIGIDAS] ---
 export const runtime = 'nodejs'; // Força o Node.js
-export const region = 'gru1';  // Força a execução em São Paulo
+
 // --- [FIM DAS ADIÇÕES] ---
 
 export async function GET(request: Request) {
