@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const runtime = 'nodejs';
+export const region = 'gru1';
 
 
 // Tipagem

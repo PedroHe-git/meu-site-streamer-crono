@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { Prisma } from "@prisma/client";
 
 export const runtime = 'nodejs';
+export const region = 'gru1';
 
 // Define os tipos de status válidos
 const validStatuses = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];

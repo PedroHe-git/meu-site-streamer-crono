@@ -9,6 +9,7 @@ import prisma from '@/lib/prisma';
 import { Prisma, MediaType } from "@prisma/client";
 
 export const runtime = 'nodejs';
+export const region = 'gru1';
 
 
   // --- GET: Busca listas paginadas e filtradas ---

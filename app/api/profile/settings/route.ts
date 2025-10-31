@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { Prisma, UserRole } from "@prisma/client"; // Importa UserRole
 
 export const runtime = 'nodejs';
+export const region = 'gru1';
 
 // --- PUT: Atualiza as definições do perfil ---
 export async function PUT(request: Request) {

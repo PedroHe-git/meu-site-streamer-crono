@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client'; // Importa Prisma para tipos
 
 export const runtime = 'nodejs';
+export const region = 'gru1';
 
 // --- GET: Busca todos os agendamentos futuros ---
 export async function GET(request: Request) {
