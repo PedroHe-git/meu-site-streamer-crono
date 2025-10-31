@@ -1,4 +1,4 @@
-// app/darshbord/page.tsx (Atualizado)
+// app/darshbord/page.tsx (COMPLETO E CORRIGIDO)
 
 "use client";
 
@@ -26,7 +26,7 @@ type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; pa
 export default function DashboardPage() {
   const { data: session, status } = useSession();
 
-  // Estados (sem mudanças)
+  // Estados
   const [toWatchData, setToWatchData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchingData, setWatchingData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchedData, setWatchedData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
@@ -39,12 +39,15 @@ export default function DashboardPage() {
   const [isListLoading, setIsListLoading] = useState<Record<StatusKey, boolean>>({ TO_WATCH: false, WATCHING: false, WATCHED: false, DROPPED: false });
   const [isUpdating, setIsUpdating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [bio, setBio] = useState(session?.user?.bio || "");
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [settingsMessage, setSettingsMessage] = useState("");
+  
+  // Estados Definições Perfil (Bio)
   // @ts-ignore
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
+  // @ts-ignore
+  const [bio, setBio] = useState(session?.user?.bio || ""); // <-- Esta linha agora funciona
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState("");
 
   // Efeito para carregar definições (Bio)
   useEffect(() => {
@@ -54,9 +57,8 @@ export default function DashboardPage() {
     }
   }, [session?.user]);
   
-  // --- Funções de Busca (sem mudanças) ---
+  // --- Funções de Busca (Preenchidas) ---
   const fetchListData = useCallback(async (listStatus: StatusKey, page: number = 1, search: string = "") => {
-    // ... (código igual)
     setIsListLoading(prev => ({ ...prev, [listStatus]: true }));
     try {
       const params = new URLSearchParams({ status: listStatus, page: page.toString(), pageSize: pageSize.toString(), });
@@ -79,8 +81,7 @@ export default function DashboardPage() {
   }, [pageSize]);
 
   const fetchScheduleData = async () => {
-    // ... (código igual)
-     try {
+    try {
       const resSchedule = await fetch("/api/schedule");
       if (!resSchedule.ok) { throw new Error('Falha ao buscar schedule'); }
       const scheduleData = await resSchedule.json();
@@ -91,7 +92,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Efeitos (sem mudanças)
+  // Efeito Inicial (Preenchido)
   useEffect(() => {
     if (status === "authenticated") {
       setIsLoadingData(true);
@@ -101,10 +102,11 @@ export default function DashboardPage() {
         fetchListData("WATCHED", 1, ""),
         fetchListData("DROPPED", 1, ""),
         fetchScheduleData()
-      ]).finally(() => setIsLoadingData(false));
+      ]).finally(() => setIsLoadingData(false)); // <-- Resolve o "A carregar..."
     }
   }, [status, fetchListData]); 
 
+  // Efeito SearchTerm (Preenchido)
   useEffect(() => {
     const handler = setTimeout(() => {
       if (status === "authenticated") {
@@ -119,7 +121,7 @@ export default function DashboardPage() {
   
   const paginatedDataMap: Record<StatusKey, PaginatedListData> = { TO_WATCH: toWatchData, WATCHING: watchingData, WATCHED: watchedData, DROPPED: droppedData, };
 
-  // --- Funções de Ação (Adicionada handleRemoveItem) ---
+  // --- Funções de Ação (Preenchidas) ---
   const handleDataChanged = useCallback(() => {
     setIsUpdating(true);
     Promise.all([
@@ -142,7 +144,6 @@ export default function DashboardPage() {
   };
 
   const handleUpdateStatus = async (item: MediaStatusWithMedia, newStatus: StatusKey) => {
-    // ... (código igual)
     setIsUpdating(true);
     setActionError(null);
     try {
@@ -164,7 +165,6 @@ export default function DashboardPage() {
   };
 
   const handleToggleWeekly = async (item: MediaStatusWithMedia) => {
-    // ... (código igual)
     setIsUpdating(true);
     setActionError(null);
     const newIsWeekly = !item.isWeekly;
@@ -187,37 +187,27 @@ export default function DashboardPage() {
     }
   };
 
-  // --- [NOVA FUNÇÃO AQUI] ---
   const handleRemoveItem = async (item: MediaStatusWithMedia) => {
     setIsUpdating(true);
     setActionError(null);
-    
     try {
-      // Chama a nova API DELETE com o ID do *MediaStatus*
       const res = await fetch(`/api/mediastatus?id=${item.id}`, {
         method: "DELETE",
       });
-
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || `Falha ao remover item`);
       }
-
-      // Sucesso! Recarrega todos os dados
       handleDataChanged(); 
-
     } catch (error: any) {
       console.error("Erro ao remover item:", error);
       setActionError(error.message);
-      setIsUpdating(false); // Garante que o loading pare em caso de erro
+      setIsUpdating(false);
     }
-    // O 'setIsUpdating(false)' será chamado pelo 'finally' do handleDataChanged
   };
-  // --- [FIM DA NOVA FUNÇÃO] ---
 
   // Função Definições Perfil (Bio)
    const handleSaveSettings = async () => {
-     // ... (código igual)
      if (!isCreator) return;
      setIsSavingSettings(true); setSettingsMessage("A guardar..."); setActionError(null);
      try {
@@ -237,7 +227,7 @@ export default function DashboardPage() {
      }
    };
 
-  // Estados de Carregamento (sem mudanças)
+  // Estados de Carregamento
   if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
     return <p className="text-center p-10 text-muted-foreground">A carregar...</p>; 
   }
@@ -248,14 +238,13 @@ export default function DashboardPage() {
 
   const firstName = session?.user?.name?.split(' ')[0] || session?.user?.username || "";
 
-  // --- JSX (Layout Atualizado) ---
+  // --- JSX (Layout Atualizado da Sidebar) ---
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
       <h1 className="text-3xl md:text-4xl font-semibold mb-8">
         Olá, {firstName}!
       </h1>
 
-      {/* Alertas (sem mudanças) */}
       {isUpdating && ( <div className="fixed top-5 right-5 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-pulse"> A atualizar... </div> )}
       {actionError && ( <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded relative" role="alert"> <strong className="font-bold">Erro: </strong> <span className="block sm:inline">{actionError}</span> <button onClick={() => setActionError(null)} className="absolute top-0 bottom-0 right-0 px-4 py-3"> <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Fechar</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg> </button> </div> )}
 
@@ -263,6 +252,8 @@ export default function DashboardPage() {
 
          {/* 1. Sidebar (Limpa) */}
          <aside className="lg:w-1/4 space-y-6">
+            
+            {/* Card Definições */}
             {isCreator && (
                 <Card>
                     <CardHeader>
@@ -302,7 +293,7 @@ export default function DashboardPage() {
                    setSearchTerm={setSearchTerm}
                    isUpdatingGlobal={isUpdating}
                    onMediaAdded={handleDataChanged}
-                   onRemoveItem={handleRemoveItem} // <-- [NOVA PROP AQUI]
+                   onRemoveItem={handleRemoveItem} 
                  />
                </CardContent>
              </Card>
