@@ -1,7 +1,3 @@
 {
-  "functions": {
-    "app/api/**": {
-      "region": "gru1"
-    }
-  }
+  "regions": ["gru1"]
 }
