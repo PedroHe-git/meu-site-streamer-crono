@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import crypto from "crypto";
 
 export const runtime = 'nodejs';
+export const region = 'gru1';
 
 // 1. REMOVEMOS todas as importações de React, render, e o componente de Email
 // import { render } from '@react-email/render';
