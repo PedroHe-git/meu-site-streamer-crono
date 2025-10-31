@@ -8,7 +8,7 @@ import { Prisma, MediaType } from "@prisma/client";
 
 // --- [CONFIGURAÇÃO VERCEL] ---
 export const runtime = 'nodejs';
-export const region = 'gru1';
+
 // --- [FIM DA CONFIGURAÇÃO] ---
 
 
