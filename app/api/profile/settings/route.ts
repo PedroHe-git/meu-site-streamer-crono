@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
 import { Prisma, UserRole } from "@prisma/client"; // Importa UserRole
 
+export const runtime = 'nodejs';
+
 // --- PUT: Atualiza as definições do perfil ---
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);

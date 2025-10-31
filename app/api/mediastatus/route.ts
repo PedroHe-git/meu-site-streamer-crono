@@ -8,6 +8,8 @@ import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
 import { Prisma, MediaType } from "@prisma/client";
 
+export const runtime = 'nodejs';
+
 
   // --- GET: Busca listas paginadas e filtradas ---
   export async function GET(request: NextRequest) {

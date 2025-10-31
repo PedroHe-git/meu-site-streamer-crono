@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import { Resend } from "resend";
 import crypto from "crypto";
 
+export const runtime = 'nodejs';
 // 1. REMOVEMOS todas as importações de React, render, e o componente de Email
 // import { render } from '@react-email/render';
 // import { VerificationEmail } from "@/app/components/emails/VerificationEmail";

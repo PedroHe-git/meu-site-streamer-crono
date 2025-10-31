@@ -7,6 +7,8 @@ import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
 import { Prisma } from "@prisma/client";
 
+export const runtime = 'nodejs';
+
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions); // Usa authOptions v4 importado corretamente
   if (!session?.user?.email) {

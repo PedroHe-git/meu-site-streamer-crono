@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { URL } from 'url'; // Importa a classe URL
 
+export const runtime = 'nodejs';
+
 export async function GET(request: Request) {
 
   console.log("VERIFY API: Rota de verificação iniciada.");

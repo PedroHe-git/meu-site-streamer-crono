@@ -1,6 +1,8 @@
 // app/api/search-anime/route.ts
 import { NextResponse } from "next/server";
 
+export const runtime = 'nodejs';
+
 // Esta função será chamada quando acedermos a /api/search-anime?query=...
 export async function GET(request: Request) {
   // 1. Pegamos o "query" da URL

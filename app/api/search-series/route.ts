@@ -2,6 +2,8 @@
 
 import { NextResponse, NextRequest } from 'next/server';
 
+export const runtime = 'nodejs';
+
 // Não precisamos mais do 'date-fns' aqui, o frontend já cuida disso
 // import { parseISO, getYear } from 'date-fns';
 

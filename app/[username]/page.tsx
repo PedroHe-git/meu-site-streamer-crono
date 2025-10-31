@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 // Importa os componentes de Abas
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+export const runtime = 'nodejs';
+
 
 // Tipagem
 type ScheduleItemWithMedia = ScheduleItem & { media: Media; };

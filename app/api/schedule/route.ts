@@ -6,6 +6,8 @@ import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client'; // Importa Prisma para tipos
 
+export const runtime = 'nodejs';
+
 // --- GET: Busca todos os agendamentos futuros ---
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions); // Usa authOptions v4

@@ -2,6 +2,8 @@ import { NextResponse, NextRequest } from "next/server";
 import prisma from '@/lib/prisma';
 import { UserRole } from "@prisma/client"; // Importa o enum
 
+export const runtime = 'nodejs';
+
 // GET /api/users/search?q=...
 export async function GET(request: NextRequest) {
   try {

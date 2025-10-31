@@ -1,6 +1,8 @@
 // app/api/search/route.ts
 import { NextResponse } from "next/server";
 
+export const runtime = 'nodejs';
+
 // Esta função será chamada quando acessarmos /api/search?query=...
 export async function GET(request: Request) {
   // 1. Pegamos o "query" da URL

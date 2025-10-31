@@ -2,6 +2,8 @@ import { NextResponse, NextRequest } from "next/server";
 import prisma from '@/lib/prisma';
 import { Prisma } from "@prisma/client";
 
+export const runtime = 'nodejs';
+
 // Define os tipos de status válidos
 const validStatuses = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];
 
