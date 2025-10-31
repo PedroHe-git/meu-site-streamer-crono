@@ -35,13 +35,13 @@ export default function Navbar() {
                 href="/auth/register" 
                 className={buttonVariants({ variant: "ghost", className: "h-9 px-3 text-sm" })}
               >
-                Registrar
+                Criar Conta
               </Link>
               <Link 
                 href="/auth/signin" 
                 className={buttonVariants({ className: "h-9 px-4 text-sm" })}
               >
-                Login
+                Entrar
               </Link>
             </>
           )}

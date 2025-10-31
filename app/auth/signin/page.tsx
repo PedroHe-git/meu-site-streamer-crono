@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FcGoogle } from 'react-icons/fc';
-import { FaTwitch, FaRegBookmark } from 'react-icons/fa'; // Importa um ícone
+import { FaTwitch, FaRegBookmark } from 'react-icons/fa'; // Importa o ícone
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,8 +14,7 @@ import { Separator } from "@/components/ui/separator";
 
 export const dynamic = 'force-dynamic';
 
-// --- O COMPONENTE SignInForm (com a lógica) PERMANECE O MESMO ---
-// (Ele já está com as cores semânticas corretas)
+// --- O COMPONENTE SignInForm ---
 function SignInForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
@@ -27,7 +26,7 @@ function SignInForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setError(""); 
-    setIsLoading('credentials'); // 1. Inicia o loading
+    setIsLoading('credentials');
     
     try {
       const result = await signIn("credentials", {
@@ -37,30 +36,25 @@ function SignInForm() {
       });
 
       if (result?.error) {
-        // --- CAMINHO DE ERRO 1 ---
-        if (result.error === "CredentialsSignin" || result.error.includes("incorreta") || result.error.includes("encontrado")) {
-            setError("Email ou senha inválidos.");
+        if (result.error === "CredentialsSignin" || result.error.includes("incorreta") || result.error.includes("encontrado") || result.error.includes("verifique seu email")) {
+            setError(result.error); // Mostra o erro exato (ex: "Verifique seu email")
         } else {
-            setError(result.error);
+            setError("Email ou senha inválidos.");
         }
-        setIsLoading(false); // 2. PARA O LOADING AQUI
+        setIsLoading(false);
 
       } else if (result?.ok && !result?.error) {
-        // --- CAMINHO DE SUCESSO ---
-         window.location.assign("/dashboard"); // Redireciona
-         return; // Para a execução
+         window.location.assign("/dashboard");
+         return;
       
       } else {
-        // --- CAMINHO DE ERRO 2 ---
         setError("Ocorreu um erro desconhecido durante o login.");
-        setIsLoading(false); // 3. PARA O LOADING AQUI
+        setIsLoading(false);
       }
     } catch (err) {
-      // --- CAMINHO DE ERRO 3 ---
       setError("Falha ao tentar fazer login.");
-      setIsLoading(false); // 4. PARA O LOADING AQUI
+      setIsLoading(false);
     } 
-    // O 'finally' foi removido
   };
 
   const handleOAuthSignIn = (provider: 'google' | 'twitch') => {
@@ -100,11 +94,38 @@ function SignInForm() {
              <Label htmlFor="email" className="text-muted-foreground">Email</Label> 
              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={!!isLoading} className="placeholder:text-muted-foreground"/> 
            </div> 
+           
+           {/* --- [MUDANÇA VISUAL AQUI] --- */}
            <div className="space-y-1"> 
-             <Label htmlFor="password" className="text-muted-foreground">Senha</Label> 
+             <div className="flex justify-between items-baseline">
+               <Label htmlFor="password" className="text-muted-foreground">Senha</Label>
+               {/* 1. Adiciona o link "Esqueceu a senha?" */}
+               <Link 
+                 href="/auth/forgot-password" 
+                 className="text-sm font-medium text-primary hover:underline"
+               >
+                 Esqueceu a senha?
+               </Link>
+             </div>
              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required disabled={!!isLoading} className="placeholder:text-muted-foreground"/> 
            </div> 
+           {/* --- [FIM DA MUDANÇA] --- */}
+           
            {error && <p className="text-sm text-red-600">{error}</p>} 
+
+           {/* [NOVO] Adiciona feedback de sucesso da verificação */}
+           {searchParams.get('verified') === 'true' && (
+             <p className="text-sm text-green-600">
+               Email verificado com sucesso! Pode fazer login.
+             </p>
+           )}
+           {/* [NOVO] Adiciona feedback de erro do token */}
+           {searchParams.get('error') && (
+             <p className="text-sm text-red-600">
+               Link de verificação inválido ou expirado. Tente novamente.
+             </p>
+           )}
+
            <Button type="submit" disabled={!!isLoading} className="w-full"> 
              {isLoading === 'credentials' ? "A entrar..." : "Entrar"} 
            </Button> 
@@ -122,14 +143,12 @@ function SignInForm() {
 }
 
 
-// --- [MUDANÇA NO LAYOUT DA PÁGINA AQUI] ---
+// --- Componente da Página (Layout Split Screen) ---
 export default function SignInPage() {
   return (
-    // 1. Usa 'grid' no desktop e 'flex' no mobile (padrão)
     <div className="flex items-center justify-center lg:grid lg:grid-cols-2 min-h-screen">
 
-      {/* 2. Coluna da Esquerda (Formulário) */}
-      {/* Sempre visível. No desktop, ocupa a primeira coluna. */}
+      {/* Coluna da Esquerda (Formulário) */}
       <div className="flex items-center justify-center p-8 w-full">
         {/* Suspense é necessário porque SignInForm usa 'useSearchParams' */}
         <Suspense fallback={<div className="text-center p-10 text-muted-foreground">A carregar...</div>}>
@@ -137,8 +156,7 @@ export default function SignInPage() {
         </Suspense>
       </div>
 
-      {/* 3. Coluna da Direita (Branding/Visual) */}
-      {/* 'hidden lg:flex' -> Escondida no mobile, visível (flex) no desktop */}
+      {/* Coluna da Direita (Branding/Visual) */}
       <div className="hidden lg:flex flex-col items-center justify-center bg-muted p-10">
         <div className="text-center max-w-md">
           <FaRegBookmark className="mx-auto h-16 w-16 text-primary" />

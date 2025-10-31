@@ -1,3 +1,5 @@
+// app/darshbord/page.tsx (Atualizado)
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -10,7 +12,7 @@ import MyLists from "./MyLists";
 import ScheduleManager from "./ScheduleManager";
 
 // Imports de UI (Todos os necessários)
-import { Label } from "@/components/ui/label"; // <-- Sintaxe corrigida aqui
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea"; 
@@ -24,7 +26,7 @@ type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; pa
 export default function DashboardPage() {
   const { data: session, status } = useSession();
 
-  // Estados
+  // Estados (sem mudanças)
   const [toWatchData, setToWatchData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchingData, setWatchingData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchedData, setWatchedData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
@@ -37,15 +39,12 @@ export default function DashboardPage() {
   const [isListLoading, setIsListLoading] = useState<Record<StatusKey, boolean>>({ TO_WATCH: false, WATCHING: false, WATCHED: false, DROPPED: false });
   const [isUpdating, setIsUpdating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-
-  // Estados Definições Perfil (Bio)
-  // @ts-ignore
-  const userRole = session?.user?.role as UserRole | undefined;
-  const isCreator = userRole === UserRole.CREATOR;
-  // @ts-ignore
   const [bio, setBio] = useState(session?.user?.bio || "");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
+  // @ts-ignore
+  const userRole = session?.user?.role as UserRole | undefined;
+  const isCreator = userRole === UserRole.CREATOR;
 
   // Efeito para carregar definições (Bio)
   useEffect(() => {
@@ -55,9 +54,9 @@ export default function DashboardPage() {
     }
   }, [session?.user]);
   
-  // --- Funções de Busca (Corrigido) ---
-
+  // --- Funções de Busca (sem mudanças) ---
   const fetchListData = useCallback(async (listStatus: StatusKey, page: number = 1, search: string = "") => {
+    // ... (código igual)
     setIsListLoading(prev => ({ ...prev, [listStatus]: true }));
     try {
       const params = new URLSearchParams({ status: listStatus, page: page.toString(), pageSize: pageSize.toString(), });
@@ -80,7 +79,8 @@ export default function DashboardPage() {
   }, [pageSize]);
 
   const fetchScheduleData = async () => {
-    try {
+    // ... (código igual)
+     try {
       const resSchedule = await fetch("/api/schedule");
       if (!resSchedule.ok) { throw new Error('Falha ao buscar schedule'); }
       const scheduleData = await resSchedule.json();
@@ -91,7 +91,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Efeito Inicial (Corrigido)
+  // Efeitos (sem mudanças)
   useEffect(() => {
     if (status === "authenticated") {
       setIsLoadingData(true);
@@ -103,9 +103,8 @@ export default function DashboardPage() {
         fetchScheduleData()
       ]).finally(() => setIsLoadingData(false));
     }
-  }, [status, fetchListData]); // fetchListData está na dependência
+  }, [status, fetchListData]); 
 
-  // Efeito SearchTerm (Corrigido)
   useEffect(() => {
     const handler = setTimeout(() => {
       if (status === "authenticated") {
@@ -116,12 +115,11 @@ export default function DashboardPage() {
       }
     }, 500);
     return () => clearTimeout(handler);
-  }, [searchTerm, status, fetchListData]); // fetchListData está na dependência
+  }, [searchTerm, status, fetchListData]); 
   
   const paginatedDataMap: Record<StatusKey, PaginatedListData> = { TO_WATCH: toWatchData, WATCHING: watchingData, WATCHED: watchedData, DROPPED: droppedData, };
 
-  // --- Funções de Ação (Corrigido) ---
-
+  // --- Funções de Ação (Adicionada handleRemoveItem) ---
   const handleDataChanged = useCallback(() => {
     setIsUpdating(true);
     Promise.all([
@@ -144,6 +142,7 @@ export default function DashboardPage() {
   };
 
   const handleUpdateStatus = async (item: MediaStatusWithMedia, newStatus: StatusKey) => {
+    // ... (código igual)
     setIsUpdating(true);
     setActionError(null);
     try {
@@ -165,6 +164,7 @@ export default function DashboardPage() {
   };
 
   const handleToggleWeekly = async (item: MediaStatusWithMedia) => {
+    // ... (código igual)
     setIsUpdating(true);
     setActionError(null);
     const newIsWeekly = !item.isWeekly;
@@ -187,8 +187,37 @@ export default function DashboardPage() {
     }
   };
 
+  // --- [NOVA FUNÇÃO AQUI] ---
+  const handleRemoveItem = async (item: MediaStatusWithMedia) => {
+    setIsUpdating(true);
+    setActionError(null);
+    
+    try {
+      // Chama a nova API DELETE com o ID do *MediaStatus*
+      const res = await fetch(`/api/mediastatus?id=${item.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || `Falha ao remover item`);
+      }
+
+      // Sucesso! Recarrega todos os dados
+      handleDataChanged(); 
+
+    } catch (error: any) {
+      console.error("Erro ao remover item:", error);
+      setActionError(error.message);
+      setIsUpdating(false); // Garante que o loading pare em caso de erro
+    }
+    // O 'setIsUpdating(false)' será chamado pelo 'finally' do handleDataChanged
+  };
+  // --- [FIM DA NOVA FUNÇÃO] ---
+
   // Função Definições Perfil (Bio)
    const handleSaveSettings = async () => {
+     // ... (código igual)
      if (!isCreator) return;
      setIsSavingSettings(true); setSettingsMessage("A guardar..."); setActionError(null);
      try {
@@ -208,7 +237,7 @@ export default function DashboardPage() {
      }
    };
 
-  // Estados de Carregamento
+  // Estados de Carregamento (sem mudanças)
   if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
     return <p className="text-center p-10 text-muted-foreground">A carregar...</p>; 
   }
@@ -226,14 +255,14 @@ export default function DashboardPage() {
         Olá, {firstName}!
       </h1>
 
-      {/* ... (Alertas de 'isUpdating' e 'actionError' permanecem os mesmos) ... */}
+      {/* Alertas (sem mudanças) */}
+      {isUpdating && ( <div className="fixed top-5 right-5 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-pulse"> A atualizar... </div> )}
+      {actionError && ( <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded relative" role="alert"> <strong className="font-bold">Erro: </strong> <span className="block sm:inline">{actionError}</span> <button onClick={() => setActionError(null)} className="absolute top-0 bottom-0 right-0 px-4 py-3"> <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Fechar</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg> </button> </div> )}
 
       <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
 
          {/* 1. Sidebar (Limpa) */}
          <aside className="lg:w-1/4 space-y-6">
-            
-            {/* Card Definições (Fica na Sidebar) */}
             {isCreator && (
                 <Card>
                     <CardHeader>
@@ -242,8 +271,8 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-1">
-                            <Label htmlFor="profile-bio" className="text-sm font-medium text-foreground">Descrição</Label>
-                            <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Mensagem sera exibida na Minha Página" maxLength={200} className="h-24 placeholder:text-muted-foreground" disabled={isSavingSettings} />
+                            <Label htmlFor="profile-bio" className="text-sm font-medium text-foreground">Bio Curta</Label>
+                            <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Fale um pouco sobre si..." maxLength={200} className="h-24 placeholder:text-muted-foreground" disabled={isSavingSettings} />
                              <p className="text-xs text-muted-foreground">{200 - (bio?.length || 0)} caracteres restantes</p>
                         </div>
                         <Button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full mt-2">
@@ -253,15 +282,10 @@ export default function DashboardPage() {
                     </CardContent>
                 </Card>
             )}
+         </aside> 
 
-             {/* Card de Agendamento FOI MOVIDO */}
-             
-         </aside> {/* Fim da Sidebar */}
-
-         {/* 2. Conteúdo Principal (Agora com 2 cards) */}
+         {/* 2. Conteúdo Principal */}
          <main className="flex-1 space-y-6">
-
-             {/* Card 1: Listas & Busca (Permanece aqui) */}
              <Card>
                <CardContent className="p-6">
                  <h2 className="text-2xl font-semibold mb-6">Minhas Listas & Busca</h2>
@@ -278,12 +302,11 @@ export default function DashboardPage() {
                    setSearchTerm={setSearchTerm}
                    isUpdatingGlobal={isUpdating}
                    onMediaAdded={handleDataChanged}
+                   onRemoveItem={handleRemoveItem} // <-- [NOVA PROP AQUI]
                  />
                </CardContent>
              </Card>
-
-             {/* --- [MUDANÇA DE LAYOUT AQUI] --- */}
-             {/* Card 2: Agendamento (Movido para cá) */}
+             
              <Card>
                <CardContent className="p-6">
                  <h2 className="text-2xl font-semibold mb-6">Gerir Agendamentos</h2>
@@ -294,10 +317,8 @@ export default function DashboardPage() {
                  />
                </CardContent>
              </Card>
-             {/* --- [FIM DA MUDANÇA] --- */}
-
-         </main> {/* Fim do Conteúdo Principal */}
-      </div> {/* Fim do Flex Layout */}
+         </main> 
+      </div> 
     </div>
   );
 }

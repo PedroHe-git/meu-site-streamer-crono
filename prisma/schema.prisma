@@ -27,6 +27,7 @@ enum MediaType {
   MOVIE
   ANIME
   SERIES
+  OUTROS
 }
 
 enum UserRole {
@@ -140,4 +141,11 @@ model VerificationToken {
 }
 // --- FIM MODELOS NEXT-AUTH V4 ---
 
+model PasswordResetToken {
+  // Usamos o token como o ID para buscas rápidas e garantia de unicidade
+  token      String   @id @unique
+  email      String   // O email do usuário que solicitou o reset
+  expires    DateTime // A data/hora que o token expira
 
+  @@map("password_reset_tokens")
+}
