@@ -8,7 +8,7 @@ import prisma from '@/lib/prisma';
 import { Prisma } from "@prisma/client";
 
 export const runtime = 'nodejs';
-export const region = 'gru1';
+
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions); // Usa authOptions v4 importado corretamente

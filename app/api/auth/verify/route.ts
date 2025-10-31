@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-export const region = 'gru1';
+
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {

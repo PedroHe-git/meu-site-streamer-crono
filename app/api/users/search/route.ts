@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { UserRole } from "@prisma/client"; // Importa o enum
 
 export const runtime = 'nodejs';
-export const region = 'gru1';
+
 
 // GET /api/users/search?q=...
 export async function GET(request: NextRequest) {
