@@ -18,6 +18,7 @@ interface SessionUser {
   username: string;
   role: UserRole;
   bio?: string | null; // <-- ADICIONADO
+  profileVisibility?: ProfileVisibility;
 }
 
 export const authOptions: NextAuthOptions = {
@@ -38,6 +39,7 @@ export const authOptions: NextAuthOptions = {
           username: profile.email.split('@')[0] + '-' + uuidv4().substring(0, 4),
           role: UserRole.VISITOR, 
           bio: null, // Bio padrão
+          profileVisibility: user.profileVisibility
         };
       },
     }),
@@ -98,9 +100,8 @@ export const authOptions: NextAuthOptions = {
          token.id = user.id;
          token.username = (user as any).username;
          token.role = (user as any).role;
-         
-         // --- [MUDANÇA 3: Adicionar 'bio' ao Token] ---
          token.bio = (user as any).bio; // <-- ADICIONADO
+         token.profileVisibility = (user as any).profileVisibility;
       }
       return token;
     },
@@ -114,6 +115,7 @@ export const authOptions: NextAuthOptions = {
 
         // --- [MUDANÇA 4: Adicionar 'bio' à Sessão] ---
         sessionUser.bio = token.bio as string; // <-- ADICIONADO
+        sessionUser.profileVisibility = token.profileVisibility as ProfileVisibility;
       }
       return session;
     },

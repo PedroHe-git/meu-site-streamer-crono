@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
-import { Prisma, UserRole } from "@prisma/client"; // Importa UserRole
+import { Prisma, UserRole, ProfileVisibility } from "@prisma/client"; // Importa UserRole
+
 
 export const runtime = 'nodejs';
 
@@ -21,7 +22,7 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { bio } = body; // Recebe apenas 'bio'
+    const { bio, profileVisibility } = body; // Recebe apenas 'bio'
 
     // --- Validações Simplificadas ---
     if (bio !== undefined && typeof bio !== 'string') {
@@ -31,18 +32,23 @@ export async function PUT(request: Request) {
     if (bio && bio.length > 200) {
          return new NextResponse(JSON.stringify({ error: "Biografia excede 200 caracteres." }), { status: 400 });
     }
+
+    if (profileVisibility !== undefined && !['PUBLIC', 'FOLLOWERS_ONLY'].includes(profileVisibility)) {
+      return new NextResponse(JSON.stringify({ error: "Visibilidade inválida." }), { status: 400 });
+    }
     // --- Fim Validações ---
 
     // Prepara os dados para atualização (apenas 'bio')
     const dataToUpdate: Prisma.UserUpdateInput = {};
     if (bio !== undefined) dataToUpdate.bio = bio;
+    if (profileVisibility !== undefined) dataToUpdate.profileVisibility = profileVisibility;
     // --- [REMOVIDO] profileThemeColor e profileBannerUrl ---
 
     // Atualiza o utilizador
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: dataToUpdate,
-      select: { bio: true } // Retorna apenas o campo atualizado
+      select: { bio: true, profileVisibility: true } // Retorna apenas o campo atualizado
     });
 
     return NextResponse.json(updatedUser);

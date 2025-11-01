@@ -1,9 +1,14 @@
+// app/api/users/[username]/lists/route.ts (Atualizado com Lógica de Privacidade)
+
 import { NextResponse, NextRequest } from "next/server";
 import prisma from '@/lib/prisma';
-import { Prisma } from "@prisma/client";
+// --- Importações Adicionadas ---
+import { Prisma, ProfileVisibility } from "@prisma/client"; // Importa ProfileVisibility
+import { getServerSession } from "next-auth/next"; // Importa getServerSession
+import { authOptions } from "@/lib/authOptions"; // Importa authOptions
+// --- Fim das Importações ---
 
 export const runtime = 'nodejs';
-
 
 // Define os tipos de status válidos
 const validStatuses = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];
@@ -19,16 +24,49 @@ export async function GET(
   }
 
   try {
-    // Encontra o utilizador pelo username
+    // --- 1. Obter sessão do visitante ---
+    const session = await getServerSession(authOptions);
+    // @ts-ignore
+    const visitorId = session?.user?.id;
+
+    // --- 2. Encontra o utilizador do perfil e sua visibilidade ---
     const user = await prisma.user.findUnique({
       where: { username: decodeURIComponent(username) },
-      select: { id: true } // Seleciona apenas o ID por segurança e performance
+      select: { id: true, profileVisibility: true } // <-- Seleciona o novo campo
     });
 
     if (!user) {
       return new NextResponse(JSON.stringify({ error: "Utilizador não encontrado" }), { status: 404 });
     }
 
+    // --- 3. Verificar Permissão de Visualização ---
+    const isPublic = user.profileVisibility === ProfileVisibility.PUBLIC;
+    const isOwnProfile = visitorId === user.id;
+    let isFollowing = false;
+
+    // Só verifica se segue se o visitante estiver logado E não for o dono do perfil
+    if (visitorId && !isOwnProfile) {
+      const followRecord = await prisma.follows.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: visitorId,
+            followingId: user.id,
+          },
+        },
+      });
+      isFollowing = !!followRecord;
+    }
+
+    // Verifica se o visitante pode ver
+    const canView = isPublic || isOwnProfile || (visitorId && isFollowing);
+
+    if (!canView) {
+      // Se não puder, retorna erro 403 (Proibido)
+      return new NextResponse(JSON.stringify({ error: "Este perfil é privado." }), { status: 403 });
+    }
+
+    // --- 4. Se puder ver, continua com a lógica original da API ---
+    
     // Lê os parâmetros da URL
     const { searchParams } = new URL(request.url);
     const pageParam = searchParams.get('page');

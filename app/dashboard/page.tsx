@@ -1,4 +1,4 @@
-// app/darshbord/page.tsx (Atualizado com Botão de Tour na Sidebar)
+// app/dashboard/page.tsx (Corrigido)
 
 "use client";
 
@@ -7,7 +7,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Step, STATUS, CallBackProps } from 'react-joyride'; 
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import { Media, MediaStatus, ScheduleItem, UserRole } from "@prisma/client";
+// 2. Importa o Enum 'ProfileVisibility'
+import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility } from "@prisma/client";
 
 import MediaSearch from "./MediaSearch";
 import MyLists from "./MyLists";
@@ -19,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea"; 
 import AppTour from '@/app/components/AppTour'; 
+// 3. Importa os RadioGroups
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; 
 
 // Tipagem
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
@@ -26,7 +29,7 @@ type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; page: number; pageSize: number; };
 
-// Define os passos do tour aqui
+// ... (Definições dos passos do Tour - STEP_PERFIL, STEP_LISTAS, etc.)
 const STEP_PERFIL: Step = {
   target: '#tour-step-1-perfil',
   content: 'Bem-vindo! Aqui você pode personalizar sua página com uma mensagem.',
@@ -69,7 +72,6 @@ const STEP_LISTA_PROX_AGENDA: Step = {
 };
 
 
-
 export default function DashboardPage() {
   const { data: session, status } = useSession();
 
@@ -92,6 +94,13 @@ export default function DashboardPage() {
   const isCreator = userRole === UserRole.CREATOR;
   // @ts-ignore
   const [bio, setBio] = useState(session?.user?.bio || "");
+  
+  // --- [CORREÇÃO AQUI] ---
+  // 4. Usa os nomes corretos do estado e da sessão
+  // @ts-ignore
+  const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
+  // --- [FIM DA CORREÇÃO] ---
+  
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
 
@@ -133,30 +142,26 @@ export default function DashboardPage() {
       setRunTour(false);
     }
   };
-
-  // --- [MUDANÇA 1: Função para o Botão Manual] ---
-  // Esta é a nova função simplificada que o botão na sidebar irá chamar
+  
   const handleStartTourClick = () => {
-    // Limpa o localStorage para garantir que o tour corra
     localStorage.removeItem('meuCronogramaTourV1');
-    
-    // Reinicia o tour
     setRunTour(false);
     setTimeout(() => {
       setRunTour(true);
-    }, 100); // Pequeno atraso para o Joyride re-renderizar
+    }, 100);
   };
-  // --- [FIM MUDANÇA 1] ---
-  
-  // --- (O 'useEffect' que ouvia o 'start-tour' foi REMOVIDO) ---
 
-  // ... (Efeito para carregar 'bio' permanece igual) ...
+  // --- [CORREÇÃO AQUI] ---
+  // 5. Atualiza o useEffect para usar os nomes corretos
   useEffect(() => {
     if (session?.user) {
       // @ts-ignore
       setBio(session.user.bio || "");
+      // @ts-ignore
+      setProfileVisibility(session.user.profileVisibility || "PUBLIC");
     }
   }, [session?.user]);
+  // --- [FIM DA CORREÇÃO] ---
   
   // ... (Todas as suas funções de busca de dados: fetchListData, fetchScheduleData, etc. permanecem iguais) ...
   const fetchListData = useCallback(async (listStatus: StatusKey, page: number = 1, search: string = "") => {
@@ -304,11 +309,16 @@ export default function DashboardPage() {
     }
   };
 
+  // --- [CORREÇÃO AQUI] ---
+  // 6. Envia o payload correto para a API
    const handleSaveSettings = async () => {
      if (!isCreator) return;
      setIsSavingSettings(true); setSettingsMessage("A guardar..."); setActionError(null);
      try {
-       const payload = { bio: bio };
+       const payload = { 
+         bio: bio,
+         profileVisibility: profileVisibility // <-- Envia o estado correto
+       };
        const res = await fetch('/api/profile/settings', {
          method: 'PUT', headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify(payload),
@@ -323,6 +333,7 @@ export default function DashboardPage() {
        setIsSavingSettings(false);
      }
    };
+  // --- [FIM DA CORREÇÃO] ---
 
   // Estados de Carregamento
   if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
@@ -338,7 +349,6 @@ export default function DashboardPage() {
   // --- JSX ---
   return (
     <>
-      {/* O AppTour "controlado" continua aqui */}
       <AppTour
         run={runTour}
         steps={tourSteps}
@@ -373,6 +383,41 @@ export default function DashboardPage() {
                               <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Fale um pouco sobre si..." maxLength={200} className="h-24 placeholder:text-muted-foreground" disabled={isSavingSettings} />
                                <p className="text-xs text-muted-foreground">{200 - (bio?.length || 0)} caracteres restantes</p>
                           </div>
+                          
+                          {/* --- [CORREÇÃO AQUI] --- */}
+                          {/* 7. Usa o RadioGroup que adicionamos na etapa anterior */}
+                          <div className="space-y-2 pt-2">
+                            <Label className="text-sm font-medium text-foreground">Visibilidade do Perfil</Label>
+                            <RadioGroup 
+                              value={profileVisibility} 
+                              onValueChange={(value: ProfileVisibility) => setProfileVisibility(value)}
+                              disabled={isSavingSettings}
+                              className="space-y-2 pt-1"
+                            >
+                              <Label 
+                                htmlFor="visibility-public" 
+                                className="flex items-center space-x-3 rounded-md border bg-background p-3 cursor-pointer transition-colors hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary"
+                              >
+                                <RadioGroupItem value="PUBLIC" id="visibility-public" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-foreground text-sm">Público</span>
+                                  <span className="text-xs text-muted-foreground">Qualquer pessoa pode ver o seu perfil.</span>
+                                </div>
+                              </Label>
+                              <Label 
+                                htmlFor="visibility-followers" 
+                                className="flex items-center space-x-3 rounded-md border bg-background p-3 cursor-pointer transition-colors hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary"
+                              >
+                                <RadioGroupItem value="FOLLOWERS_ONLY" id="visibility-followers" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-foreground text-sm">Privado (Seguidores)</span>
+                                  <span className="text-xs text-muted-foreground">Apenas utilizadores que o seguem podem ver.</span>
+                                </div>
+                              </Label>
+                            </RadioGroup>
+                          </div>
+                          {/* --- [FIM DA CORREÇÃO] --- */}
+
                           <Button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full mt-2">
                              {isSavingSettings ? "A guardar..." : "Guardar Definições"}
                           </Button>
@@ -381,16 +426,13 @@ export default function DashboardPage() {
                   </Card>
               )}
 
-              {/* --- [MUDANÇA 2: Botão do Tour Manual] --- */}
-              {/* Adiciona um botão de 'outline' na sidebar */}
               <Button 
                 variant="outline" 
                 className="w-full"
-                onClick={handleStartTourClick} // Chama a nova função
+                onClick={handleStartTourClick}
               >
                 Reiniciar Tour
               </Button>
-              {/* --- [FIM MUDANÇA 2] --- */}
 
            </aside> 
 

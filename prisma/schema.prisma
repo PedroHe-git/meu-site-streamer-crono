@@ -23,6 +23,12 @@ enum MovieStatusType {
   DROPPED
 }
 
+// --- ENUMS (Nível Superior) ---
+enum ProfileVisibility {
+  PUBLIC
+  FOLLOWERS_ONLY
+}
+
 enum MediaType {
   MOVIE
   ANIME
@@ -49,6 +55,8 @@ model User {
 
   // --- Campos de Personalização ---
   bio              String?   @db.Text // Mantido
+
+  profileVisibility ProfileVisibility @default(PUBLIC)
 
   // Relações
   accounts      Account[]
