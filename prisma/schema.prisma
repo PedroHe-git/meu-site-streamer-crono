@@ -56,6 +56,9 @@ model User {
   mediaStatuses MediaStatus[]
   scheduleItems ScheduleItem[]
 
+  following     Follows[] @relation("Following")
+  followers     Follows[] @relation("Followers")
+
   @@map("users") 
 }
 // --- FIM USER ---
@@ -102,7 +105,21 @@ model ScheduleItem {
   media             Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   isCompleted       Boolean   @default(false)
 }
-// --- FIM SEUS MODELOS ---
+
+model Follows {
+  followerId  String
+  followingId String
+
+  // Define a relação para o "seguidor" (quem segue)
+  follower    User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+
+  // Define a relação para o "seguido" (quem é seguido)
+  following   User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  // Garante que um utilizador não pode seguir o mesmo criador duas vezes
+  @@id([followerId, followingId])
+  @@map("follows")
+}
 
 // --- MODELOS NEXT-AUTH V4 (Com @map) ---
 model Account {
