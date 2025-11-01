@@ -1,4 +1,4 @@
-// lib/authOptions.ts
+// lib/authOptions.ts (Corrigido)
 
 import NextAuth, { NextAuthOptions, User as NextAuthUser } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
@@ -7,18 +7,19 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
-import { UserRole } from "@prisma/client";
-import { v4 as uuidv4 } from 'uuid'; // Importa o UUID
+// Importe os Enums
+import { UserRole, ProfileVisibility } from "@prisma/client"; 
+import { v4 as uuidv4 } from 'uuid';
 
-// --- [MUDANÇA 1: Adicionar 'bio' à Interface] ---
+// --- [MUDANÇA 1: Atualizar a Interface da Sessão] ---
 interface SessionUser {
   id: string;
   name?: string | null;
   email?: string | null;
   username: string;
   role: UserRole;
-  bio?: string | null; // <-- ADICIONADO
-  profileVisibility?: ProfileVisibility;
+  bio?: string | null;
+  profileVisibility: ProfileVisibility; // <-- ADICIONADO
 }
 
 export const authOptions: NextAuthOptions = {
@@ -38,8 +39,8 @@ export const authOptions: NextAuthOptions = {
           image: profile.picture,
           username: profile.email.split('@')[0] + '-' + uuidv4().substring(0, 4),
           role: UserRole.VISITOR, 
-          bio: null, // Bio padrão
-          profileVisibility: user.profileVisibility
+          bio: null,
+          profileVisibility: ProfileVisibility.PUBLIC, // <-- ADICIONADO
         };
       },
     }),
@@ -58,6 +59,7 @@ export const authOptions: NextAuthOptions = {
           username: profile.preferred_username + '-' + uuidv4().substring(0, 4),
           role: UserRole.VISITOR,
           bio: null,
+          profileVisibility: ProfileVisibility.PUBLIC, // <-- ADICIONADO
         };
       },
     }),
@@ -76,14 +78,15 @@ export const authOptions: NextAuthOptions = {
               throw new Error("Por favor, verifique seu email antes de fazer login.");
             }
             
-            // --- [MUDANÇA 2: Adicionar 'bio' ao return] ---
+            // --- [MUDANÇA 2: Adicionar todos os campos ao return] ---
             return {
                 id: user.id,
                 name: user.name,
                 email: user.email,
                 username: user.username,
                 role: user.role,
-                bio: user.bio, // <-- ADICIONADO
+                bio: user.bio,
+                profileVisibility: user.profileVisibility, // <-- ADICIONADO
             };
         }
      }),
@@ -95,27 +98,28 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
+    // --- [MUDANÇA 3: Passar campos para o Token] ---
     async jwt({ token, user }) {
       if (user) {
+         // O objeto 'user' aqui é o que foi retornado do 'authorize'
          token.id = user.id;
          token.username = (user as any).username;
          token.role = (user as any).role;
-         token.bio = (user as any).bio; // <-- ADICIONADO
-         token.profileVisibility = (user as any).profileVisibility;
+         token.bio = (user as any).bio;
+         token.profileVisibility = (user as any).profileVisibility; // <-- ADICIONADO
       }
       return token;
     },
     
+    // --- [MUDANÇA 4: Passar campos do Token para a Sessão] ---
     async session({ session, token }) {
       if (session.user) {
         const sessionUser = session.user as SessionUser;
         sessionUser.id = token.id as string;
         sessionUser.username = token.username as string;
         sessionUser.role = token.role as UserRole;
-
-        // --- [MUDANÇA 4: Adicionar 'bio' à Sessão] ---
-        sessionUser.bio = token.bio as string; // <-- ADICIONADO
-        sessionUser.profileVisibility = token.profileVisibility as ProfileVisibility;
+        sessionUser.bio = token.bio as string | null; // <-- ADICIONADO
+        sessionUser.profileVisibility = token.profileVisibility as ProfileVisibility; // <-- ADICIONADO
       }
       return session;
     },
