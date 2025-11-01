@@ -8,7 +8,7 @@ import { Prisma } from "@prisma/client";
 
 // Configura o runtime e a região (necessário para o Prisma no Vercel)
 export const runtime = 'nodejs';
-export const region = 'gru1';
+
 
 /**
  * API para BUSCAR todos os criadores que o utilizador logado segue.

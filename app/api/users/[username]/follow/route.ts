@@ -8,7 +8,7 @@ import { Prisma } from "@prisma/client";
 
 // Configura o runtime e a região (necessário para o Prisma no Vercel)
 export const runtime = 'nodejs';
-export const region = 'gru1';
+
 
 /**
  * API para Seguir (Follow) ou Deixar de Seguir (Unfollow) um Criador.
