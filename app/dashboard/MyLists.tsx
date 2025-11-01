@@ -187,10 +187,10 @@ export default function MyLists({
 
       <Tabs defaultValue="TO_WATCH" className="w-full">
         <TabsList className="grid w-full grid-cols-4 h-auto mb-4">
-          <TabsTrigger value="TO_WATCH" className="text-xs sm:text-sm px-1 h-full whitespace-normal">Para Assistir ({toWatchData.totalCount})</TabsTrigger>
-          <TabsTrigger value="WATCHING" className="text-xs sm:text-sm px-1 h-full whitespace-normal">Assistindo ({watchingData.totalCount})</TabsTrigger>
-          <TabsTrigger value="WATCHED" className="text-xs sm:text-sm px-1 h-full whitespace-normal">Já Assistido ({watchedData.totalCount})</TabsTrigger>
-          <TabsTrigger value="DROPPED" className="text-xs sm:text-sm px-1 h-full whitespace-normal">Abandonados ({droppedData.totalCount})</TabsTrigger>
+          <TabsTrigger value="TO_WATCH" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-para-assistir">Para Assistir ({toWatchData.totalCount})</TabsTrigger>
+          <TabsTrigger value="WATCHING" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-assistindo">Assistindo ({watchingData.totalCount})</TabsTrigger>
+          <TabsTrigger value="WATCHED" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-ja-assistido">Já Assistido ({watchedData.totalCount})</TabsTrigger>
+          <TabsTrigger value="DROPPED" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-abandonados">Abandonados ({droppedData.totalCount})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="TO_WATCH">{renderTabContent("TO_WATCH")}</TabsContent>
