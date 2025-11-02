@@ -33,14 +33,16 @@ export async function GET(request: Request) {
       userId: user.id,
     };
 
-    // Se start e end forem fornecidos (pelo calendário), use-os
+    // 2. Verifica se o FullCalendar enviou datas
     if (startDate && endDate) {
+      // Se sim, usa o intervalo de datas do calendário
       whereCondition.scheduledAt = {
         gte: new Date(startDate),
         lte: new Date(endDate),
       };
+      // (NÃO filtramos por isCompleted, pois o calendário quer ver tudo)
     } else {
-      // Comportamento original (fallback para o seu ScheduleManager atual)
+      // Se não, é o ScheduleManager (a lista) a pedir
       // Busca apenas itens futuros e não concluídos
       whereCondition.scheduledAt = {
         gte: new Date(new Date().setHours(0, 0, 0, 0)),
@@ -48,14 +50,9 @@ export async function GET(request: Request) {
       whereCondition.isCompleted = false;
     }
 
-    // Busca itens do cronograma E inclui a 'media' associada
+    // 3. Busca no banco de dados USANDO a 'whereCondition' correta
     const scheduleItems = await prisma.scheduleItem.findMany({
-      where: {
-        userId: user.id,
-        // Apenas itens cuja DATA seja hoje ou no futuro
-        scheduledAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-        isCompleted: false
-      },
+      where: whereCondition, // <--- ESTA É A CORREÇÃO
       include: {
         media: true, // Inclui a mídia
       },

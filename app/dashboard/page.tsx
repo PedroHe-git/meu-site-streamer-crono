@@ -549,11 +549,11 @@ export default function DashboardPage() {
 
   // --- ESTADOS DE CARREGAMENTO ---
   if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
-    return <p className="text-center p-10 text-muted-foreground">A carregar...</p>; 
-  }
-  if (status === "unauthenticated") { 
-    if (typeof window !== 'undefined') { redirect("/auth/signin"); } 
-    return <p className="text-center p-10 text-muted-foreground">Redirecionando...</p>; 
+  return (
+    <div className="mx-auto max-w-5xl p-4 md:p-6">
+      <p className="text-center pt-20 text-muted-foreground">A carregar...</p>
+    </div>
+    );
   }
 
   const firstName = session?.user?.name?.split(' ')[0] || session?.user?.username || "";
@@ -611,7 +611,7 @@ export default function DashboardPage() {
       </Dialog>
       
 
-      <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+      <div className="mx-auto max-w-5xl p-4 md:p-6">
         <h1 className="text-3xl md:text-4xl font-semibold mb-8">
           Olá, {firstName}!
         </h1>

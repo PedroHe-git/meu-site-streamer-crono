@@ -159,7 +159,7 @@ export default async function PublicProfilePage({ params, searchParams }: { para
   return (
     <div className={cn("bg-background text-foreground")}>
       <div className={cn(
-        "container mx-auto max-w-5xl px-4 py-8 md:px-6 md:py-12 lg:py-16",
+        "container mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10",
         "transition-all duration-300 ease-in-out"
       )}>
 

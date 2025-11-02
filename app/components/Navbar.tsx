@@ -46,7 +46,7 @@ export default function Navbar() {
           {status === "unauthenticated" && (
             <>
               <Link href="/auth/register" className={buttonVariants({ variant: "ghost", className: "h-9 px-3 text-sm" })}>
-                Registar
+                Registrar
               </Link>
               <Link href="/auth/signin" className={buttonVariants({ className: "h-9 px-4 text-sm" })}>
                 Login
