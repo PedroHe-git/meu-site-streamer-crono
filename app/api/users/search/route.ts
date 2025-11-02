@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { UserRole } from "@prisma/client"; // Importa o enum
 
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 export const runtime = 'nodejs';
 
 

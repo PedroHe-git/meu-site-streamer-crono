@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 // O import 'url' foi REMOVIDO
-
+export const revalidate = 0;
 // --- [ADIÇÕES CORRIGIDAS] ---
 export const runtime = 'nodejs'; // Força o Node.js
 

@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client'; // Importa Prisma para tipos
 
+export const revalidate = 0;
 export const runtime = 'nodejs';
 
 

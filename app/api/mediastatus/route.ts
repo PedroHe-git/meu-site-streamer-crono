@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma';
 import { Prisma, MediaType } from "@prisma/client";
 
 // --- [CONFIGURAÇÃO VERCEL] ---
+export const revalidate = 0;
 export const runtime = 'nodejs';
 
 // --- [FIM DA CONFIGURAÇÃO] ---

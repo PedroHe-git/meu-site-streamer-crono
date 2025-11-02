@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // Esta função será chamada quando acessarmos /api/search?query=...
 export async function GET(request: Request) {
