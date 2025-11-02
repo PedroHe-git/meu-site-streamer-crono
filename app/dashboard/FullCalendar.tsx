@@ -31,17 +31,14 @@ interface CalendarEvent extends Event {
   resource: ScheduleItemWithMedia;
 }
 
-// Configuração do localizador (Igual)
+// Configuração do localizador (Corrigido da etapa anterior)
 const locales = {
   "pt-BR": ptBR,
 };
 const localizer = dateFnsLocalizer({
   format,
   parse,
-  // --- [ CORREÇÃO AQUI ] ---
-  // Adiciona o tipo 'Date' ao parâmetro
   startOfWeek: (date: Date) => startOfWeek(date, { locale: ptBR }),
-  // --- [ FIM DA CORREÇÃO ] ---
   getDay,
   locales,
 });
@@ -69,7 +66,8 @@ const getMonthRange = (date: Date) => {
   return { start, end };
 };
 
-// Componente customizado de evento (Adicione alguns estilos Tailwind)
+// --- [ INÍCIO DA CORREÇÃO ] ---
+// Componente customizado de evento
 function CustomEventComponent({ event }: EventProps<CalendarEvent>) {
   const { title, resource } = event;
   const posterPath = resource.media.posterPath;
@@ -79,7 +77,8 @@ function CustomEventComponent({ event }: EventProps<CalendarEvent>) {
       {posterPath && (
         <Image
           src={posterPath}
-          alt={title || "Poster"}
+          // Converte 'title' (ReactNode) para 'string'
+          alt={String(title) || "Poster"}
           width={16}
           height={24}
           className="rounded-sm flex-shrink-0 object-cover"
@@ -87,12 +86,17 @@ function CustomEventComponent({ event }: EventProps<CalendarEvent>) {
           style={{ width: "16px", height: "24px" }}
         />
       )}
-      <span className="truncate text-xs font-semibold" title={title}>
+      <span 
+        className="truncate text-xs font-semibold" 
+        // A prop 'title' do HTML também espera uma string
+        title={String(title)} 
+      >
         {title}
       </span>
     </div>
   );
 }
+// --- [ FIM DA CORREÇÃO ] ---
 
 export default function FullCalendar() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -108,6 +112,10 @@ export default function FullCalendar() {
         start: start.toISOString(),
         end: end.toISOString(),
       });
+      
+      // [CORREÇÃO DE LÓGICA] Busca na API pública (se não for o dono) ou na API privada
+      // Assumindo que o FullCalendar só aparece no dashboard, a API /api/schedule está correta.
+      // Se este calendário fosse público, teríamos que mudar a API aqui.
       const res = await fetch(`/api/schedule?${params.toString()}`);
       if (!res.ok) throw new Error("Falha ao buscar agendamentos");
 
@@ -131,7 +139,7 @@ export default function FullCalendar() {
         }
 
         return {
-          title: item.media.title,
+          title: item.media.title, // 'title' é a string do nome da mídia
           start: startDate,
           end: endDate,
           allDay: !item.horario,
@@ -178,11 +186,8 @@ export default function FullCalendar() {
           const isCompleted = event.resource.isCompleted;
           return {
             style: {
-              // Os estilos de fundo agora serão tratados no CSS global,
-              // mas ainda podemos usar aqui para cores específicas se necessário.
-              // Garantimos que a cor do texto seja branca para dark mode
-              color: 'white', // <-- Garante texto branco nos eventos
-              backgroundColor: isCompleted ? "#5a6268" : "#6366F1", // Pode ajustar estas cores
+              color: 'white', 
+              backgroundColor: isCompleted ? "#5a6268" : "#6366F1", 
               opacity: isCompleted ? 0.7 : 1,
               border: "none",
             },
