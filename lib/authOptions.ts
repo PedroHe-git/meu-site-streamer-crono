@@ -1,5 +1,3 @@
-// lib/authOptions.ts (Corrigido)
-
 import NextAuth, { NextAuthOptions, User as NextAuthUser } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import TwitchProvider from "next-auth/providers/twitch";
@@ -7,11 +5,9 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
-// Importe os Enums
 import { UserRole, ProfileVisibility } from "@prisma/client"; 
 import { v4 as uuidv4 } from 'uuid';
 
-// --- [MUDANÇA 1: Atualizar a Interface da Sessão] ---
 interface SessionUser {
   id: string;
   name?: string | null;
@@ -19,7 +15,8 @@ interface SessionUser {
   username: string;
   role: UserRole;
   bio?: string | null;
-  profileVisibility: ProfileVisibility; // <-- ADICIONADO
+  profileVisibility: ProfileVisibility;
+  image?: string | null; // Garantir que a imagem está na interface
 }
 
 export const authOptions: NextAuthOptions = {
@@ -36,11 +33,11 @@ export const authOptions: NextAuthOptions = {
           id: profile.sub,
           name: profile.name,
           email: profile.email,
-          image: profile.picture,
+          image: profile.picture, // O OAuth já fornece a imagem
           username: profile.email.split('@')[0] + '-' + uuidv4().substring(0, 4),
           role: UserRole.VISITOR, 
           bio: null,
-          profileVisibility: ProfileVisibility.PUBLIC, // <-- ADICIONADO
+          profileVisibility: ProfileVisibility.PUBLIC,
         };
       },
     }),
@@ -55,11 +52,11 @@ export const authOptions: NextAuthOptions = {
           id: profile.sub,
           name: profile.preferred_username,
           email: profile.email,
-          image: profile.picture,
+          image: profile.picture, // O OAuth já fornece a imagem
           username: profile.preferred_username + '-' + uuidv4().substring(0, 4),
           role: UserRole.VISITOR,
           bio: null,
-          profileVisibility: ProfileVisibility.PUBLIC, // <-- ADICIONADO
+          profileVisibility: ProfileVisibility.PUBLIC,
         };
       },
     }),
@@ -78,7 +75,6 @@ export const authOptions: NextAuthOptions = {
               throw new Error("Por favor, verifique seu email antes de fazer login.");
             }
             
-            // --- [MUDANÇA 2: Adicionar todos os campos ao return] ---
             return {
                 id: user.id,
                 name: user.name,
@@ -86,7 +82,8 @@ export const authOptions: NextAuthOptions = {
                 username: user.username,
                 role: user.role,
                 bio: user.bio,
-                profileVisibility: user.profileVisibility, // <-- ADICIONADO
+                profileVisibility: user.profileVisibility,
+                image: user.image, // Passa a imagem da BD
             };
         }
      }),
@@ -98,28 +95,41 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    // --- [MUDANÇA 3: Passar campos para o Token] ---
-    async jwt({ token, user }) {
+    // --- [CORREÇÃO PRINCIPAL AQUI] ---
+    async jwt({ token, user, trigger, session }) {
+      
+      // 1. No login inicial (objeto 'user' existe)
       if (user) {
-         // O objeto 'user' aqui é o que foi retornado do 'authorize'
          token.id = user.id;
-         token.username = (user as any).username;
-         token.role = (user as any).role;
-         token.bio = (user as any).bio;
-         token.profileVisibility = (user as any).profileVisibility; // <-- ADICIONADO
+         token.username = user.username;
+         token.role = user.role;
+         token.bio = user.bio;
+         token.profileVisibility = user.profileVisibility;
+         token.image = user.image; // Guarda a imagem no token
       }
-      return token;
+
+      // 2. Na atualização da sessão (ex: updateSession() chamado no dashboard)
+      // O 'trigger' será "update" e o objeto 'session' conterá os novos dados
+      if (trigger === "update" && session?.user) {
+        // Atualiza o token com os novos dados passados pela função updateSession
+        token.bio = session.user.bio;
+        token.profileVisibility = session.user.profileVisibility;
+        token.image = session.user.image;
+      }
+
+      return token; // Retorna o token atualizado
     },
     
-    // --- [MUDANÇA 4: Passar campos do Token para a Sessão] ---
     async session({ session, token }) {
+      // Esta função passa os dados do TOKEN (atualizado acima) para a SESSÃO do cliente
       if (session.user) {
         const sessionUser = session.user as SessionUser;
         sessionUser.id = token.id as string;
         sessionUser.username = token.username as string;
         sessionUser.role = token.role as UserRole;
-        sessionUser.bio = token.bio as string | null; // <-- ADICIONADO
-        sessionUser.profileVisibility = token.profileVisibility as ProfileVisibility; // <-- ADICIONADO
+        sessionUser.bio = token.bio as string | null;
+        sessionUser.profileVisibility = token.profileVisibility as ProfileVisibility;
+        sessionUser.image = token.image as string | null; // Passa a imagem do token para a sessão
       }
       return session;
     },
@@ -128,3 +138,4 @@ export const authOptions: NextAuthOptions = {
   debug: process.env.NODE_ENV === "development",
   secret: process.env.NEXTAUTH_SECRET,
 };
+

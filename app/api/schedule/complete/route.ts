@@ -74,16 +74,17 @@ export async function POST(request: Request) {
         data: mediaStatusUpdateData,
       });
 
-      // 5. Deleta o ScheduleItem (SEMPRE, pois o episódio/intervalo foi concluído)
+      // 5. Atualiza o ScheduleItem para concluído
       await tx.scheduleItem.update({
         where: { id: scheduleItem.id, },
-        data: { isCompleted: true }
+        data: { isCompleted: true } // Em vez de deletar, marcamos como completo
       });
 
       console.log(`Item ${mediaStatus.isWeekly ? 'semanal' : 'normal'} (${scheduleItem.id}) concluído.`);
-      // Retorna o status atualizado para confirmação no frontend
-      // Adicionamos scheduleItemDeleted para clareza no frontend (embora sempre seja true neste caso)
-      return { updatedMediaStatus, scheduleItemDeleted: !mediaStatus.isWeekly };
+      
+      // --- [MUDANÇA AQUI] ---
+      // Retornamos 'isWeekly' para o frontend saber qual mensagem mostrar.
+      return { updatedMediaStatus, itemWasCompleted: true, isWeekly: mediaStatus.isWeekly };
     });
 
     // Retorna o resultado da transação
@@ -99,4 +100,3 @@ export async function POST(request: Request) {
     return new NextResponse(JSON.stringify({ error: "Erro interno ao completar item" }), { status: 500 });
   }
 }
-

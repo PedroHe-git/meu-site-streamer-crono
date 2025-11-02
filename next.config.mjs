@@ -10,14 +10,15 @@ const cspValue = [
   // ✅ Estilos
   "style-src 'self' 'unsafe-inline' fonts.googleapis.com;",
 
-  // ✅ Libera imagens (incluindo c.clarity.ms)
-  "img-src 'self' data: image.tmdb.org cdn.myanimelist.net i.imgur.com https://www.clarity.ms https://c.clarity.ms c.bing.com;",
+  // --- [CORREÇÃO AQUI: Adicionado 'blob:'] ---
+  // Permite URLs temporários (blob:) para a pré-visualização do avatar
+  "img-src 'self' data: blob: image.tmdb.org cdn.myanimelist.net i.imgur.com https://www.clarity.ms https://c.clarity.ms c.bing.com *.public.blob.vercel-storage.com;",
 
   // ✅ Fontes
   "font-src 'self' fonts.gstatic.com;",
 
-  // ✅ Permite conexões do Clarity (envio de dados)
-  "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms https://i.clarity.ms vitals.vercel-insights.com;",
+  // ✅ Permite conexões (incluindo Vercel Blob)
+  "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms https://i.clarity.ms vitals.vercel-insights.com *.public.blob.vercel-storage.com;",
 
   "frame-src 'self';",
 ].join(' ');
@@ -48,6 +49,12 @@ const nextConfig = {
         hostname: "i.imgur.com",
         pathname: "/**",
       },
+      // Domínio do Vercel Blob (já estava correto)
+      {
+        protocol: "https",
+        hostname: "*.public.blob.vercel-storage.com",
+        pathname: "/**",
+      },
     ],
   },
 
@@ -62,3 +69,4 @@ const nextConfig = {
 };
 
 export default nextConfig;
+

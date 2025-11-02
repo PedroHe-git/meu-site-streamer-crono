@@ -2,13 +2,11 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
-import { Prisma, UserRole, ProfileVisibility } from "@prisma/client"; // Importa UserRole
-
+import { Prisma, UserRole, ProfileVisibility } from "@prisma/client"; 
 
 export const runtime = 'nodejs';
 
-
-// --- PUT: Atualiza as definições do perfil ---
+// --- PUT: Atualiza as definições do perfil (Bio e Privacidade APENAS) ---
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -22,40 +20,41 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { bio, profileVisibility } = body; // Recebe apenas 'bio'
+    
+    // --- MUDANÇA 1: 'image' foi removido daqui ---
+    const { bio, profileVisibility } = body; 
 
-    // --- Validações Simplificadas ---
+    // --- Validações ---
     if (bio !== undefined && typeof bio !== 'string') {
         return new NextResponse(JSON.stringify({ error: "Biografia inválida." }), { status: 400 });
     }
-    // Limita o tamanho da bio
     if (bio && bio.length > 200) {
          return new NextResponse(JSON.stringify({ error: "Biografia excede 200 caracteres." }), { status: 400 });
     }
-
     if (profileVisibility !== undefined && !['PUBLIC', 'FOLLOWERS_ONLY'].includes(profileVisibility)) {
       return new NextResponse(JSON.stringify({ error: "Visibilidade inválida." }), { status: 400 });
     }
+    // --- MUDANÇA 2: Validação da 'image' removida ---
+    
     // --- Fim Validações ---
 
-    // Prepara os dados para atualização (apenas 'bio')
+    // --- MUDANÇA 3: 'image' removida do objeto de atualização ---
     const dataToUpdate: Prisma.UserUpdateInput = {};
     if (bio !== undefined) dataToUpdate.bio = bio;
     if (profileVisibility !== undefined) dataToUpdate.profileVisibility = profileVisibility;
-    // --- [REMOVIDO] profileThemeColor e profileBannerUrl ---
 
     // Atualiza o utilizador
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: dataToUpdate,
-      select: { bio: true, profileVisibility: true } // Retorna apenas o campo atualizado
+      // --- MUDANÇA 4: 'image' removida do 'select' de retorno ---
+      select: { bio: true, profileVisibility: true } 
     });
 
     return NextResponse.json(updatedUser);
 
   } catch (error) {
     console.error("Erro ao atualizar definições:", error);
-    // Este erro (P2025) pode acontecer se o ID da sessão for inválido
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
        return new NextResponse(JSON.stringify({ error: "Utilizador não encontrado." }), { status: 404 });
     }

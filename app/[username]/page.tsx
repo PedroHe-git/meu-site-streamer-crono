@@ -1,24 +1,24 @@
-// app/[username]/page.tsx (Atualizado com Lógica de Privacidade)
-
 import prisma from '@/lib/prisma';
 import { notFound } from "next/navigation";
 import { format, startOfWeek, endOfWeek, addDays, isSameDay, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
-import { ScheduleItem, Media, MediaStatus, Prisma, UserRole, ProfileVisibility } from '@prisma/client'; // Importa ProfileVisibility
+import { ScheduleItem, Media, MediaStatus, Prisma, UserRole, ProfileVisibility } from '@prisma/client'; 
 import Image from "next/image";
 import UserListsClient from '@/app/components/UserListsClient';
 import { FiRefreshCw } from 'react-icons/fi';
-import { Lock } from 'lucide-react'; // Importa o ícone de cadeado
+import { Lock } from 'lucide-react'; 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import Link from 'next/link';
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Importa a sessão e o novo botão
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/authOptions"; //
-import FollowButton from "@/app/components/FollowButton"; // O nosso novo componente
+import { authOptions } from "@/lib/authOptions"; 
+import FollowButton from "@/app/components/FollowButton"; 
+
+// --- [MUDANÇA 1: Importar o Avatar] ---
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 // Tipagem
 type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
@@ -46,7 +46,6 @@ export default async function PublicProfilePage({ params, searchParams }: { para
   const startOfThisWeek = startOfDay(startOfWeek(targetDate, weekOptions));
   const endOfThisWeek = endOfDay(endOfWeek(targetDate, weekOptions));
 
-  // Busca o utilizador (profileUser) e o novo campo de visibilidade
   const profileUser = await prisma.user.findUnique({
     where: { username: decodedUsername },
     select: {
@@ -55,7 +54,8 @@ export default async function PublicProfilePage({ params, searchParams }: { para
         username: true, 
         role: true,
         bio: true,
-        profileVisibility: true // <-- SELECIONA O NOVO CAMPO
+        profileVisibility: true, 
+        image: true // <-- [MUDANÇA 2: Buscar a imagem do perfil]
       }
   });
 
@@ -80,27 +80,26 @@ export default async function PublicProfilePage({ params, searchParams }: { para
   const isOwnProfile = visitorId === profileUser.id;
   const isLoggedIn = !!visitorId;
   
-  // O visitante pode ver o perfil se:
-  // 1. O perfil for público.
-  // 2. O visitante for o dono do perfil.
-  // 3. O visitante estiver logado E seguir o criador (e o perfil for FOLLOWERS_ONLY).
   const canViewProfile = isPublic || isOwnProfile || (isLoggedIn && isFollowing);
 
   // --- 5. DEFINIR CONDIÇÕES DE VISIBILIDADE DO BOTÃO ---
   const canFollow = profileUser.role === 'CREATOR';
-  const isOwnProfileForButton = visitorId === profileUser.id; // Renomeado para evitar conflito
-  
+  const isOwnProfileForButton = visitorId === profileUser.id; 
   const showFollowButton = isLoggedIn && canFollow && !isOwnProfileForButton;
 
+  // --- [MUDANÇA 3: Criar o fallback do Avatar] ---
+  const fallbackLetter = (profileUser.name || profileUser.username)
+                         .substring(0, 1)
+                         .toUpperCase();
+
   // --- 6. CARREGAMENTO CONDICIONAL DE DADOS ---
-  // Só buscamos os dados das listas e cronograma se o visitante PUDER VER
-  
   let scheduleItems: ScheduleItemWithMedia[] = [];
   let initialToWatch: InitialListData = { items: [], totalCount: 0 };
   let initialWatched: InitialListData = { items: [], totalCount: 0 };
   let daysOfWeek: DaySchedule[] = [];
   
   if (canViewProfile) {
+    // ... (lógica de busca de dados)
     const scheduleItemsDb = await prisma.scheduleItem.findMany({ 
       where: { 
         userId: profileUser.id, 
@@ -151,6 +150,17 @@ export default async function PublicProfilePage({ params, searchParams }: { para
 
         {/* Cabeçalho (Sempre visível) */}
         <div className="text-center mb-12">
+            
+            {/* --- [MUDANÇA 4: Adicionar o Avatar] --- */}
+            <Avatar className="w-24 h-24 mx-auto mb-4 border-2 border-muted shadow-sm">
+              <AvatarImage 
+                src={profileUser.image ?? undefined} 
+                alt={profileUser.name || profileUser.username} 
+              />
+              <AvatarFallback className="text-3xl">{fallbackLetter}</AvatarFallback>
+            </Avatar>
+            {/* --- [FIM DA MUDANÇA] --- */}
+            
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2">
               {profileUser.name || profileUser.username}
             </h1>
@@ -284,7 +294,6 @@ export default async function PublicProfilePage({ params, searchParams }: { para
                   }
                 </p>
                 
-                {/* Opcional: Adicionar um botão de Login se o visitante não estiver logado */}
                 {!isLoggedIn && (
                   <Button asChild className="mt-4">
                     <Link href="/auth/signin">Fazer Login</Link>

@@ -1,27 +1,47 @@
-// app/dashboard/page.tsx (Corrigido)
-
 "use client";
 
-// 1. Importa 'useMemo' e os tipos do Joyride
-import { useState, useEffect, useCallback, useMemo } from "react"; 
+// 1. Importações de Hooks e Tipos
+import { 
+  useState, useEffect, useCallback, useMemo, useRef, 
+  ChangeEvent, SyntheticEvent 
+} from "react";
 import { Step, STATUS, CallBackProps } from 'react-joyride'; 
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-// 2. Importa o Enum 'ProfileVisibility'
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility } from "@prisma/client";
+import Image from "next/image"; 
 
+// 2. Importações da Biblioteca de Corte
+import ReactCrop, { 
+  type Crop, 
+  PixelCrop, 
+  centerCrop, 
+  makeAspectCrop 
+} from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css'; // Estilos obrigatórios
+
+// 3. Importações de Componentes
 import MediaSearch from "./MediaSearch";
 import MyLists from "./MyLists";
 import ScheduleManager from "./ScheduleManager";
 
-// Imports de UI
+// 4. Importações de UI (shadcn)
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea"; 
 import AppTour from '@/app/components/AppTour'; 
-// 3. Importa os RadioGroups
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; 
+import { Pen } from "lucide-react"; 
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogClose
+} from "@/components/ui/dialog";
 
 // Tipagem
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
@@ -29,10 +49,10 @@ type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; page: number; pageSize: number; };
 
-// ... (Definições dos passos do Tour - STEP_PERFIL, STEP_LISTAS, etc.)
+// Passos do Tour
 const STEP_PERFIL: Step = {
   target: '#tour-step-1-perfil',
-  content: 'Bem-vindo! Aqui você pode personalizar sua página com uma mensagem.',
+  content: 'Bem-vindo! Aqui pode personalizar a sua página com um avatar, bio e definir a sua privacidade.',
   placement: 'right',
 };
 const STEP_LISTAS: Step = {
@@ -72,15 +92,39 @@ const STEP_LISTA_PROX_AGENDA: Step = {
 };
 
 
-export default function DashboardPage() {
-  const { data: session, status } = useSession();
+// --- Função de ajuda para centrar o corte ---
+function centerAspectCrop(
+  mediaWidth: number,
+  mediaHeight: number,
+  aspect: number,
+): Crop {
+  return centerCrop(
+    makeAspectCrop(
+      {
+        unit: '%',
+        width: 90,
+      },
+      aspect,
+      mediaWidth,
+      mediaHeight,
+    ),
+    mediaWidth,
+    mediaHeight,
+  );
+}
 
-  // ... (Seus estados de 'toWatchData', etc. permanecem os mesmos) ...
+
+export default function DashboardPage() {
+  const { data: session, status, update: updateSession } = useSession();
+
+  // Estados das Listas
   const [toWatchData, setToWatchData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchingData, setWatchingData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchedData, setWatchedData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [droppedData, setDroppedData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [scheduleItems, setScheduleItems] = useState<ScheduleItemWithMedia[]>([]);
+  
+  // Estados de UI e Paginação
   const [currentPage, setCurrentPage] = useState<Record<StatusKey, number>>({ TO_WATCH: 1, WATCHING: 1, WATCHED: 1, DROPPED: 1, });
   const [searchTerm, setSearchTerm] = useState("");
   const [pageSize, setPageSize] = useState(20);
@@ -89,24 +133,28 @@ export default function DashboardPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   
-  // @ts-ignore
+  // Estados de Definições de Perfil
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
-  // @ts-ignore
   const [bio, setBio] = useState(session?.user?.bio || "");
-  
-  // --- [CORREÇÃO AQUI] ---
-  // 4. Usa os nomes corretos do estado e da sessão
-  // @ts-ignore
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
-  // --- [FIM DA CORREÇÃO] ---
-  
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
 
-  // --- Lógica do Tour ---
-  const [runTour, setRunTour] = useState(false);
+  // Estados para o Cropper de Avatar
+  const [previewImage, setPreviewImage] = useState<string | null>(null); // URL do avatar (ou preview local)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null); // Ficheiro cortado, pronto para upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null); 
+  const canvasRef = useRef<HTMLCanvasElement>(null); // Canvas invisível
+  const [imageSrc, setImageSrc] = useState(''); // URL da imagem original para o modal
+  const [crop, setCrop] = useState<Crop>(); 
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>(); 
+  const [isCropperOpen, setIsCropperOpen] = useState(false); 
+  const [aspect, setAspect] = useState<number | undefined>(1 / 1); // Força corte quadrado (1:1)
 
+  // Lógica do Tour
+  const [runTour, setRunTour] = useState(false);
   const tourSteps = useMemo(() => {
     const dynamicSteps: Step[] = [];
     if (isCreator) {
@@ -122,7 +170,6 @@ export default function DashboardPage() {
     return dynamicSteps;
   }, [isCreator]);
 
-  // useEffect para iniciar o tour
   useEffect(() => {
     if (status !== 'loading' && !isLoadingData) {
       const hasViewedTour = localStorage.getItem('meuCronogramaTourV1');
@@ -134,7 +181,6 @@ export default function DashboardPage() {
     }
   }, [isLoadingData, status]); 
 
-  // Callback para parar o tour
   const handleJoyrideCallback = (data: CallBackProps) => {
     const { status } = data;
     if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status as any)) {
@@ -151,19 +197,16 @@ export default function DashboardPage() {
     }, 100);
   };
 
-  // --- [CORREÇÃO AQUI] ---
-  // 5. Atualiza o useEffect para usar os nomes corretos
+  // Carrega dados da sessão para os estados
   useEffect(() => {
     if (session?.user) {
-      // @ts-ignore
       setBio(session.user.bio || "");
-      // @ts-ignore
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
+      setPreviewImage(session.user.image || null); // Define a imagem atual
     }
   }, [session?.user]);
-  // --- [FIM DA CORREÇÃO] ---
   
-  // ... (Todas as suas funções de busca de dados: fetchListData, fetchScheduleData, etc. permanecem iguais) ...
+  // --- Funções de Busca de Dados (Sem alterações) ---
   const fetchListData = useCallback(async (listStatus: StatusKey, page: number = 1, search: string = "") => {
     setIsListLoading(prev => ({ ...prev, [listStatus]: true }));
     try {
@@ -308,34 +351,193 @@ export default function DashboardPage() {
       setIsUpdating(false);
     }
   };
+  // --- Fim das Funções de Busca de Dados ---
 
-  // --- [CORREÇÃO AQUI] ---
-  // 6. Envia o payload correto para a API
+
+  // --- [LÓGICA DO AVATAR E CROPPER ATUALIZADA] ---
+  
+  // 1. Ativa o input de ficheiro
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  // 2. Quando o utilizador seleciona um ficheiro
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setCrop(undefined); // Limpa o corte anterior
+      const file = e.target.files[0];
+      
+      // Validação de tipo e tamanho (ex: 5MB)
+      if (!file.type.startsWith("image/")) {
+        setActionError("Ficheiro inválido. Por favor, selecione uma imagem.");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) { // 5MB
+        setActionError("Imagem muito grande. O limite é 5MB.");
+        return;
+      }
+
+      setImageSrc(URL.createObjectURL(file)); // Define a imagem para o modal
+      setIsCropperOpen(true); // Abre o modal
+      setActionError(null);
+      setSettingsMessage("");
+    }
+  };
+
+  // 3. Quando a imagem é carregada no modal, centramos o corte
+  function onImageLoad(e: SyntheticEvent<HTMLImageElement>) {
+    if (aspect) {
+      const { width, height } = e.currentTarget;
+      setCrop(centerAspectCrop(width, height, aspect));
+    }
+  }
+
+  // 4. Quando o utilizador confirma o corte no modal
+  const handleCropConfirm = async () => {
+    const image = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!image || !canvas || !completedCrop) {
+      throw new Error('Recursos de corte não estão prontos');
+    }
+
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+    
+    canvas.width = completedCrop.width * scaleX;
+    canvas.height = completedCrop.height * scaleY;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Não foi possível obter o contexto 2D');
+    }
+
+    ctx.drawImage(
+      image,
+      completedCrop.x * scaleX,
+      completedCrop.y * scaleY,
+      completedCrop.width * scaleX,
+      completedCrop.height * scaleY,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+
+    // Converte a tela (canvas) num Blob
+    return new Promise<void>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Falha ao criar blob da imagem cortada'));
+          return;
+        }
+        
+        const croppedFile = new File([blob], "avatar.png", { type: "image/png" });
+        
+        // Ficheiro cortado pronto para o upload
+        setSelectedFile(croppedFile);
+        
+        // Atualiza a pré-visualização no dashboard
+        setPreviewImage(URL.createObjectURL(croppedFile));
+        
+        setIsCropperOpen(false); // Fecha o modal
+        resolve();
+      }, 'image/png');
+    });
+  };
+
+  // 5. Função de Upload (agora só faz upload, não mexe no estado)
+  const handleAvatarUpload = async (): Promise<string> => {
+    if (!selectedFile) {
+      throw new Error("Nenhum ficheiro selecionado.");
+    }
+    
+    setSettingsMessage("A fazer upload...");
+    const formData = new FormData();
+    formData.append("file", selectedFile); // Envia o ficheiro CORTADO
+
+    const res = await fetch('/api/profile/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const { url: newImageUrl, error } = await res.json();
+    if (!res.ok) {
+      throw new Error(error || "Falha no upload");
+    }
+    return newImageUrl; // Retorna o URL permanente
+  };
+
+  // 6. Função de Guardar (COORDENA TUDO)
    const handleSaveSettings = async () => {
      if (!isCreator) return;
-     setIsSavingSettings(true); setSettingsMessage("A guardar..."); setActionError(null);
+     
+     setIsSavingSettings(true); 
+     setSettingsMessage("A guardar..."); 
+     setActionError(null);
+
+     // Começa com a imagem atual da sessão
+     let newImageUrl = session?.user?.image || null;
+
      try {
+       // Etapa 1: Fazer Upload da Imagem (se houver uma nova)
+       if (selectedFile) {
+         newImageUrl = await handleAvatarUpload(); // A API de upload guarda na BD
+         setSettingsMessage("Upload concluído, a guardar definições...");
+       }
+
+       // Etapa 2: Guardar Bio e Privacidade
        const payload = { 
          bio: bio,
-         profileVisibility: profileVisibility // <-- Envia o estado correto
+         profileVisibility: profileVisibility
        };
        const res = await fetch('/api/profile/settings', {
          method: 'PUT', headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify(payload),
        });
-       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Falha ao guardar.'); }
+       
+       if (!res.ok) { 
+         const d = await res.json(); 
+         throw new Error(d.error || 'Falha ao guardar definições.'); 
+       }
+       
+       const { bio: newBio, profileVisibility: newVisibility } = await res.json();
+
+       // Etapa 3: Atualizar a Sessão UMA VEZ com TODOS os dados
+       if (updateSession) {
+         await updateSession({
+           ...session, // Preserva a sessão existente
+           user: {
+             ...session?.user, // Preserva os dados do utilizador
+             image: newImageUrl, // Atualiza a imagem (nova ou a antiga)
+             bio: newBio,         // Atualiza a bio
+             profileVisibility: newVisibility // Atualiza a privacidade
+           }
+         });
+       }
+
+       // Etapa 4: Limpar e mostrar sucesso
        setSettingsMessage("Guardado!");
+       setSelectedFile(null); // Limpa o ficheiro
+       setPreviewImage(newImageUrl); // Garante que o preview tem o URL permanente
        setTimeout(() => setSettingsMessage(""), 4000);
+       
      } catch (error: any) {
        console.error("Erro ao guardar definições:", error);
-       setSettingsMessage(""); setActionError(`Erro: ${error.message}`);
+       setSettingsMessage(""); 
+       setActionError(`Erro: ${error.message}`);
+       // Reverte o preview para a imagem original da sessão se algo falhar
+       setPreviewImage(session?.user?.image || null);
      } finally {
        setIsSavingSettings(false);
+       if (fileInputRef.current) {
+         fileInputRef.current.value = "";
+       }
      }
    };
-  // --- [FIM DA CORREÇÃO] ---
+  // --- [FIM DA LÓGICA DO AVATAR] ---
 
-  // Estados de Carregamento
+
+  // --- ESTADOS DE CARREGAMENTO (sem alteração) ---
   if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
     return <p className="text-center p-10 text-muted-foreground">A carregar...</p>; 
   }
@@ -345,6 +547,7 @@ export default function DashboardPage() {
   }
 
   const firstName = session?.user?.name?.split(' ')[0] || session?.user?.username || "";
+  const fallbackLetter = (session?.user?.name || session?.user?.username || "U").charAt(0).toUpperCase();
 
   // --- JSX ---
   return (
@@ -355,12 +558,54 @@ export default function DashboardPage() {
         onCallback={handleJoyrideCallback}
       />
       
+      {/* Canvas Invisível para o corte */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'none',
+          objectFit: 'contain',
+        }}
+      />
+
+      {/* Modal (Dialog) do Cropper */}
+      <Dialog open={isCropperOpen} onOpenChange={setIsCropperOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cortar Imagem</DialogTitle>
+          </DialogHeader>
+          {imageSrc && (
+            <ReactCrop
+              crop={crop}
+              onChange={(_, percentCrop) => setCrop(percentCrop)}
+              onComplete={(c) => setCompletedCrop(c)}
+              aspect={aspect}
+              circularCrop // Força um corte circular
+            >
+              <img
+                ref={imgRef}
+                alt="Imagem para cortar"
+                src={imageSrc}
+                onLoad={onImageLoad}
+                style={{ maxHeight: '70vh' }}
+              />{/* <--- O '}' extra foi removido daqui */}
+            </ReactCrop>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button type="button" onClick={handleCropConfirm}>Confirmar Corte</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+
       <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
         <h1 className="text-3xl md:text-4xl font-semibold mb-8">
           Olá, {firstName}!
         </h1>
 
-        {/* ... (Alertas) ... */}
+        {/* Alertas */}
         {isUpdating && ( <div className="fixed top-5 right-5 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-pulse"> A atualizar... </div> )}
         {actionError && ( <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded relative" role="alert"> <strong className="font-bold">Erro: </strong> <span className="block sm:inline">{actionError}</span> <button onClick={() => setActionError(null)} className="absolute top-0 bottom-0 right-0 px-4 py-3"> <svg className="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Fechar</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg> </button> </div> )}
 
@@ -378,14 +623,50 @@ export default function DashboardPage() {
                           <CardDescription>Ajuste a sua página pública.</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                          
+                          {/* UI do Avatar */}
+                          <div className="flex flex-col items-center space-y-2">
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={handleFileChange} // Abre o modal
+                              accept="image/png, image/jpeg, image/gif"
+                              className="hidden" 
+                            />
+                            <button
+                              type="button"
+                              onClick={handleAvatarClick}
+                              className="relative group rounded-full"
+                              title="Alterar avatar"
+                              disabled={isSavingSettings}
+                            >
+                              <Avatar className="h-24 w-24 border-2 border-muted">
+                                <AvatarImage 
+                                  src={previewImage || undefined} // Mostra a imagem da sessão ou o preview
+                                  alt={session?.user?.username || "Avatar"} 
+                                />
+                                <AvatarFallback className="text-3xl">{fallbackLetter}</AvatarFallback>
+                              </Avatar>
+                              <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Pen className="h-6 w-6 text-white" />
+                              </div>
+                            </button>
+                            {!selectedFile && (
+                              <p className="text-xs text-muted-foreground">Clique no avatar para alterar a imagem.</p>
+                            )}
+                            {selectedFile && (
+                              <p className="text-xs text-blue-600 font-medium">Nova imagem pronta. Clique em "Guardar".</p>
+                            )}
+                          </div>
+                          
+                          {/* Bio */}
                           <div className="space-y-1">
                               <Label htmlFor="profile-bio" className="text-sm font-medium text-foreground">Bio Curta</Label>
                               <Textarea id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Fale um pouco sobre si..." maxLength={200} className="h-24 placeholder:text-muted-foreground" disabled={isSavingSettings} />
                                <p className="text-xs text-muted-foreground">{200 - (bio?.length || 0)} caracteres restantes</p>
                           </div>
                           
-                          {/* --- [CORREÇÃO AQUI] --- */}
-                          {/* 7. Usa o RadioGroup que adicionamos na etapa anterior */}
+                          {/* Privacidade */}
                           <div className="space-y-2 pt-2">
                             <Label className="text-sm font-medium text-foreground">Visibilidade do Perfil</Label>
                             <RadioGroup 
@@ -416,12 +697,12 @@ export default function DashboardPage() {
                               </Label>
                             </RadioGroup>
                           </div>
-                          {/* --- [FIM DA CORREÇÃO] --- */}
 
+                          {/* Botão de Guardar */}
                           <Button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full mt-2">
                              {isSavingSettings ? "A guardar..." : "Guardar Definições"}
                           </Button>
-                          {settingsMessage && <p className={`text-sm text-center ${settingsMessage.startsWith('Erro') ? 'text-red-600' : 'text-green-600'}`}>{settingsMessage}</p>}
+                          {settingsMessage && <p className={`text-sm text-center font-medium ${actionError ? 'text-red-600' : 'text-green-600'}`}>{settingsMessage}</p>}
                       </CardContent>
                   </Card>
               )}
@@ -436,7 +717,7 @@ export default function DashboardPage() {
 
            </aside> 
 
-           {/* 2. Conteúdo Principal */}
+           {/* 2. Conteúdo Principal (sem alterações) */}
            <main className="flex-1 space-y-6">
                
                <Card id="tour-step-2-listas-busca">
