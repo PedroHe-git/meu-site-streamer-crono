@@ -62,7 +62,7 @@ export async function GET(
     // 4. Calcular o intervalo de datas para essa semana
     const today = new Date();
     // O 'weekStartsOn: 0' define Domingo como o início da semana
-    const weekOptions = { locale: ptBR, weekStartsOn: 0 as const }; 
+    const weekOptions = {weekStartsOn: 0 as const }; 
     const targetDate = addDays(today, weekOffset * 7);
     const startDate = startOfDay(startOfWeek(targetDate, weekOptions));
     const endDate = endOfDay(endOfWeek(targetDate, weekOptions));

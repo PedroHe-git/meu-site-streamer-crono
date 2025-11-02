@@ -125,7 +125,7 @@ export default function PublicScheduleView({ username }: Props) {
   const handleDateSelect = (date: Date | null) => {
     if (!date) return;
     const today = new Date();
-    const weekOptions = { locale: ptBR, weekStartsOn: 0 as const }; 
+    const weekOptions = {weekStartsOn: 0 as const }; 
     const startOfTodayWeek = startOfWeek(today, weekOptions);
     const startOfSelectedWeek = startOfWeek(date, weekOptions);
     
