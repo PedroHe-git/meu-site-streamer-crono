@@ -8,6 +8,7 @@ import { ProfileVisibility } from "@prisma/client";
 import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(
