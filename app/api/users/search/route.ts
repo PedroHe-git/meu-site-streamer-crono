@@ -2,6 +2,8 @@ import { NextResponse, NextRequest } from "next/server";
 import prisma from '@/lib/prisma';
 import { UserRole } from "@prisma/client"; // Importa o enum
 
+
+export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 
