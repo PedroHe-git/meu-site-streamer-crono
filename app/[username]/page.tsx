@@ -19,6 +19,8 @@ import UserListsClient from "@/app/components/UserListsClient";
 import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
 import PublicScheduleView from "@/app/components/PublicScheduleView";
 
+export const dynamic = 'force-dynamic';
+
 type PublicProfileProps = {
   username: string;
   name: string | null;
