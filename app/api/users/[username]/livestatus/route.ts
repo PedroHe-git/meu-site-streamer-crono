@@ -3,6 +3,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+
+export const dynamic = 'force-dynamic';
 // Cache do Token de App (igual a antes)
 let tokenCache = {
   token: null as string | null,

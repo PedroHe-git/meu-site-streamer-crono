@@ -1,8 +1,9 @@
 // app/api/search/route.ts
 import { NextResponse } from "next/server";
 
-export const runtime = 'nodejs';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 // Esta função será chamada quando acessarmos /api/search?query=...
 export async function GET(request: Request) {

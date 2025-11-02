@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 
 export const runtime = 'nodejs';
-
+export const dynamic = 'force-dynamic';
 
 // Esta função será chamada quando acedermos a /api/search-anime?query=...
 export async function GET(request: Request) {

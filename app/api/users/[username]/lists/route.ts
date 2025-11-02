@@ -9,7 +9,7 @@ import { authOptions } from "@/lib/authOptions"; // Importa authOptions
 // --- Fim das Importações ---
 
 export const runtime = 'nodejs';
-
+export const dynamic = 'force-dynamic';
 // Define os tipos de status válidos
 const validStatuses = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];
 
