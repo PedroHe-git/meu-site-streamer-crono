@@ -14,6 +14,7 @@ declare module "next-auth" {
       bio?: string | null;
       profileVisibility: ProfileVisibility;
       image?: string | null; // <-- Verifique se esta linha existe
+      twitchUsername?: string | null;
     } & DefaultSession["user"] 
   }
 
@@ -23,6 +24,7 @@ declare module "next-auth" {
     bio?: string | null;
     profileVisibility: ProfileVisibility;
     image?: string | null; // <-- Verifique se esta linha existe
+    twitchUsername?: string | null;
   }
 }
 
@@ -35,6 +37,7 @@ declare module "next-auth/jwt" {
     bio?: string | null;
     profileVisibility: ProfileVisibility;
     image?: string | null; // <-- Verifique se esta linha existe
+    twitchUsername?: string | null;
   }
 }
 

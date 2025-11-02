@@ -2,110 +2,100 @@
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/authOptions"; //
+import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
-import { Prisma } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 
-// Configura o runtime e a região (necessário para o Prisma no Vercel)
-export const runtime = 'nodejs';
-
-
-/**
- * API para Seguir (Follow) ou Deixar de Seguir (Unfollow) um Criador.
- * A API "alterna" (toggles) o estado.
- */
 export async function POST(
   request: Request,
   { params }: { params: { username: string } }
 ) {
-  try {
-    // 1. OBTER O UTILIZADOR LOGADO (O SEGUIDOR)
-    const session = await getServerSession(authOptions);
-    // @ts-ignore
-    if (!session || !session.user?.id) {
-      return new NextResponse(JSON.stringify({ error: "Não autorizado. Faça login para seguir." }), { status: 401 });
-    }
-    // @ts-ignore
-    const followerId = session.user.id;
+  const session = await getServerSession(authOptions);
 
-    // 2. OBTER O CRIADOR A SER SEGUIDO (O "SEGUIDO")
-    const { username } = params;
-    if (!username) {
-      return new NextResponse(JSON.stringify({ error: "Username do criador é obrigatório" }), { status: 400 });
-    }
-
-    const followingUser = await prisma.user.findUnique({
-      where: { username: decodeURIComponent(username) },
-      select: { id: true, role: true } // Apenas os campos necessários
+  // 1. O utilizador que segue (da sessão) tem de estar logado
+  if (!session?.user?.id) {
+    return new NextResponse(JSON.stringify({ error: "Não autorizado" }), {
+      status: 401,
     });
+  }
+  
+  const followerId = session.user.id;
 
-    if (!followingUser) {
-      return new NextResponse(JSON.stringify({ error: "Criador não encontrado" }), { status: 404 });
-    }
-    
-    // Regra de negócio: Apenas "CREATOR" pode ser seguido
-    if (followingUser.role !== 'CREATOR') {
-       return new NextResponse(JSON.stringify({ error: "Apenas Criadores podem ser seguidos" }), { status: 400 });
-    }
-
-    const followingId = followingUser.id;
-
-    // 3. REGRA DE NEGÓCIO: UTILIZADOR NÃO PODE SEGUIR A SI MESMO
-    if (followerId === followingId) {
-      return new NextResponse(JSON.stringify({ error: "Não pode seguir a si mesmo" }), { status: 400 });
-    }
-
-    // 4. VERIFICAR SE JÁ SEGUE (LÓGICA DO "TOGGLE")
-    // (Usa o modelo Follows)
-    const existingFollow = await prisma.follows.findUnique({
+  try {
+    // 2. O utilizador a ser seguido (o alvo) tem de existir e ser um CREATOR
+    const targetCreator = await prisma.user.findUnique({
       where: {
-        followerId_followingId: {
-          followerId: followerId,
-          followingId: followingId,
-        },
+        username: decodeURIComponent(params.username),
+        role: UserRole.CREATOR, // Só se pode seguir CREATORs
       },
     });
 
-    let isFollowing: boolean;
+    if (!targetCreator) {
+      return new NextResponse(JSON.stringify({ error: "Criador não encontrado" }), {
+        status: 404,
+      });
+    }
 
+    const targetUserId = targetCreator.id;
+
+    // Não se pode seguir a si mesmo
+    if (followerId === targetUserId) {
+      return new NextResponse(JSON.stringify({ error: "Não pode seguir a si mesmo" }), {
+        status: 400,
+      });
+    }
+
+    // 3. Verificar se já segue
+    const existingFollow = await prisma.follows.findFirst({
+      where: {
+        followerId: followerId,
+        followingId: targetUserId,
+      },
+      // [OPCIONAL, MAS BOM] Selecione apenas os campos que usamos
+      select: {
+        followerId: true,
+        followingId: true,
+      }
+    });
+
+    // 4. Se já segue, "unfollow"
     if (existingFollow) {
-      // --- JÁ SEGUE: EXECUTAR "DEIXAR DE SEGUIR" (UNFOLLOW) ---
+      
+      // --- [ INÍCIO DA CORREÇÃO ] ---
+      // Em vez de usar 'id', usamos o ID composto 'followerId_followingId'
       await prisma.follows.delete({
         where: {
           followerId_followingId: {
             followerId: followerId,
-            followingId: followingId,
-          },
+            followingId: targetUserId,
+          }
         },
       });
-      isFollowing = false;
-      console.log(`[FOLLOW] Utilizador ${followerId} deixou de seguir ${followingId}`);
+      // --- [ FIM DA CORREÇÃO ] ---
 
-    } else {
-      // --- NÃO SEGUE: EXECUTAR "SEGUIR" (FOLLOW) ---
-      await prisma.follows.create({
-        data: {
-          followerId: followerId,
-          followingId: followingId,
-        },
+      return NextResponse.json({ 
+        message: "Deixou de seguir", 
+        isFollowing: false 
       });
-      isFollowing = true;
-      console.log(`[FOLLOW] Utilizador ${followerId} começou a seguir ${followingId}`);
     }
 
-    // 5. RETORNAR O NOVO ESTADO
-    return NextResponse.json({ isFollowing: isFollowing }, { status: 200 });
+    // 5. Se não segue, "follow"
+    await prisma.follows.create({
+      data: {
+        followerId: followerId,
+        followingId: targetUserId,
+      },
+    });
+
+    return NextResponse.json({ 
+      message: "Seguido com sucesso", 
+      isFollowing: true 
+    });
 
   } catch (error) {
-    console.error("Erro na API de Seguir/Deixar de Seguir:", error);
-    
-    // Tratamento de erro específico do Prisma (ex: falha de constraint)
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') { // Erro de constraint única
-        return new NextResponse(JSON.stringify({ error: "Relação já existe (conflito)." }), { status: 409 });
-      }
-    }
-    
-    return new NextResponse(JSON.stringify({ error: "Erro interno do servidor." }), { status: 500 });
+    console.error("Erro ao seguir/deixar de seguir:", error);
+    return new NextResponse(JSON.stringify({ error: "Erro interno do servidor" }), {
+      status: 500,
+    });
   }
 }

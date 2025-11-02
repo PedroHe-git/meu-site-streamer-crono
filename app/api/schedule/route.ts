@@ -24,6 +24,30 @@ export async function GET(request: Request) {
       return new NextResponse("Usuário não encontrado", { status: 404 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const startDate = searchParams.get('start');
+    const endDate = searchParams.get('end');
+
+    // Define a condição base
+    const whereCondition: Prisma.ScheduleItemWhereInput = {
+      userId: user.id,
+    };
+
+    // Se start e end forem fornecidos (pelo calendário), use-os
+    if (startDate && endDate) {
+      whereCondition.scheduledAt = {
+        gte: new Date(startDate),
+        lte: new Date(endDate),
+      };
+    } else {
+      // Comportamento original (fallback para o seu ScheduleManager atual)
+      // Busca apenas itens futuros e não concluídos
+      whereCondition.scheduledAt = {
+        gte: new Date(new Date().setHours(0, 0, 0, 0)),
+      };
+      whereCondition.isCompleted = false;
+    }
+
     // Busca itens do cronograma E inclui a 'media' associada
     const scheduleItems = await prisma.scheduleItem.findMany({
       where: {

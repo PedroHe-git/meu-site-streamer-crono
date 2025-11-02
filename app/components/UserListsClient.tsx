@@ -66,7 +66,7 @@ export default function UserListsClient({ username, initialToWatch, initialWatch
       // [CORREÇÃO] Usa text-muted-foreground
       listContent = <div className="text-center py-4 text-muted-foreground">A carregar...</div>;
     } else {
-      const validItems = data.items.filter(ms => ms && ms.media);
+      const validItems = (data.items || []).filter(ms => ms && ms.media);
       if (validItems.length === 0) {
         // [CORREÇÃO] Usa text-muted-foreground
         listContent = (

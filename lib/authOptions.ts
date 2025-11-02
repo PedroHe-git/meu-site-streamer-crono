@@ -5,7 +5,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
-import { UserRole, ProfileVisibility } from "@prisma/client"; 
+import { UserRole, ProfileVisibility, Prisma } from "@prisma/client"; // <-- Importe o Prisma
 import { v4 as uuidv4 } from 'uuid';
 
 interface SessionUser {
@@ -16,7 +16,8 @@ interface SessionUser {
   role: UserRole;
   bio?: string | null;
   profileVisibility: ProfileVisibility;
-  image?: string | null; // Garantir que a imagem está na interface
+  image?: string | null;
+  twitchUsername?: string | null; 
 }
 
 export const authOptions: NextAuthOptions = {
@@ -26,18 +27,16 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID!, 
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       profile(profile) {
-        if (!profile.email) {
-          throw new Error("Provedor OAuth sem email não é suportado.");
-        }
         return {
           id: profile.sub,
           name: profile.name,
           email: profile.email,
-          image: profile.picture, // O OAuth já fornece a imagem
+          image: profile.picture,
           username: profile.email.split('@')[0] + '-' + uuidv4().substring(0, 4),
           role: UserRole.VISITOR, 
           bio: null,
           profileVisibility: ProfileVisibility.PUBLIC,
+          twitchUsername: null, 
         };
       },
     }),
@@ -52,11 +51,12 @@ export const authOptions: NextAuthOptions = {
           id: profile.sub,
           name: profile.preferred_username,
           email: profile.email,
-          image: profile.picture, // O OAuth já fornece a imagem
+          image: profile.picture, // <-- Twitch já fornece a imagem
           username: profile.preferred_username + '-' + uuidv4().substring(0, 4),
           role: UserRole.VISITOR,
           bio: null,
           profileVisibility: ProfileVisibility.PUBLIC,
+          twitchUsername: profile.preferred_username, 
         };
       },
     }),
@@ -83,45 +83,101 @@ export const authOptions: NextAuthOptions = {
                 role: user.role,
                 bio: user.bio,
                 profileVisibility: user.profileVisibility,
-                image: user.image, // Passa a imagem da BD
+                image: user.image,
+                twitchUsername: user.twitchUsername,
             };
         }
      }),
   ],
   pages: { signIn: "/auth/signin", },
+  session: { strategy: "jwt" },
 
-  session: {
-    strategy: "jwt",
+  events: {
+    // --- [ INÍCIO DA MODIFICAÇÃO ] ---
+    async linkAccount({ user, account, profile }) {
+      // Quando o utilizador vincula uma conta (ex: Twitch)
+      if (account.provider === "twitch") {
+        
+        // Prepara os dados para atualizar no Prisma
+        const dataToUpdate: Prisma.UserUpdateInput = {};
+
+        // 1. Adiciona o username da Twitch
+        // @ts-ignore
+        dataToUpdate.twitchUsername = profile.preferred_username || null;
+
+        // 2. Verifica a imagem
+        // @ts-ignore
+        const twitchPicture = profile.picture as string | null;
+
+        // SE o utilizador NÃO tiver uma imagem personalizada (user.image for null)
+        // E SE a Twitch forneceu uma imagem (twitchPicture não for null)
+        // ENTÃO, atualiza a imagem do utilizador.
+        if (!user.image && twitchPicture) {
+          dataToUpdate.image = twitchPicture;
+        }
+
+        // 3. Atualiza o utilizador na base de dados
+        await prisma.user.update({
+          where: { id: user.id },
+          data: dataToUpdate,
+        });
+      }
+    }
+    // --- [ FIM DA MODIFICAÇÃO ] ---
   },
 
   callbacks: {
-    // --- [CORREÇÃO PRINCIPAL AQUI] ---
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger, session, account, profile }) { 
       
-      // 1. No login inicial (objeto 'user' existe)
+      // No login inicial (user existe)
       if (user) {
          token.id = user.id;
          token.username = user.username;
          token.role = user.role;
          token.bio = user.bio;
          token.profileVisibility = user.profileVisibility;
-         token.image = user.image; // Guarda a imagem no token
+         token.image = user.image;
+         token.twitchUsername = user.twitchUsername;
       }
 
-      // 2. Na atualização da sessão (ex: updateSession() chamado no dashboard)
-      // O 'trigger' será "update" e o objeto 'session' conterá os novos dados
+      // --- [ INÍCIO DA MODIFICAÇÃO ] ---
+      // Quando uma nova conta é VINCULADA (ex: clicar em "Vincular Twitch" no dashboard)
+      // O 'profile' e 'account' estão disponíveis neste trigger
+      if (trigger === "update" && account && profile) {
+        
+        if (account.provider === "twitch") {
+          // @ts-ignore
+          token.twitchUsername = profile.preferred_username;
+
+          // Atualiza o token com a imagem da Twitch, SE o token não tiver uma
+          // @ts-ignore
+          const twitchPicture = profile.picture as string | null;
+          if (!token.image && twitchPicture) {
+            token.image = twitchPicture;
+          }
+        }
+      }
+      // --- [ FIM DA MODIFICAÇÃO ] ---
+
+      // Quando a sessão é atualizada manualmente (ex: salvar bio ou novo avatar)
       if (trigger === "update" && session?.user) {
-        // Atualiza o token com os novos dados passados pela função updateSession
-        token.bio = session.user.bio;
-        token.profileVisibility = session.user.profileVisibility;
-        token.image = session.user.image;
+        if (session.user.bio !== undefined) {
+          token.bio = session.user.bio;
+        }
+        if (session.user.profileVisibility !== undefined) {
+          token.profileVisibility = session.user.profileVisibility;
+        }
+        // Se a sessão for atualizada com uma nova imagem (do upload), ela tem prioridade
+        if (session.user.image !== undefined) {
+            token.image = session.user.image;
+        }
       }
 
-      return token; // Retorna o token atualizado
+      return token; 
     },
     
     async session({ session, token }) {
-      // Esta função passa os dados do TOKEN (atualizado acima) para a SESSÃO do cliente
+      // Passa todos os dados do token para a sessão do cliente
       if (session.user) {
         const sessionUser = session.user as SessionUser;
         sessionUser.id = token.id as string;
@@ -129,7 +185,8 @@ export const authOptions: NextAuthOptions = {
         sessionUser.role = token.role as UserRole;
         sessionUser.bio = token.bio as string | null;
         sessionUser.profileVisibility = token.profileVisibility as ProfileVisibility;
-        sessionUser.image = token.image as string | null; // Passa a imagem do token para a sessão
+        sessionUser.image = token.image as string | null; 
+        sessionUser.twitchUsername = token.twitchUsername as string | null;
       }
       return session;
     },
@@ -138,4 +195,3 @@ export const authOptions: NextAuthOptions = {
   debug: process.env.NODE_ENV === "development",
   secret: process.env.NEXTAUTH_SECRET,
 };
-

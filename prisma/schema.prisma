@@ -55,9 +55,9 @@ model User {
 
   // --- Campos de Personalização ---
   bio              String?   @db.Text // Mantido
-
+  
   profileVisibility ProfileVisibility @default(PUBLIC)
-
+  twitchUsername   String?           @unique
   // Relações
   accounts      Account[]
   sessions      Session[]

@@ -63,3 +63,113 @@
   body {
     @apply bg-background text-foreground;
   }
+
+.rbc-calendar {
+  font-family: var(--font-sans); 
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--card)); 
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+.rbc-header {
+  border-bottom-color: hsl(var(--border));
+  border-left-color: hsl(var(--border));
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+.rbc-toolbar button {
+  background-color: hsl(var(--card)); 
+  color: hsl(var(--card-foreground)); 
+  border: 1px solid hsl(var(--border));
+}
+.rbc-toolbar button:hover,
+.rbc-toolbar button:focus {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.rbc-toolbar button.rbc-active {
+  background-color: hsl(var(--primary)); 
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+.rbc-month-view {
+  border-color: hsl(var(--border));
+}
+.rbc-month-row + .rbc-month-row {
+  border-color: hsl(var(--border));
+}
+.rbc-day-bg + .rbc-day-bg {
+  border-color: hsl(var(--border));
+}
+/* Cor padrão (clara) para "hoje" */
+.rbc-today {
+  background-color: hsl(var(--accent));
+}
+/* Cor padrão (clara) para "fora do mês" */
+.rbc-off-range-bg {
+  background-color: hsl(var(--muted)); 
+}
+
+
+/* --- [CORREÇÃO] Estilos para o Dark Mode --- */
+/* Agora usamos o seletor .dark que o next-themes aplica */
+
+.dark .rbc-calendar {
+  color: hsl(var(--foreground)); 
+  background-color: hsl(var(--card)); /* Fundo escuro do card */
+  border-color: hsl(var(--border));
+}
+
+.dark .rbc-header {
+  background-color: hsl(var(--muted)); /* Fundo escuro para cabeçalho */
+  border-bottom-color: hsl(var(--border));
+  border-left-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+/* --- ESTA É A CORREÇÃO QUE VOCÊ PEDIU --- */
+/* Dia de hoje no modo escuro */
+.dark .rbc-today {
+  background-color: hsl(var(--muted) / 0.5); /* Fundo escuro sutil (60% de opacidade) */
+}
+
+/* Células de outros meses no modo escuro */
+.dark .rbc-off-range-bg {
+  background-color: hsl(var(--muted)); /* Fundo principal (mais escuro) */
+}
+.dark .rbc-off-range .rbc-date-cell {
+  color: hsl(var(--muted-foreground)); /* Texto cinza para dias de outros meses */
+}
+/* --- FIM DA CORREÇÃO --- */
+
+/* Barra de navegação no modo escuro */
+.dark .rbc-toolbar button {
+  background-color: hsl(var(--card)); 
+  color: hsl(var(--card-foreground)); 
+  border-color: hsl(var(--border));
+}
+.dark .rbc-toolbar button:hover,
+.dark .rbc-toolbar button:focus {
+  background-color: hsl(var(--accent)); 
+  color: hsl(var(--accent-foreground));
+}
+.dark .rbc-toolbar button.rbc-active {
+  background-color: hsl(var(--primary)); 
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+.dark .rbc-toolbar-label {
+  color: hsl(var(--foreground));
+}
+
+/* Bordas no modo escuro */
+.dark .rbc-month-view,
+.dark .rbc-month-row + .rbc-month-row,
+.dark .rbc-day-bg + .rbc-day-bg {
+  border-color: hsl(var(--border));
+}
+
+/* Eventos */
+.dark .rbc-row-segment .rbc-event {
+  color: hsl(var(--primary-foreground)); /* Texto branco no evento */
+}

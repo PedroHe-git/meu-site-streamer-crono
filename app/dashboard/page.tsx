@@ -6,7 +6,7 @@ import {
   ChangeEvent, SyntheticEvent 
 } from "react";
 import { Step, STATUS, CallBackProps } from 'react-joyride'; 
-import { useSession } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react"; // <-- [ATUALIZADO] signIn adicionado
 import { redirect } from "next/navigation";
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility } from "@prisma/client";
 import Image from "next/image"; 
@@ -18,12 +18,13 @@ import ReactCrop, {
   centerCrop, 
   makeAspectCrop 
 } from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css'; // Estilos obrigatórios
+import 'react-image-crop/dist/ReactCrop.css'; 
 
 // 3. Importações de Componentes
 import MediaSearch from "./MediaSearch";
 import MyLists from "./MyLists";
 import ScheduleManager from "./ScheduleManager";
+import FullCalendar from "./FullCalendar"; // <-- [ADICIONADO] Calendário
 
 // 4. Importações de UI (shadcn)
 import { Label } from "@/components/ui/label";
@@ -49,7 +50,7 @@ type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; page: number; pageSize: number; };
 
-// Passos do Tour
+// Passos do Tour (Pode adicionar um para o calendário se quiser)
 const STEP_PERFIL: Step = {
   target: '#tour-step-1-perfil',
   content: 'Bem-vindo! Aqui pode personalizar a sua página com um avatar, bio e definir a sua privacidade.',
@@ -88,6 +89,12 @@ const STEP_AGENDA: Step = {
 const STEP_LISTA_PROX_AGENDA: Step = {
   target: '#tour-step-lista-agendamentos',
   content: 'Gerencie seus itens agendados. Ao assistir clique em CONCLUÍDO ou VISTO! Caso não conseguiu ver clique em REMOVER',
+  placement: 'top',
+};
+// [OPCIONAL] Novo passo do Tour para o Calendário
+const STEP_CALENDARIO: Step = {
+  target: '#tour-step-4-calendario',
+  content: 'Aqui tem uma visão completa do seu cronograma, mostrando todos os seus agendamentos passados e futuros.',
   placement: 'top',
 };
 
@@ -132,6 +139,9 @@ export default function DashboardPage() {
   const [isListLoading, setIsListLoading] = useState<Record<StatusKey, boolean>>({ TO_WATCH: false, WATCHING: false, WATCHED: false, DROPPED: false });
   const [isUpdating, setIsUpdating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // [ADICIONADO] Chave para forçar recarregamento do calendário
+  const [calendarKey, setCalendarKey] = useState(0);
   
   // Estados de Definições de Perfil
   const userRole = session?.user?.role as UserRole | undefined;
@@ -140,18 +150,21 @@ export default function DashboardPage() {
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
+  
+  // [REMOVIDO] Estado do twitchUsername removido
+  // const [twitchUsername, setTwitchUsername] = useState(session?.user?.twitchUsername || "");
 
   // Estados para o Cropper de Avatar
-  const [previewImage, setPreviewImage] = useState<string | null>(null); // URL do avatar (ou preview local)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null); // Ficheiro cortado, pronto para upload
+  const [previewImage, setPreviewImage] = useState<string | null>(null); 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null); 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLImageElement>(null); 
-  const canvasRef = useRef<HTMLCanvasElement>(null); // Canvas invisível
-  const [imageSrc, setImageSrc] = useState(''); // URL da imagem original para o modal
+  const canvasRef = useRef<HTMLCanvasElement>(null); 
+  const [imageSrc, setImageSrc] = useState(''); 
   const [crop, setCrop] = useState<Crop>(); 
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>(); 
   const [isCropperOpen, setIsCropperOpen] = useState(false); 
-  const [aspect, setAspect] = useState<number | undefined>(1 / 1); // Força corte quadrado (1:1)
+  const [aspect, setAspect] = useState<number | undefined>(1 / 1); 
 
   // Lógica do Tour
   const [runTour, setRunTour] = useState(false);
@@ -167,6 +180,7 @@ export default function DashboardPage() {
     dynamicSteps.push(STEP_LISTAS_PARA_ABANDONADOS);
     dynamicSteps.push(STEP_AGENDA);
     dynamicSteps.push(STEP_LISTA_PROX_AGENDA);
+    dynamicSteps.push(STEP_CALENDARIO); // <-- [ADICIONADO] Novo passo
     return dynamicSteps;
   }, [isCreator]);
 
@@ -202,11 +216,13 @@ export default function DashboardPage() {
     if (session?.user) {
       setBio(session.user.bio || "");
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
-      setPreviewImage(session.user.image || null); // Define a imagem atual
+      setPreviewImage(session.user.image || null); 
+      // [REMOVIDO]
+      // setTwitchUsername(session.user.twitchUsername || "");
     }
   }, [session?.user]);
   
-  // --- Funções de Busca de Dados (Sem alterações) ---
+  // --- Funções de Busca de Dados ---
   const fetchListData = useCallback(async (listStatus: StatusKey, page: number = 1, search: string = "") => {
     setIsListLoading(prev => ({ ...prev, [listStatus]: true }));
     try {
@@ -231,7 +247,9 @@ export default function DashboardPage() {
 
   const fetchScheduleData = async () => {
     try {
-      const resSchedule = await fetch("/api/schedule");
+      // [ATUALIZADO] Removemos os parâmetros para que a API use o fallback
+      // e traga apenas os itens futuros para o "ScheduleManager"
+      const resSchedule = await fetch("/api/schedule"); 
       if (!resSchedule.ok) { throw new Error('Falha ao buscar schedule'); }
       const scheduleData = await resSchedule.json();
       setScheduleItems(scheduleData);
@@ -275,9 +293,11 @@ export default function DashboardPage() {
       fetchListData("WATCHING", 1, searchTerm),
       fetchListData("WATCHED", 1, searchTerm),
       fetchListData("DROPPED", 1, searchTerm),
-      fetchScheduleData()
+      fetchScheduleData() // Busca dados para o ScheduleManager (lista)
     ]).finally(() => {
       setIsUpdating(false);
+      // [ATUALIZADO] Força o FullCalendar a recarregar
+      setCalendarKey(prevKey => prevKey + 1); 
     });
   }, [fetchListData, searchTerm]); 
 
@@ -354,20 +374,17 @@ export default function DashboardPage() {
   // --- Fim das Funções de Busca de Dados ---
 
 
-  // --- [LÓGICA DO AVATAR E CROPPER ATUALIZADA] ---
+  // --- [LÓGICA DO AVATAR E CROPPER] ---
   
-  // 1. Ativa o input de ficheiro
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
   };
 
-  // 2. Quando o utilizador seleciona um ficheiro
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setCrop(undefined); // Limpa o corte anterior
+      setCrop(undefined); 
       const file = e.target.files[0];
       
-      // Validação de tipo e tamanho (ex: 5MB)
       if (!file.type.startsWith("image/")) {
         setActionError("Ficheiro inválido. Por favor, selecione uma imagem.");
         return;
@@ -377,14 +394,13 @@ export default function DashboardPage() {
         return;
       }
 
-      setImageSrc(URL.createObjectURL(file)); // Define a imagem para o modal
-      setIsCropperOpen(true); // Abre o modal
+      setImageSrc(URL.createObjectURL(file)); 
+      setIsCropperOpen(true); 
       setActionError(null);
       setSettingsMessage("");
     }
   };
 
-  // 3. Quando a imagem é carregada no modal, centramos o corte
   function onImageLoad(e: SyntheticEvent<HTMLImageElement>) {
     if (aspect) {
       const { width, height } = e.currentTarget;
@@ -392,7 +408,6 @@ export default function DashboardPage() {
     }
   }
 
-  // 4. Quando o utilizador confirma o corte no modal
   const handleCropConfirm = async () => {
     const image = imgRef.current;
     const canvas = canvasRef.current;
@@ -423,7 +438,6 @@ export default function DashboardPage() {
       canvas.height,
     );
 
-    // Converte a tela (canvas) num Blob
     return new Promise<void>((resolve, reject) => {
       canvas.toBlob((blob) => {
         if (!blob) {
@@ -432,20 +446,14 @@ export default function DashboardPage() {
         }
         
         const croppedFile = new File([blob], "avatar.png", { type: "image/png" });
-        
-        // Ficheiro cortado pronto para o upload
         setSelectedFile(croppedFile);
-        
-        // Atualiza a pré-visualização no dashboard
         setPreviewImage(URL.createObjectURL(croppedFile));
-        
-        setIsCropperOpen(false); // Fecha o modal
+        setIsCropperOpen(false); 
         resolve();
       }, 'image/png');
     });
   };
 
-  // 5. Função de Upload (agora só faz upload, não mexe no estado)
   const handleAvatarUpload = async (): Promise<string> => {
     if (!selectedFile) {
       throw new Error("Nenhum ficheiro selecionado.");
@@ -453,7 +461,7 @@ export default function DashboardPage() {
     
     setSettingsMessage("A fazer upload...");
     const formData = new FormData();
-    formData.append("file", selectedFile); // Envia o ficheiro CORTADO
+    formData.append("file", selectedFile); 
 
     const res = await fetch('/api/profile/upload', {
       method: 'POST',
@@ -464,10 +472,11 @@ export default function DashboardPage() {
     if (!res.ok) {
       throw new Error(error || "Falha no upload");
     }
-    return newImageUrl; // Retorna o URL permanente
+    return newImageUrl; 
   };
 
-  // 6. Função de Guardar (COORDENA TUDO)
+  // --- [ATUALIZADO] handleSaveSettings ---
+  // Removida a lógica do twitchUsername daqui
    const handleSaveSettings = async () => {
      if (!isCreator) return;
      
@@ -475,13 +484,12 @@ export default function DashboardPage() {
      setSettingsMessage("A guardar..."); 
      setActionError(null);
 
-     // Começa com a imagem atual da sessão
      let newImageUrl = session?.user?.image || null;
 
      try {
        // Etapa 1: Fazer Upload da Imagem (se houver uma nova)
        if (selectedFile) {
-         newImageUrl = await handleAvatarUpload(); // A API de upload guarda na BD
+         newImageUrl = await handleAvatarUpload(); 
          setSettingsMessage("Upload concluído, a guardar definições...");
        }
 
@@ -489,6 +497,7 @@ export default function DashboardPage() {
        const payload = { 
          bio: bio,
          profileVisibility: profileVisibility
+         // twitchUsername foi removido
        };
        const res = await fetch('/api/profile/settings', {
          method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -500,32 +509,33 @@ export default function DashboardPage() {
          throw new Error(d.error || 'Falha ao guardar definições.'); 
        }
        
+       // Não esperamos mais o twitchUsername de volta
        const { bio: newBio, profileVisibility: newVisibility } = await res.json();
 
-       // Etapa 3: Atualizar a Sessão UMA VEZ com TODOS os dados
+       // Etapa 3: Atualizar a Sessão UMA VEZ
        if (updateSession) {
          await updateSession({
-           ...session, // Preserva a sessão existente
+           ...session, 
            user: {
-             ...session?.user, // Preserva os dados do utilizador
-             image: newImageUrl, // Atualiza a imagem (nova ou a antiga)
-             bio: newBio,         // Atualiza a bio
-             profileVisibility: newVisibility // Atualiza a privacidade
+             ...session?.user, 
+             image: newImageUrl,
+             bio: newBio,        
+             profileVisibility: newVisibility
+             // twitchUsername foi removido
            }
          });
        }
 
        // Etapa 4: Limpar e mostrar sucesso
        setSettingsMessage("Guardado!");
-       setSelectedFile(null); // Limpa o ficheiro
-       setPreviewImage(newImageUrl); // Garante que o preview tem o URL permanente
+       setSelectedFile(null); 
+       setPreviewImage(newImageUrl); 
        setTimeout(() => setSettingsMessage(""), 4000);
        
      } catch (error: any) {
        console.error("Erro ao guardar definições:", error);
        setSettingsMessage(""); 
        setActionError(`Erro: ${error.message}`);
-       // Reverte o preview para a imagem original da sessão se algo falhar
        setPreviewImage(session?.user?.image || null);
      } finally {
        setIsSavingSettings(false);
@@ -537,7 +547,7 @@ export default function DashboardPage() {
   // --- [FIM DA LÓGICA DO AVATAR] ---
 
 
-  // --- ESTADOS DE CARREGAMENTO (sem alteração) ---
+  // --- ESTADOS DE CARREGAMENTO ---
   if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
     return <p className="text-center p-10 text-muted-foreground">A carregar...</p>; 
   }
@@ -579,10 +589,8 @@ export default function DashboardPage() {
               onChange={(_, percentCrop) => setCrop(percentCrop)}
               onComplete={(c) => setCompletedCrop(c)}
               aspect={aspect}
-              circularCrop // Força um corte circular
+              circularCrop 
             >
-              {/* --- [CORREÇÃO 1: Desativar regra do ESLint] --- */}
-              {/* A biblioteca de crop precisa de uma tag <img>, não <Image> */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 ref={imgRef}
@@ -632,7 +640,7 @@ export default function DashboardPage() {
                             <input
                               type="file"
                               ref={fileInputRef}
-                              onChange={handleFileChange} // Abre o modal
+                              onChange={handleFileChange} 
                               accept="image/png, image/jpeg, image/gif"
                               className="hidden" 
                             />
@@ -645,7 +653,7 @@ export default function DashboardPage() {
                             >
                               <Avatar className="h-24 w-24 border-2 border-muted">
                                 <AvatarImage 
-                                  src={previewImage || undefined} // Mostra a imagem da sessão ou o preview
+                                  src={previewImage || undefined} 
                                   alt={session?.user?.username || "Avatar"} 
                                 />
                                 <AvatarFallback className="text-3xl">{fallbackLetter}</AvatarFallback>
@@ -658,7 +666,6 @@ export default function DashboardPage() {
                               <p className="text-xs text-muted-foreground">Clique no avatar para alterar a imagem.</p>
                             )}
                             {selectedFile && (
-                              /* --- [CORREÇÃO 2: Escapar as aspas] --- */
                               <p className="text-xs text-blue-600 font-medium">Nova imagem pronta. Clique em &quot;Guardar&quot;.</p>
                             )}
                           </div>
@@ -670,6 +677,39 @@ export default function DashboardPage() {
                                <p className="text-xs text-muted-foreground">{200 - (bio?.length || 0)} caracteres restantes</p>
                           </div>
                           
+                          {/* --- [ATUALIZADO] Status da Live (Twitch) --- */}
+                          <div className="space-y-2 pt-2">
+                            <Label className="text-sm font-medium text-foreground">Status da Live (Twitch)</Label>
+                            
+                            {/* Verifica se a sessão AGORA tem o twitchUsername */}
+                            {session?.user?.twitchUsername ? (
+                              // Se SIM, mostra a conta vinculada
+                              <div className="flex items-center justify-between gap-2 rounded-md border border-input bg-background p-3">
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6441a5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-twitch flex-shrink-0"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7"/></svg>
+                                  <span className="text-sm font-medium text-foreground truncate" title={session.user.twitchUsername}>
+                                    {session.user.twitchUsername}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-semibold text-green-600 flex-shrink-0">VINCULADO</span>
+                              </div>
+                            ) : (
+                              // Se NÃO, mostra o botão para vincular
+                              <>
+                                <p className="text-xs text-muted-foreground pb-1">Para exibir o indicador "LIVE" no seu perfil, vincule sua conta da Twitch.</p>
+                                <Button 
+                                  variant="outline" 
+                                  className="w-full bg-[#6441a5] text-white hover:bg-[#583894]" 
+                                  onClick={() => signIn("twitch")}
+                                  disabled={isSavingSettings}
+                                >
+                                  Vincular com a Twitch
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                          {/* --- [FIM DA ATUALIZAÇÃO] --- */}
+
                           {/* Privacidade */}
                           <div className="space-y-2 pt-2">
                             <Label className="text-sm font-medium text-foreground">Visibilidade do Perfil</Label>
@@ -721,7 +761,7 @@ export default function DashboardPage() {
 
            </aside> 
 
-           {/* 2. Conteúdo Principal (sem alterações) */}
+           {/* 2. Conteúdo Principal */}
            <main className="flex-1 space-y-6">
                
                <Card id="tour-step-2-listas-busca">
@@ -751,8 +791,22 @@ export default function DashboardPage() {
                    <ScheduleManager
                      agendaveisList={watchingData.items}
                      initialScheduleItems={scheduleItems}
-                     onScheduleChanged={handleDataChanged}
+                     onScheduleChanged={handleDataChanged} // <-- Isto agora também atualiza o calendário
                    />
+                 </CardContent>
+               </Card>
+
+               {/* [ADICIONADO] Card do Calendário */}
+               <Card id="tour-step-4-calendario">
+                 <CardHeader>
+                   <CardTitle>Calendário Completo</CardTitle>
+                   <CardDescription>
+                     Uma visão geral de todos os seus agendamentos, passados e futuros.
+                   </CardDescription>
+                 </CardHeader>
+                 <CardContent>
+                   {/* [ATUALIZADO] A prop 'key' força a atualização */}
+                   <FullCalendar key={calendarKey} /> 
                  </CardContent>
                </Card>
            </main> 

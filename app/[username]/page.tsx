@@ -1,310 +1,176 @@
+// app/[username]/page.tsx
+
 import prisma from '@/lib/prisma';
 import { notFound } from "next/navigation";
-import { format, startOfWeek, endOfWeek, addDays, isSameDay, startOfDay, endOfDay } from "date-fns";
-import { ptBR } from "date-fns/locale/pt-BR";
-import { ScheduleItem, Media, MediaStatus, Prisma, UserRole, ProfileVisibility } from '@prisma/client'; 
-import Image from "next/image";
-import UserListsClient from '@/app/components/UserListsClient';
-import { FiRefreshCw } from 'react-icons/fi';
-import { Lock } from 'lucide-react'; 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
-import Link from 'next/link';
-import { cn } from "@/lib/utils";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/authOptions"; 
-import FollowButton from "@/app/components/FollowButton"; 
+import { authOptions } from "@/lib/authOptions";
+import { ProfileVisibility, UserRole } from "@prisma/client";
+import { cn } from "@/lib/utils";
 
-// --- [MUDANÇA 1: Importar o Avatar] ---
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Lock } from 'lucide-react';
 
-// Tipagem
-type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
-type MediaStatusWithMedia = MediaStatus & { media: Media; };
-type DaySchedule = { date: Date; dayName: string; items: ScheduleItemWithMedia[]; };
-type InitialListData = { items: MediaStatusWithMedia[]; totalCount: number; };
+import FollowButton from "@/app/components/FollowButton";
+import UserListsClient from "@/app/components/UserListsClient";
+import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
+import PublicScheduleView from "@/app/components/PublicScheduleView";
 
-const PAGE_SIZE_PUBLIC = 20;
+type PublicProfileProps = {
+  username: string;
+  name: string | null;
+  image: string | null;
+  bio: string | null;
+  profileVisibility: ProfileVisibility;
+  role: UserRole;
+  followersCount: number;
+  followingCount: number;
+}
 
 export default async function PublicProfilePage({ params, searchParams }: { params: { username: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
 
-  // --- 1. OBTER SESSÃO DO VISITANTE ---
   const session = await getServerSession(authOptions);
-  // @ts-ignore
-  const visitorId = session?.user?.id;
-
-  // --- 2. OBTER DADOS DO PERFIL VISTO ---
-  const { username } = params;
-  const decodedUsername = decodeURIComponent(username);
+  const decodedUsername = decodeURIComponent(params.username);
   
-  const weekOffset = Math.max(-1, Number(searchParams.weekOffset) || 0);
-  const today = new Date();
-  const targetDate = addDays(today, weekOffset * 7);
-  const weekOptions = { locale: ptBR, weekStartsOn: 1 as const };
-  const startOfThisWeek = startOfDay(startOfWeek(targetDate, weekOptions));
-  const endOfThisWeek = endOfDay(endOfWeek(targetDate, weekOptions));
-
+  // 1. Buscar o utilizador do perfil e contagens
   const profileUser = await prisma.user.findUnique({
     where: { username: decodedUsername },
     select: {
-        id: true, 
-        name: true, 
-        username: true, 
-        role: true,
-        bio: true,
-        profileVisibility: true, 
-        image: true // <-- [MUDANÇA 2: Buscar a imagem do perfil]
+      id: true,
+      username: true, // <--- [ ESTA É A CORREÇÃO IMPORTANTE ] ---
+      name: true,
+      image: true,
+      bio: true,
+      profileVisibility: true,
+      role: true, 
+      _count: {
+        select: {
+          followers: true,
+          following: true,
+        }
       }
+    }
   });
 
-  if (!profileUser) { notFound(); }
-
-  // --- 3. VERIFICAR ESTADO "A SEGUIR" ---
+  if (!profileUser) {
+    notFound();
+  }
+  
+  // 2. Verificar se o visitante (sessão) está a seguir o utilizador do perfil
   let isFollowing = false;
-  if (visitorId) {
-    const followRecord = await prisma.follows.findUnique({
+  if (session?.user?.id) {
+    const followRelation = await prisma.follows.findFirst({
       where: {
-        followerId_followingId: {
-          followerId: visitorId,
-          followingId: profileUser.id,
-        },
-      },
+        followerId: session.user.id,
+        followingId: profileUser.id,
+      }
     });
-    isFollowing = !!followRecord;
+    isFollowing = !!followRelation;
   }
-
-  // --- 4. VERIFICAR PERMISSÃO DE VISUALIZAÇÃO ---
-  const isPublic = profileUser.profileVisibility === ProfileVisibility.PUBLIC;
-  const isOwnProfile = visitorId === profileUser.id;
-  const isLoggedIn = !!visitorId;
   
-  const canViewProfile = isPublic || isOwnProfile || (isLoggedIn && isFollowing);
+  // 3. Verificar Permissões de Privacidade
+  const isOwner = session?.user?.id === profileUser.id;
+  const canViewProfile = 
+    profileUser.profileVisibility === ProfileVisibility.PUBLIC || 
+    isOwner || 
+    (profileUser.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY && isFollowing);
 
-  // --- 5. DEFINIR CONDIÇÕES DE VISIBILIDADE DO BOTÃO ---
-  const canFollow = profileUser.role === 'CREATOR';
-  const isOwnProfileForButton = visitorId === profileUser.id; 
-  const showFollowButton = isLoggedIn && canFollow && !isOwnProfileForButton;
+  const fallbackLetter = (profileUser.name || profileUser.username).charAt(0).toUpperCase();
 
-  // --- [MUDANÇA 3: Criar o fallback do Avatar] ---
-  const fallbackLetter = (profileUser.name || profileUser.username)
-                         .substring(0, 1)
-                         .toUpperCase();
-
-  // --- 6. CARREGAMENTO CONDICIONAL DE DADOS ---
-  let scheduleItems: ScheduleItemWithMedia[] = [];
-  let initialToWatch: InitialListData = { items: [], totalCount: 0 };
-  let initialWatched: InitialListData = { items: [], totalCount: 0 };
-  let daysOfWeek: DaySchedule[] = [];
+  // 4. Selecionar a aba ativa (padrão é 'cronograma')
+  const defaultTab = "cronograma";
+  const allowedTabs = ["cronograma", "listas"];
+  let activeTab = defaultTab;
   
-  if (canViewProfile) {
-    // ... (lógica de busca de dados)
-    const scheduleItemsDb = await prisma.scheduleItem.findMany({ 
-      where: { 
-        userId: profileUser.id, 
-        scheduledAt: { gte: startOfThisWeek, lte: endOfThisWeek } 
-      }, 
-      include: { media: true }, 
-      orderBy: [{ scheduledAt: 'asc' }, { horario: 'asc' }], 
-    });
-    scheduleItems = scheduleItemsDb as ScheduleItemWithMedia[];
-    
-    const fetchInitialList = async (status: 'TO_WATCH' | 'WATCHED'): Promise<InitialListData> => { 
-      const whereCondition: Prisma.MediaStatusWhereInput = { userId: profileUser.id, status: status }; 
-      const [items, totalCount] = await Promise.all([ 
-        prisma.mediaStatus.findMany({ where: whereCondition, include: { media: true }, take: PAGE_SIZE_PUBLIC, orderBy: { media: { title: 'asc' } } }), 
-        prisma.mediaStatus.count({ where: whereCondition }) 
-      ]); 
-      return { items: items as MediaStatusWithMedia[], totalCount }; 
-    };
-    
-    [initialToWatch, initialWatched] = await Promise.all([ 
-      fetchInitialList("TO_WATCH"), 
-      fetchInitialList("WATCHED") 
-    ]);
-
-    for (let i = 0; i < 7; i++) { 
-      const day = addDays(startOfThisWeek, i); 
-      const itemsForThisDay = scheduleItems.filter(item => isSameDay(item.scheduledAt, day)); 
-      daysOfWeek.push({ 
-        date: day, 
-        dayName: format(day, "EEEE", { locale: ptBR }), 
-        items: itemsForThisDay, 
-      }); 
-    }
+  if (searchParams?.tab && typeof searchParams.tab === 'string' && allowedTabs.includes(searchParams.tab)) {
+    activeTab = searchParams.tab;
   }
-
-  const initialWatching: InitialListData = { items: [], totalCount: 0 };
-  const initialDropped: InitialListData = { items: [], totalCount: 0 };
-  
-  const prevWeekLink = `/${username}?weekOffset=${weekOffset - 1}`;
-  const nextWeekLink = `/${username}?weekOffset=${weekOffset + 1}`;
-  const currentWeekLink = `/${username}`; 
-  // --- FIM DA BUSCA DE DADOS ---
-
 
   return (
     <div className={cn("bg-background text-foreground")}>
-      <div className={cn("container mx-auto max-w-5xl px-4 pb-8 md:px-6 md:pb-12 lg:px-8 lg:py-16 pt-8 md:pt-12 lg:pt-16")}>
+      <div className={cn(
+        "container mx-auto max-w-5xl px-4 py-8 md:px-6 md:py-12 lg:py-16",
+        "transition-all duration-300 ease-in-out"
+      )}>
 
         {/* Cabeçalho (Sempre visível) */}
         <div className="text-center mb-12">
             
-            {/* --- [MUDANÇA 4: Adicionar o Avatar] --- */}
-            <Avatar className="w-24 h-24 mx-auto mb-4 border-2 border-muted shadow-sm">
-              <AvatarImage 
-                src={profileUser.image ?? undefined} 
-                alt={profileUser.name || profileUser.username} 
-              />
-              <AvatarFallback className="text-3xl">{fallbackLetter}</AvatarFallback>
+            <Avatar className="w-24 h-24 mx-auto mb-4 border-2 border-muted shadow-md">
+              <AvatarImage src={profileUser.image || undefined} alt={profileUser.username} />
+              <AvatarFallback className="text-4xl">{fallbackLetter}</AvatarFallback>
             </Avatar>
-            {/* --- [FIM DA MUDANÇA] --- */}
             
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2">
-              {profileUser.name || profileUser.username}
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2 flex items-center justify-center gap-3 flex-wrap">
+              <span>{profileUser.name || profileUser.username}</span>
+              {profileUser.role === UserRole.CREATOR && (
+                <LiveStatusIndicator username={decodedUsername} />
+              )}
             </h1>
+
             {profileUser.bio && (
               <p className="text-lg text-muted-foreground max-w-xl mx-auto">
                 {profileUser.bio}
               </p>
             )}
 
-            {/* Renderiza o Botão de Seguir */}
-            <div className="mt-6">
-              {showFollowButton && (
+            {/* Contagens e Botão de Seguir */}
+            <div className="flex justify-center items-center gap-6 mt-6">
+              <div className="text-center">
+                <span className="text-xl font-bold block">{profileUser._count.followers}</span>
+                <span className="text-sm text-muted-foreground">Seguidores</span>
+              </div>
+              <div className="text-center">
+                <span className="text-xl font-bold block">{profileUser._count.following}</span>
+                <span className="text-sm text-muted-foreground">A Seguir</span>
+              </div>
+              
+              {/* Agora 'profileUser.username' terá o valor correto */}
+              {session && !isOwner && (
                 <FollowButton
+                  // A prop que o seu componente espera chama-se 'username'
+                  username={decodedUsername} 
                   initialIsFollowing={isFollowing}
-                  username={decodedUsername}
+                  disabled={profileUser.role !== UserRole.CREATOR}
                 />
               )}
             </div>
         </div>
 
-        {/* --- CONTEÚDO CONDICIONAL --- */}
+        {/* Conteúdo Principal (Listas e Cronograma) */}
         {canViewProfile ? (
-          // O visitante PODE VER: Renderiza as Abas
-          <Tabs defaultValue="schedule" className="w-full">
-            
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="schedule">Cronograma</TabsTrigger>
-              <TabsTrigger value="lists">Listas</TabsTrigger>
+          <Tabs defaultValue={activeTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto mb-8">
+              <TabsTrigger value="cronograma">Cronograma</TabsTrigger>
+              <TabsTrigger value="listas">Listas</TabsTrigger>
             </TabsList>
 
             {/* Conteúdo da Aba "Cronograma" */}
-            <TabsContent value="schedule">
-              <Card>
-                <CardHeader>
-                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                        <CardTitle className="text-2xl md:text-3xl text-primary">
-                            Cronograma
-                            {weekOffset === 0 ? (
-                              <span className="text-lg md:text-xl text-muted-foreground ml-2">(Semana Atual)</span>
-                            ) : (
-                              <span className="text-lg md:text-xl text-muted-foreground ml-2">(Semana de {format(startOfThisWeek, "dd/MM")})</span>
-                            )}
-                        </CardTitle>
-                        <div className="flex gap-2">
-                            {weekOffset > -1 && (
-                              <Link 
-                                href={prevWeekLink} 
-                                className={buttonVariants({ variant: "outline", size: "sm" })}
-                              >
-                                &larr; Anterior
-                              </Link>
-                            )}
-                            {weekOffset !== 0 && (
-                              <Link 
-                                href={currentWeekLink} 
-                                className={buttonVariants({ variant: "outline", size: "sm" })}
-                              >
-                                Semana Atual
-                              </Link>
-                            )}
-                            <Link 
-                              href={nextWeekLink} 
-                              className={buttonVariants({ variant: "outline", size: "sm" })}
-                            >
-                              Próxima &rarr;
-                            </Link>
-                        </div>
-                    </div>
-                </CardHeader>
-
-                  <CardContent className="space-y-6">
-                    {daysOfWeek.map(day => (
-                      <div key={day.date.toString()}>
-                        <h3 className="text-lg font-semibold mb-3 capitalize text-primary">
-                            {day.dayName} <span className="text-base text-muted-foreground font-normal ml-2">({format(day.date, "dd/MM")})</span>
-                        </h3>
-                        {day.items.length === 0 ? ( <p className="text-muted-foreground text-sm pl-4">Nenhum item.</p> ) : (
-                          <ul className="space-y-3 pl-4 border-l-2">
-                            {day.items.map(item => {
-                                const isItemWeekly = false; 
-                                return !item.media ? null : ( 
-                                <li 
-                                  key={item.id} 
-                                  className={cn(
-                                    "flex items-start gap-4 transition-opacity", 
-                                    // @ts-ignore
-                                    item.isCompleted && "opacity-50"
-                                  )}
-                                >
-                                    <Image src={ item.media.posterPath || "/poster-placeholder.png" } width={50} height={75} alt={item.media.title} className="rounded shadow-sm flex-shrink-0" unoptimized={true} />
-                                    <div className="flex-grow">
-                                        <span className="font-semibold text-lg text-foreground line-clamp-2 flex items-center gap-1" title={item.media.title}>
-                                          {item.media.title}
-                                          {isItemWeekly && (<FiRefreshCw className="inline text-blue-500 flex-shrink-0" title="Item Semanal"/>)}
-                                        </span>
-                                    </div>
-                                    {item.horario && ( <div className="flex-shrink-0 text-right"> <span className="text-sm font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full whitespace-nowrap"> {item.horario} </span> </div> )}
-                                </li>
-                                );
-                            })}
-                          </ul>
-                        )}
-                      </div>
-                    ))}
-                  </CardContent>
-              </Card>
+            <TabsContent value="cronograma">
+              <PublicScheduleView username={decodedUsername} />
             </TabsContent>
 
             {/* Conteúdo da Aba "Listas" */}
-            <TabsContent value="lists">
+            <TabsContent value="listas">
               <UserListsClient
-                username={decodedUsername}
-                initialToWatch={initialToWatch}
-                initialWatching={initialWatching}
-                initialWatched={initialWatched}
-                initialDropped={initialDropped}
+                username={decodedUsername} 
               />
             </TabsContent>
+
           </Tabs>
         ) : (
-          // O visitante NÃO PODE VER: Renderiza a mensagem de perfil privado
-          <Card className="w-full max-w-md mx-auto">
-            <CardContent className="pt-6">
-              <div className="flex flex-col items-center text-center space-y-3">
-                <Lock className="h-12 w-12 text-muted-foreground" />
-                <h2 className="text-xl font-semibold">Este perfil é privado</h2>
-                <p className="text-muted-foreground text-sm">
-                  {isLoggedIn ? 
-                    `Siga ${profileUser.name || profileUser.username} para ver o seu cronograma e listas.` :
-                    `Faça login e siga ${profileUser.name || profileUser.username} para ver o seu perfil.`
-                  }
-                </p>
-                
-                {!isLoggedIn && (
-                  <Button asChild className="mt-4">
-                    <Link href="/auth/signin">Fazer Login</Link>
-                  </Button>
-                )}
-              </div>
+          // Ecrã de Perfil Privado
+          <Card className="max-w-md mx-auto mt-12">
+            <CardContent className="p-8 text-center">
+              <Lock className="w-16 h-16 text-muted-foreground mx-auto mb-6" />
+              <h2 className="text-2xl font-semibold mb-2">Perfil Privado</h2>
+              <p className="text-muted-foreground">
+                Este perfil é privado. Siga <span className="font-bold">{profileUser.username}</span> para ver o seu cronograma e listas.
+              </p>
             </CardContent>
           </Card>
         )}
-        {/* --- FIM DO CONTEÚDO CONDICIONAL --- */}
-
       </div>
     </div>
   );
