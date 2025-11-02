@@ -38,7 +38,10 @@ const locales = {
 const localizer = dateFnsLocalizer({
   format,
   parse,
-  startOfWeek: (date) => startOfWeek(date, { locale: ptBR }),
+  // --- [ CORREÇÃO AQUI ] ---
+  // Adiciona o tipo 'Date' ao parâmetro
+  startOfWeek: (date: Date) => startOfWeek(date, { locale: ptBR }),
+  // --- [ FIM DA CORREÇÃO ] ---
   getDay,
   locales,
 });
