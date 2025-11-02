@@ -1,17 +1,14 @@
 // app/components/PublicScheduleView.tsx
-// CORREÇÕES APLICADAS:
-// 1. Uso consistente de UTC para evitar problemas de fuso horário
-// 2. Garantir que sábado apareça corretamente
-// 3. Logs para debug em produção
 
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ScheduleItem, Media, MediaType } from "@prisma/client";
+import { ScheduleItem, Media } from "@prisma/client";
 import Image from "next/image";
-import { format, addDays, startOfWeek, isSameDay, differenceInWeeks, parseISO } from "date-fns";
+// [MUDANÇA 1: Importar 'parse']
+import { format, addDays, startOfWeek, isSameDay, differenceInWeeks, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
+// [MUDANÇA 2: REMOVIDA a linha 'date-fns-tz' que causava o erro]
 
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css"; 
@@ -32,11 +29,11 @@ interface Props {
 
 type ScheduleData = {
   items: ScheduleItemWithMedia[];
-  weekStart: string;
-  weekEnd: string;
+  weekStart: string; // Agora é "yyyy-MM-dd"
+  weekEnd: string;   // Agora é "yyyy-MM-dd"
 };
 
-// Componente para um único item da lista
+// Componente para um único item da lista (sem mudanças)
 function ScheduleListItem({ item, isCompleted }: { item: ScheduleItemWithMedia; isCompleted: boolean }) {
   return (
     <div className={cn(
@@ -84,28 +81,18 @@ export default function PublicScheduleView({ username }: Props) {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/users/${username}/schedule?weekOffset=${weekOffset}`, {
-          cache: 'no-store'
-        });
-        
+        // [MUDANÇA 3: Manter o 'cache-buster' para garantir que não há cache]
+        const cacheBuster = `&cb=${new Date().getTime()}`;
+        const res = await fetch(
+          `/api/users/${username}/schedule?weekOffset=${weekOffset}${cacheBuster}`, 
+          { cache: 'no-store' }
+        );
+
         if (!res.ok) {
           const data = await res.json();
           throw new Error(data.error || "Não foi possível carregar o cronograma.");
         }
         const data: ScheduleData = await res.json();
-        
-        // LOG DE DEBUG - remova após confirmar que funciona
-        console.log('📅 Dados recebidos:', {
-          weekStart: data.weekStart,
-          weekEnd: data.weekEnd,
-          totalItems: data.items.length,
-          itemsByDay: data.items.reduce((acc, item) => {
-            const day = format(parseISO(item.scheduledAt as any), 'EEEE', { locale: ptBR });
-            acc[day] = (acc[day] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>)
-        });
-        
         setData(data);
       } catch (err: any) {
         setError(err.message);
@@ -116,44 +103,26 @@ export default function PublicScheduleView({ username }: Props) {
     fetchSchedule();
   }, [username, weekOffset]);
 
-  // --- MUDANÇA CRÍTICA: Usar startOfDay para garantir comparação correta ---
-  const daysOfWeek = useMemo(() => {
-    if (!data) return [];
-    
-    // Parsear a data do servidor como UTC
-    const startOfThisWeek = parseISO(data.weekStart);
-    
-    // LOG DE DEBUG
-    console.log('📅 Gerando dias da semana:', {
-      weekStart: data.weekStart,
-      parsed: startOfThisWeek,
-      dayOfWeek: format(startOfThisWeek, 'EEEE', { locale: ptBR })
-    });
-    
-    // Gerar os 7 dias
-    const days = Array.from({ length: 7 }).map((_, i) => {
-      const day = addDays(startOfThisWeek, i);
-      
-      // LOG DE DEBUG - remova após confirmar
-      if (i === 6) { // Sábado (último dia se começar no domingo)
-        console.log('📅 Sábado:', {
-          date: format(day, 'dd/MM/yyyy'),
-          dayName: format(day, 'EEEE', { locale: ptBR }),
-          iso: day.toISOString()
-        });
-      }
-      
-      return day;
-    });
-    
-    return days;
+  // [MUDANÇA 4: Usar 'parse' para ler a data 'yyyy-MM-dd' como local]
+  const startOfThisWeekDate = useMemo(() => {
+    if (!data) return null;
+    // Converte a string "2025-11-02" para um objeto Date
+    // que representa a meia-noite LOCAL (corrigindo o bug do Sábado)
+    return parse(data.weekStart, 'yyyy-MM-dd', new Date());
   }, [data]);
+
+  // Memoiza os 7 dias da semana
+  const daysOfWeek = useMemo(() => {
+    if (!startOfThisWeekDate) return [];
+    return Array.from({ length: 7 }).map((_, i) => addDays(startOfThisWeekDate, i));
+  }, [startOfThisWeekDate]); // Depende da data corrigida
 
   // Gera o Título da Semana
   const weekTitle = useMemo(() => {
     if (!data) return "A carregar...";
-    const start = format(parseISO(data.weekStart), "dd/MM");
-    const end = format(parseISO(data.weekEnd), "dd/MM/yyyy");
+    // [MUDANÇA 5: Usar 'parse' também para formatar o título]
+    const start = format(parse(data.weekStart, 'yyyy-MM-dd', new Date()), "dd/MM");
+    const end = format(parse(data.weekEnd, 'yyyy-MM-dd', new Date()), "dd/MM/yyyy");
     if (weekOffset === 0) return "Semana Atual";
     if (weekOffset === -1) return "Semana Passada";
     if (weekOffset === 1) return "Próxima Semana";
@@ -161,20 +130,18 @@ export default function PublicScheduleView({ username }: Props) {
   }, [data, weekOffset]);
 
   // Lógica do Date Picker
-  const currentWeekStartDate = useMemo(() => {
-    return data ? parseISO(data.weekStart) : new Date();
-  }, [data]);
-
   const handleDateSelect = (date: Date | null) => {
     if (!date) return;
     const today = new Date();
-    const weekOptions = {weekStartsOn: 0 as const }; 
+    // [MUDANÇA 6: Remover 'locale' do cálculo (igual à API)]
+    const weekOptions = { weekStartsOn: 0 as const }; 
     const startOfTodayWeek = startOfWeek(today, weekOptions);
     const startOfSelectedWeek = startOfWeek(date, weekOptions);
     
     const newOffset = differenceInWeeks(startOfSelectedWeek, startOfTodayWeek);
-    setWeekOffset(Math.max(-1, newOffset));
+    setWeekOffset(newOffset);
   };
+
 
   if (error) {
     return <div className="text-center py-10 text-red-500">{error}</div>;
@@ -193,7 +160,7 @@ export default function PublicScheduleView({ username }: Props) {
 
           <div className="flex gap-2">
             <DatePicker
-              selected={currentWeekStartDate}
+              selected={startOfThisWeekDate} // [MUDANÇA 7: Usar a data corrigida]
               onChange={handleDateSelect}
               locale="pt-BR"
               dateFormat="dd/MM/yyyy"
@@ -220,12 +187,12 @@ export default function PublicScheduleView({ username }: Props) {
               variant="outline" 
               size="icon" 
               onClick={() => setWeekOffset(w => w - 1)} 
-              disabled={isLoading || weekOffset <= -1} 
+              disabled={isLoading}
               title="Semana anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
-
+            
             <Button 
               variant="outline" 
               size="icon" 
@@ -243,36 +210,19 @@ export default function PublicScheduleView({ username }: Props) {
         {isLoading ? (
           <div className="text-center py-10 text-muted-foreground">A carregar semana...</div>
         ) : (
-          daysOfWeek.map((day, index) => {
-            // --- MUDANÇA CRÍTICA: Comparar usando apenas a data, sem hora ---
-            const dayStart = new Date(day);
-            dayStart.setHours(0, 0, 0, 0);
-            
+          daysOfWeek.map(day => {
             const itemsForThisDay = data?.items.filter(item => {
-              const itemDate = new Date(item.scheduledAt);
-              itemDate.setHours(0, 0, 0, 0);
-              return itemDate.getTime() === dayStart.getTime();
+              // 'item.scheduledAt' é um ISO String (ex: 2025-11-03T14:00:00.000Z)
+              // new Date() converte-o para o fuso local automaticamente
+              const scheduledDate = new Date(item.scheduledAt);
+              return isSameDay(scheduledDate, day);
             }) || [];
-            
-            // LOG DE DEBUG para sábado
-            if (index === 6) {
-              console.log('📅 Itens do Sábado:', {
-                date: format(day, 'dd/MM/yyyy'),
-                dayName: format(day, 'EEEE', { locale: ptBR }),
-                itemCount: itemsForThisDay.length,
-                items: itemsForThisDay.map(i => ({
-                  title: i.media.title,
-                  scheduledAt: i.scheduledAt,
-                  completed: i.isCompleted
-                }))
-              });
-            }
             
             const pendingItems = itemsForThisDay.filter(item => !item.isCompleted);
             const completedItems = itemsForThisDay.filter(item => item.isCompleted);
 
             return (
-              <div key={day.toISOString()}>
+              <div key={day.toString()}>
                 <h3 className="text-lg font-semibold mb-3 capitalize text-foreground">
                   {format(day, "EEEE", { locale: ptBR })}
                   <span className="text-base text-muted-foreground font-normal ml-2">

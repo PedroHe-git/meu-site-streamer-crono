@@ -5,11 +5,14 @@ import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { ProfileVisibility } from "@prisma/client";
-import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
-import { ptBR } from "date-fns/locale";
+// [MUDANÇA 1: Importar 'format']
+import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "date-fns";
+// [REMOVIDO] ptBR não é mais necessário aqui
 
-export const revalidate = 0;
 export const runtime = 'nodejs';
+// Força esta rota a ser dinâmica (sem cache de servidor)
+export const revalidate = 0; 
+
 
 export async function GET(
   request: Request,
@@ -31,7 +34,7 @@ export async function GET(
       });
     }
 
-    // 2. Verificar Privacidade (igual a antes)
+    // 2. Verificar Privacidade
     const isOwner = session?.user?.id === user.id;
     let isFollowing = false;
     if (session?.user?.id && !isOwner) {
@@ -52,17 +55,14 @@ export async function GET(
       );
     }
 
-    // --- [ INÍCIO DA MODIFICAÇÃO DA LÓGICA ] ---
-
     // 3. Obter o weekOffset da URL (ex: ?weekOffset=0)
     const { searchParams } = new URL(request.url);
-    // O '|| 0' garante que o padrão é a semana atual
     const weekOffset = parseInt(searchParams.get('weekOffset') || '0');
 
-    // 4. Calcular o intervalo de datas para essa semana
+    // 4. Calcular o intervalo de datas
     const today = new Date();
-    // O 'weekStartsOn: 0' define Domingo como o início da semana
-    const weekOptions = {weekStartsOn: 0 as const }; 
+    // [MUDANÇA 2: Remover o 'locale' do cálculo para evitar bugs]
+    const weekOptions = { weekStartsOn: 0 as const }; 
     const targetDate = addDays(today, weekOffset * 7);
     const startDate = startOfDay(startOfWeek(targetDate, weekOptions));
     const endDate = endOfDay(endOfWeek(targetDate, weekOptions));
@@ -84,13 +84,13 @@ export async function GET(
         { horario: "asc" },
       ],
     });
-    // --- [ FIM DA MODIFICAÇÃO DA LÓGICA ] ---
 
-    // 6. Retorna os itens e as datas da semana para o frontend
+    // 6. Retorna os itens e as datas da semana
     return NextResponse.json({
       items: scheduleItems,
-      weekStart: startDate.toISOString(),
-      weekEnd: endDate.toISOString(),
+      // [MUDANÇA 3: Formatar a data para 'yyyy-MM-dd']
+      weekStart: format(startDate, 'yyyy-MM-dd'),
+      weekEnd: format(endDate, 'yyyy-MM-dd'),
     });
 
   } catch (error) {
