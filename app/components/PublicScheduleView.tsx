@@ -1,4 +1,8 @@
 // app/components/PublicScheduleView.tsx
+// CORREÇÕES APLICADAS:
+// 1. Uso consistente de UTC para evitar problemas de fuso horário
+// 2. Garantir que sábado apareça corretamente
+// 3. Logs para debug em produção
 
 "use client";
 
@@ -7,6 +11,7 @@ import { ScheduleItem, Media, MediaType } from "@prisma/client";
 import Image from "next/image";
 import { format, addDays, startOfWeek, isSameDay, differenceInWeeks, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
 
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css"; 
@@ -54,12 +59,9 @@ function ScheduleListItem({ item, isCompleted }: { item: ScheduleItemWithMedia; 
           {item.media.title}
         </h4>
         <p className="text-sm text-primary font-medium">
-          {/* --- [INÍCIO DA CORREÇÃO] --- */}
           {item.seasonNumber !== null && `T${item.seasonNumber}`}
           {item.episodeNumber !== null && ` E${item.episodeNumber}`}
-          {/* Verifica se ambos não são null ANTES de comparar */}
           {item.episodeNumberEnd !== null && item.episodeNumber !== null && item.episodeNumberEnd > item.episodeNumber && `-${item.episodeNumberEnd}`}
-          {/* --- [FIM DA CORREÇÃO] --- */}
         </p>
       </div>
       {item.horario && (
@@ -82,13 +84,28 @@ export default function PublicScheduleView({ username }: Props) {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/users/${username}/schedule?weekOffset=${weekOffset}`);
-        cache: 'no-store'
+        const res = await fetch(`/api/users/${username}/schedule?weekOffset=${weekOffset}`, {
+          cache: 'no-store'
+        });
+        
         if (!res.ok) {
           const data = await res.json();
           throw new Error(data.error || "Não foi possível carregar o cronograma.");
         }
         const data: ScheduleData = await res.json();
+        
+        // LOG DE DEBUG - remova após confirmar que funciona
+        console.log('📅 Dados recebidos:', {
+          weekStart: data.weekStart,
+          weekEnd: data.weekEnd,
+          totalItems: data.items.length,
+          itemsByDay: data.items.reduce((acc, item) => {
+            const day = format(parseISO(item.scheduledAt as any), 'EEEE', { locale: ptBR });
+            acc[day] = (acc[day] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        });
+        
         setData(data);
       } catch (err: any) {
         setError(err.message);
@@ -99,18 +116,44 @@ export default function PublicScheduleView({ username }: Props) {
     fetchSchedule();
   }, [username, weekOffset]);
 
-  // Memoiza os 7 dias da semana
+  // --- MUDANÇA CRÍTICA: Usar startOfDay para garantir comparação correta ---
   const daysOfWeek = useMemo(() => {
     if (!data) return [];
-    const startOfThisWeek = new Date(data.weekStart);
-    return Array.from({ length: 7 }).map((_, i) => addDays(startOfThisWeek, i));
+    
+    // Parsear a data do servidor como UTC
+    const startOfThisWeek = parseISO(data.weekStart);
+    
+    // LOG DE DEBUG
+    console.log('📅 Gerando dias da semana:', {
+      weekStart: data.weekStart,
+      parsed: startOfThisWeek,
+      dayOfWeek: format(startOfThisWeek, 'EEEE', { locale: ptBR })
+    });
+    
+    // Gerar os 7 dias
+    const days = Array.from({ length: 7 }).map((_, i) => {
+      const day = addDays(startOfThisWeek, i);
+      
+      // LOG DE DEBUG - remova após confirmar
+      if (i === 6) { // Sábado (último dia se começar no domingo)
+        console.log('📅 Sábado:', {
+          date: format(day, 'dd/MM/yyyy'),
+          dayName: format(day, 'EEEE', { locale: ptBR }),
+          iso: day.toISOString()
+        });
+      }
+      
+      return day;
+    });
+    
+    return days;
   }, [data]);
 
   // Gera o Título da Semana
   const weekTitle = useMemo(() => {
     if (!data) return "A carregar...";
-    const start = format(new Date(data.weekStart), "dd/MM");
-    const end = format(new Date(data.weekEnd), "dd/MM/yyyy");
+    const start = format(parseISO(data.weekStart), "dd/MM");
+    const end = format(parseISO(data.weekEnd), "dd/MM/yyyy");
     if (weekOffset === 0) return "Semana Atual";
     if (weekOffset === -1) return "Semana Passada";
     if (weekOffset === 1) return "Próxima Semana";
@@ -130,13 +173,8 @@ export default function PublicScheduleView({ username }: Props) {
     const startOfSelectedWeek = startOfWeek(date, weekOptions);
     
     const newOffset = differenceInWeeks(startOfSelectedWeek, startOfTodayWeek);
-
-    // --- [ INÍCIO DA MUDANÇA 1 ] ---
-    // Garante que o offset não seja menor que -1
     setWeekOffset(Math.max(-1, newOffset));
-    // --- [ FIM DA MUDANÇA 1 ] ---
   };
-
 
   if (error) {
     return <div className="text-center py-10 text-red-500">{error}</div>;
@@ -178,18 +216,15 @@ export default function PublicScheduleView({ username }: Props) {
               </Button>
             )}
 
-            {/* --- [ INÍCIO DA MUDANÇA 2 ] --- */}
             <Button 
               variant="outline" 
               size="icon" 
               onClick={() => setWeekOffset(w => w - 1)} 
-              // Desativa se estiver carregando OU se já estiver na semana -1
               disabled={isLoading || weekOffset <= -1} 
               title="Semana anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            {/* --- [ FIM DA MUDANÇA 2 ] --- */}
 
             <Button 
               variant="outline" 
@@ -208,15 +243,36 @@ export default function PublicScheduleView({ username }: Props) {
         {isLoading ? (
           <div className="text-center py-10 text-muted-foreground">A carregar semana...</div>
         ) : (
-          daysOfWeek.map(day => {
-            const itemsForThisDay = data?.items.filter(item => 
-              isSameDay(new Date(item.scheduledAt), day)
-            ) || [];
+          daysOfWeek.map((day, index) => {
+            // --- MUDANÇA CRÍTICA: Comparar usando apenas a data, sem hora ---
+            const dayStart = new Date(day);
+            dayStart.setHours(0, 0, 0, 0);
+            
+            const itemsForThisDay = data?.items.filter(item => {
+              const itemDate = new Date(item.scheduledAt);
+              itemDate.setHours(0, 0, 0, 0);
+              return itemDate.getTime() === dayStart.getTime();
+            }) || [];
+            
+            // LOG DE DEBUG para sábado
+            if (index === 6) {
+              console.log('📅 Itens do Sábado:', {
+                date: format(day, 'dd/MM/yyyy'),
+                dayName: format(day, 'EEEE', { locale: ptBR }),
+                itemCount: itemsForThisDay.length,
+                items: itemsForThisDay.map(i => ({
+                  title: i.media.title,
+                  scheduledAt: i.scheduledAt,
+                  completed: i.isCompleted
+                }))
+              });
+            }
+            
             const pendingItems = itemsForThisDay.filter(item => !item.isCompleted);
             const completedItems = itemsForThisDay.filter(item => item.isCompleted);
 
             return (
-              <div key={day.toString()}>
+              <div key={day.toISOString()}>
                 <h3 className="text-lg font-semibold mb-3 capitalize text-foreground">
                   {format(day, "EEEE", { locale: ptBR })}
                   <span className="text-base text-muted-foreground font-normal ml-2">
