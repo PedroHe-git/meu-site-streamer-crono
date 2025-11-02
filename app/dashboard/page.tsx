@@ -696,7 +696,7 @@ export default function DashboardPage() {
                             ) : (
                               // Se NÃO, mostra o botão para vincular
                               <>
-                                <p className="text-xs text-muted-foreground pb-1">Para exibir o indicador "LIVE" no seu perfil, vincule sua conta da Twitch.</p>
+                                <p className="text-xs text-muted-foreground pb-1">Para exibir o indicador &quotLIVE&quot no seu perfil, vincule sua conta da Twitch.</p>
                                 <Button 
                                   variant="outline" 
                                   className="w-full bg-[#6441a5] text-white hover:bg-[#583894]" 
