@@ -83,6 +83,7 @@ export default function PublicScheduleView({ username }: Props) {
       setError(null);
       try {
         const res = await fetch(`/api/users/${username}/schedule?weekOffset=${weekOffset}`);
+        cache: 'no-store'
         if (!res.ok) {
           const data = await res.json();
           throw new Error(data.error || "Não foi possível carregar o cronograma.");
