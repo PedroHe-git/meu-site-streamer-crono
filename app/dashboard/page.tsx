@@ -581,13 +581,16 @@ export default function DashboardPage() {
               aspect={aspect}
               circularCrop // Força um corte circular
             >
+              {/* --- [CORREÇÃO 1: Desativar regra do ESLint] --- */}
+              {/* A biblioteca de crop precisa de uma tag <img>, não <Image> */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 ref={imgRef}
                 alt="Imagem para cortar"
                 src={imageSrc}
                 onLoad={onImageLoad}
                 style={{ maxHeight: '70vh' }}
-              />{/* <--- O '}' extra foi removido daqui */}
+              />
             </ReactCrop>
           )}
           <DialogFooter>
@@ -655,7 +658,8 @@ export default function DashboardPage() {
                               <p className="text-xs text-muted-foreground">Clique no avatar para alterar a imagem.</p>
                             )}
                             {selectedFile && (
-                              <p className="text-xs text-blue-600 font-medium">Nova imagem pronta. Clique em "Guardar".</p>
+                              /* --- [CORREÇÃO 2: Escapar as aspas] --- */
+                              <p className="text-xs text-blue-600 font-medium">Nova imagem pronta. Clique em &quot;Guardar&quot;.</p>
                             )}
                           </div>
                           
