@@ -6,13 +6,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-// Define as props que este componente recebe
+// 1. Adicione 'disabled' às props
 interface FollowButtonProps {
   initialIsFollowing: boolean;
   username: string; // O username do CRIADOR (a quem seguir)
+  disabled?: boolean; // <-- MUDANÇA AQUI
 }
 
-export default function FollowButton({ initialIsFollowing, username }: FollowButtonProps) {
+export default function FollowButton({ 
+  initialIsFollowing, 
+  username, 
+  disabled // <-- MUDANÇA AQUI
+}: FollowButtonProps) {
+  
   const router = useRouter();
   
   // Estado para o botão (controla o que o utilizador vê)
@@ -57,7 +63,8 @@ export default function FollowButton({ initialIsFollowing, username }: FollowBut
   return (
     <Button
       onClick={handleFollowToggle}
-      disabled={isLoading}
+      // 3. Combine o 'disabled' externo com o 'isLoading' interno
+      disabled={isLoading || disabled} // <-- MUDANÇA AQUI
       // Muda o visual do botão com base no estado
       variant={isFollowing ? "outline" : "default"}
       size="sm"
