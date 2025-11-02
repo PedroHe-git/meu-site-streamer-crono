@@ -54,9 +54,12 @@ function ScheduleListItem({ item, isCompleted }: { item: ScheduleItemWithMedia; 
           {item.media.title}
         </h4>
         <p className="text-sm text-primary font-medium">
-          {item.seasonNumber && `T${item.seasonNumber}`}
-          {item.episodeNumber && ` E${item.episodeNumber}`}
-          {item.episodeNumberEnd && item.episodeNumberEnd > item.episodeNumber && `-${item.episodeNumberEnd}`}
+          {/* --- [INÍCIO DA CORREÇÃO] --- */}
+          {item.seasonNumber !== null && `T${item.seasonNumber}`}
+          {item.episodeNumber !== null && ` E${item.episodeNumber}`}
+          {/* Verifica se ambos não são null ANTES de comparar */}
+          {item.episodeNumberEnd !== null && item.episodeNumber !== null && item.episodeNumberEnd > item.episodeNumber && `-${item.episodeNumberEnd}`}
+          {/* --- [FIM DA CORREÇÃO] --- */}
         </p>
       </div>
       {item.horario && (
