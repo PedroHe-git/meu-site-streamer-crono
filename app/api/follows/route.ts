@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/authOptions"; //
 import prisma from '@/lib/prisma';
 import { Prisma } from "@prisma/client";
 
+export const dynamic = 'force-dynamic';
 // Configura o runtime e a região (necessário para o Prisma no Vercel)
 export const runtime = 'nodejs';
 
