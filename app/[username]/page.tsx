@@ -4,7 +4,9 @@ import prisma from '@/lib/prisma';
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
-import { ProfileVisibility, UserRole } from "@prisma/client";
+// --- [MUDANÇA 1] ---
+// Importa Prisma e tipos necessários para a query
+import { ProfileVisibility, UserRole, Prisma, MediaStatus, Media } from "@prisma/client"; 
 import { cn } from "@/lib/utils";
 
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -28,6 +30,45 @@ type PublicProfileProps = {
   followingCount: number;
 }
 
+// --- [MUDANÇA 2] ---
+
+// 1. Definir tipos de dados que o UserListsClient espera
+type MediaStatusWithMedia = MediaStatus & { media: Media; };
+type InitialListData = { items: MediaStatusWithMedia[]; totalCount: number; };
+
+// 2. Definir o tamanho da página inicial
+const PAGE_SIZE = 20;
+
+// 3. Função helper para buscar os dados de uma lista
+async function getInitialListData(userId: string, status: Prisma.EnumMovieStatusTypeFilter['equals']): Promise<InitialListData> {
+  const whereCondition: Prisma.MediaStatusWhereInput = {
+    userId: userId,
+    status: status,
+  };
+
+  try {
+    const [items, totalCount] = await prisma.$transaction([
+      prisma.mediaStatus.findMany({
+        where: whereCondition,
+        include: { media: true },
+        skip: 0,
+        take: PAGE_SIZE,
+        orderBy: { media: { title: 'asc' } }
+      }),
+      prisma.mediaStatus.count({
+        where: whereCondition,
+      })
+    ]);
+    return { items, totalCount };
+  } catch (error) {
+    console.error(`Falha ao buscar lista inicial ${status}:`, error);
+    // Retorna vazio em caso de erro
+    return { items: [], totalCount: 0 };
+  }
+}
+// --- [FIM DA MUDANÇA 2] ---
+
+
 export default async function PublicProfilePage({ params, searchParams }: { params: { username: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
 
   const session = await getServerSession(authOptions);
@@ -38,12 +79,13 @@ export default async function PublicProfilePage({ params, searchParams }: { para
     where: { username: decodedUsername },
     select: {
       id: true,
-      username: true, // <--- [ ESTA É A CORREÇÃO IMPORTANTE ] ---
+      username: true, 
       name: true,
       image: true,
       bio: true,
       profileVisibility: true,
       role: true, 
+      twitchUsername: true, // <-- Adicionado para o LiveStatusIndicator
       _count: {
         select: {
           followers: true,
@@ -87,6 +129,33 @@ export default async function PublicProfilePage({ params, searchParams }: { para
     activeTab = searchParams.tab;
   }
 
+  // --- [MUDANÇA 3] ---
+  // 5. Buscar os dados das listas SE o perfil puder ser visto
+  let initialLists: Record<string, InitialListData> = {
+    toWatch: { items: [], totalCount: 0 },
+    watching: { items: [], totalCount: 0 },
+    watched: { items: [], totalCount: 0 },
+    dropped: { items: [], totalCount: 0 },
+  };
+
+  if (canViewProfile) {
+    // Usamos Promise.all para buscar todas as listas em paralelo
+    const [toWatchData, watchingData, watchedData, droppedData] = await Promise.all([
+      getInitialListData(profileUser.id, "TO_WATCH"),
+      getInitialListData(profileUser.id, "WATCHING"),
+      getInitialListData(profileUser.id, "WATCHED"),
+      getInitialListData(profileUser.id, "DROPPED"),
+    ]);
+    initialLists = {
+      toWatch: toWatchData,
+      watching: watchingData,
+      watched: watchedData,
+      dropped: droppedData,
+    };
+  }
+  // --- [FIM DA MUDANÇA 3] ---
+
+
   return (
     <div className={cn("bg-background text-foreground")}>
       <div className={cn(
@@ -104,7 +173,8 @@ export default async function PublicProfilePage({ params, searchParams }: { para
             
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2 flex items-center justify-center gap-3 flex-wrap">
               <span>{profileUser.name || profileUser.username}</span>
-              {profileUser.role === UserRole.CREATOR && (
+              {/* [MUDANÇA 4] Só renderiza se for CREATOR E tiver um twitchUsername vinculado */}
+              {profileUser.role === UserRole.CREATOR && profileUser.twitchUsername && (
                 <LiveStatusIndicator username={decodedUsername} />
               )}
             </h1>
@@ -126,10 +196,8 @@ export default async function PublicProfilePage({ params, searchParams }: { para
                 <span className="text-sm text-muted-foreground">A Seguir</span>
               </div>
               
-              {/* Agora 'profileUser.username' terá o valor correto */}
               {session && !isOwner && (
                 <FollowButton
-                  // A prop que o seu componente espera chama-se 'username'
                   username={decodedUsername} 
                   initialIsFollowing={isFollowing}
                   disabled={profileUser.role !== UserRole.CREATOR}
@@ -151,12 +219,18 @@ export default async function PublicProfilePage({ params, searchParams }: { para
               <PublicScheduleView username={decodedUsername} />
             </TabsContent>
 
+            {/* --- [MUDANÇA 5] --- */}
             {/* Conteúdo da Aba "Listas" */}
             <TabsContent value="listas">
               <UserListsClient
-                username={decodedUsername} 
+                username={decodedUsername}
+                initialToWatch={initialLists.toWatch}
+                initialWatching={initialLists.watching}
+                initialWatched={initialLists.watched}
+                initialDropped={initialLists.dropped}
               />
             </TabsContent>
+            {/* --- [FIM DA MUDANÇA 5] --- */}
 
           </Tabs>
         ) : (
