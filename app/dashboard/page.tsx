@@ -1,4 +1,4 @@
-// app/dashboard/page.tsx (Corrigido para o build)
+// app/dashboard/page.tsx (Corrigido)
 
 "use client";
 
@@ -55,7 +55,6 @@ type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; page: number; pageSize: number; };
 
-// ... (Passos do Tour) ...
 const STEP_PERFIL: Step = {
   target: '#tour-step-1-perfil',
   content: 'Bem-vindo! Aqui pode personalizar a sua página com um avatar, bio e definir a sua privacidade.',
@@ -63,7 +62,7 @@ const STEP_PERFIL: Step = {
 };
 const STEP_LISTAS: Step = {
   target: '#tour-step-2-listas-busca',
-  content: 'Este é o seu painel principal. Pesquise filmes, animes, séries ou adicione manualmente, e organize-as em listas: "Próximos Conteúdos", "Essa Semana".',
+  content: 'Este é o seu painel principal. Pesquise filmes, animes, séries ou adicione manualmente, e organize-as em listas: "Próximo Conteúdo", "Essa Semana".',
   placement: 'top',
 };
 const STEP_LISTAS_PARA_ASSISTIR: Step = {
@@ -101,6 +100,7 @@ const STEP_CALENDARIO: Step = {
   content: 'Aqui tem uma visão completa do seu cronograma, mostrando todos os seus agendamentos passados e futuros.',
   placement: 'top',
 };
+
 
 // ... (Função centerAspectCrop - sem mudanças) ...
 function centerAspectCrop(
@@ -147,18 +147,20 @@ export default function DashboardPage() {
   // Estados de Definições de Perfil
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
-  const [displayName, setDisplayName] = useState(session?.user?.name || "");
+  
+  // --- [NOVOS ESTADOS DE PERFIL] ---
+  const [displayName, setDisplayName] = useState(session?.user?.name || ""); // Para o Nome de Exibição
+  // --- [FIM DOS NOVOS ESTADOS] ---
+  
   const [bio, setBio] = useState(session?.user?.bio || "");
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
   
-  // --- [Estados para os Switches] ---
   const [showToWatch, setShowToWatch] = useState(session?.user?.showToWatchList ?? true);
   const [showWatching, setShowWatching] = useState(session?.user?.showWatchingList ?? true);
   const [showWatched, setShowWatched] = useState(session?.user?.showWatchedList ?? true);
   const [showDropped, setShowDropped] = useState(session?.user?.showDroppedList ?? true);
-  // --- [FIM] ---
 
   // ... (Estados do Cropper - sem mudanças) ...
   const [previewImage, setPreviewImage] = useState<string | null>(null); 
@@ -217,15 +219,15 @@ export default function DashboardPage() {
     }, 100);
   };
 
-  // Carrega dados da sessão para os estados
+  // Carrega dados da sessão para os estados (Atualizado)
   useEffect(() => {
     if (session?.user) {
-      setDisplayName(session.user.name || "");
+      // --- [NOVA LINHA] ---
+      setDisplayName(session.user.name || ""); // Atualiza o nome de exibição
+      // --- [FIM DA NOVA LINHA] ---
       setBio(session.user.bio || "");
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
       
-      // Só atualiza a imagem de preview a partir da sessão
-      // se o utilizador NÃO tiver um ficheiro novo selecionado (em preview).
       if (!selectedFile) {
         setPreviewImage(session.user.image || null);
       }
@@ -306,7 +308,7 @@ export default function DashboardPage() {
       fetchListData("WATCHING", 1, searchTerm),
       fetchListData("WATCHED", 1, searchTerm),
       fetchListData("DROPPED", 1, searchTerm),
-      fetchScheduleData() // Busca dados para o ScheduleManager (lista)
+      fetchScheduleData() 
     ]).finally(() => {
       setIsUpdating(false);
       setCalendarKey(prevKey => prevKey + 1); 
@@ -486,7 +488,7 @@ export default function DashboardPage() {
     return newImageUrl; 
   };
   
-  // --- (handleSaveSettings - sem mudanças) ---
+   // --- handleSaveSettings (Atualizado) ---
    const handleSaveSettings = async () => {
      if (!isCreator) return;
      
@@ -500,19 +502,22 @@ export default function DashboardPage() {
        // Etapa 1: Fazer Upload da Imagem (se houver uma nova)
        if (selectedFile) {
          setSettingsMessage("A fazer upload...");
-         newImageUrl = await handleAvatarUpload(); // Obtém a nova URL (ex: Vercel Blob)
+         newImageUrl = await handleAvatarUpload(); 
          setSettingsMessage("Upload concluído, a guardar definições...");
        }
 
-       // Etapa 2: Guardar Bio, Privacidade E A NOVA IMAGEM na API
+       // Etapa 2: Guardar Bio, Privacidade, Switches, Imagem E NOME
        const payload = { 
+         // --- [NOVA LINHA] ---
+         name: displayName, // Adiciona o nome de exibição
+         // --- [FIM DA NOVA LINHA] ---
          bio: bio,
          profileVisibility: profileVisibility,
          showToWatchList: showToWatch,
          showWatchingList: showWatching,
          showWatchedList: showWatched,
          showDroppedList: showDropped,
-         image: newImageUrl, // --- Envia a URL da imagem para a API
+         image: newImageUrl, 
        };
        
        const res = await fetch('/api/profile/settings', {
@@ -525,16 +530,18 @@ export default function DashboardPage() {
          throw new Error(d.error || 'Falha ao guardar definições.'); 
        }
        
-       // A API agora retorna todos os campos atualizados (incluindo a imagem)
-       const newSettings = await res.json();
+       const newSettings = await res.json(); // newSettings agora tem 'name'
 
        // Etapa 3: Atualizar a Sessão UMA VEZ
        if (updateSession) {
+         // --- [INÍCIO DA CORREÇÃO] ---
+         // Enviamos TODOS os novos dados para o 'updateSession'
          await updateSession({
            ...session, 
            user: {
              ...session?.user, 
-             image: newSettings.image, // Usa a imagem confirmada pela API
+             name: newSettings.name, // Esta linha estava em falta
+             image: newSettings.image, 
              bio: newSettings.bio,
              profileVisibility: newSettings.profileVisibility,
              showToWatchList: newSettings.showToWatchList,
@@ -543,6 +550,7 @@ export default function DashboardPage() {
              showDroppedList: newSettings.showDroppedList,
            }
          });
+         // --- [FIM DA CORREÇÃO] ---
        }
 
        // Etapa 4: Limpar e mostrar sucesso
@@ -554,7 +562,6 @@ export default function DashboardPage() {
        setSettingsMessage(""); 
        setActionError(`Erro: ${error.message}`);
        
-       // Reverte a imagem de preview se o upload falhar
        if (selectedFile) {
          setPreviewImage(session?.user?.image || null);
        }
@@ -579,22 +586,21 @@ export default function DashboardPage() {
 
   // --- [INÍCIO DA CORREÇÃO] ---
   // Move estas definições para ANTES do bloco de carregamento
-  const firstName = session?.user?.name?.split(' ')[0] || session?.user?.username || "";
+  // --- [MUDANÇA] Agora usa 'displayName' do estado, com fallback para a sessão
+  const firstName = (displayName || session?.user?.name)?.split(' ')[0] || session?.user?.username || "";
+  // --- [FIM DA MUDANÇA] ---
   const fallbackLetter = (session?.user?.name || session?.user?.username || "U").charAt(0).toUpperCase();
 
-  // --- ESTADOS DE CARREGAMENTO (Com layout fixo para evitar flicker) ---
+  // --- ESTADOS DE CARREGAMENTO (Atualizado) ---
   if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
     
     // Mantenha o esqueleto da página para evitar o "flicker"
     return (
       <>
-        {/* Renderiza o AppTour e o Canvas mesmo durante o load */}
         <AppTour
           run={runTour}
           steps={tourSteps}
-          // --- [CORREÇÃO 1] ---
           callback={handleJoyrideCallback} 
-          // --- [FIM DA CORREÇÃO] ---
         />
         <canvas
           ref={canvasRef}
@@ -603,23 +609,18 @@ export default function DashboardPage() {
             objectFit: 'contain',
           }}
         />
-        {/* Não renderiza o Dialog do Cropper aqui */}
 
         {/* Contêiner principal (Layout Fixo) */}
         <div className="mx-auto max-w-5xl p-4 md:p-6">
           
-          {/* O H1 já pode ser renderizado, pois {firstName} vem da sessão */}
           <h1 className="text-3xl md:text-4xl font-semibold mb-8">
             Olá, {firstName}!
           </h1>
 
-          {/* O layout de 2 colunas também */}
           <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
 
-             {/* 1. Sidebar (Renderiza O CONTEÚDO COMPLETO, pois depende apenas da sessão) */}
+             {/* 1. Sidebar (Atualizada com o campo Nome) */}
              <aside className="lg:w-1/4 space-y-6">
-              
-              {/* Card Definições */}
               {isCreator && (
                   <Card id="tour-step-1-perfil">
                       <CardHeader>
@@ -662,6 +663,22 @@ export default function DashboardPage() {
                               <p className="text-xs text-blue-600 font-medium">Nova imagem pronta. Clique em &quot;Guardar&quot;.</p>
                             )}
                           </div>
+                          
+                          {/* --- [NOVO CAMPO 'NOME DE EXIBIÇÃO'] --- */}
+                          <div className="space-y-1">
+                              <Label htmlFor="profile-name-skeleton" className="text-sm font-medium text-foreground">Nome de Exibição</Label>
+                              <Input 
+                                id="profile-name-skeleton" 
+                                value={displayName} 
+                                onChange={(e) => setDisplayName(e.target.value)} 
+                                placeholder="O seu nome público" 
+                                maxLength={50} 
+                                className="placeholder:text-muted-foreground" 
+                                disabled={isSavingSettings} 
+                              />
+                              <p className="text-xs text-muted-foreground">@{session?.user?.username} (não pode ser alterado)</p>
+                          </div>
+                          {/* --- [FIM DO NOVO CAMPO] --- */}
                           
                           {/* Bio */}
                           <div className="space-y-1">
@@ -736,7 +753,7 @@ export default function DashboardPage() {
                             <p className="text-xs text-muted-foreground">Escolha quais listas são visíveis na sua página pública.</p>
                             <div className="space-y-3 pt-2">
                               <div className="flex items-center justify-between rounded-md border p-3">
-                                <Label htmlFor="showToWatch-skeleton" className="text-sm font-medium cursor-pointer">Próximos Conteúdos</Label>
+                                <Label htmlFor="showToWatch-skeleton" className="text-sm font-medium cursor-pointer">Próximo Conteúdo</Label>
                                 <Switch id="showToWatch-skeleton" checked={showToWatch} onCheckedChange={setShowToWatch} disabled={isSavingSettings} />
                               </div>
                               <div className="flex items-center justify-between rounded-md border p-3">
@@ -801,15 +818,13 @@ export default function DashboardPage() {
   }
   // --- [FIM DA CORREÇÃO] ---
 
-  // --- JSX (Conteúdo Carregado) ---
+  // --- JSX (Conteúdo Carregado - Atualizado) ---
   return (
     <>
       <AppTour
         run={runTour}
         steps={tourSteps}
-        // --- [CORREÇÃO 2] ---
         callback={handleJoyrideCallback}
-        // --- [FIM DA CORREÇÃO] ---
       />
       
       {/* Canvas Invisível para o corte */}
@@ -867,7 +882,7 @@ export default function DashboardPage() {
 
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
 
-           {/* 1. Sidebar */}
+           {/* 1. Sidebar (Atualizada com o campo Nome) */}
            <aside className="lg:w-1/4 space-y-6">
               
               {/* Card Definições */}
@@ -913,11 +928,12 @@ export default function DashboardPage() {
                               <p className="text-xs text-blue-600 font-medium">Nova imagem pronta. Clique em &quot;Guardar&quot;.</p>
                             )}
                           </div>
-
+                          
+                          {/* --- [NOVO CAMPO 'NOME DE EXIBIÇÃO'] --- */}
                           <div className="space-y-1">
-                              <Label htmlFor="profile-name-skeleton" className="text-sm font-medium text-foreground">Nome de Exibição</Label>
+                              <Label htmlFor="profile-name" className="text-sm font-medium text-foreground">Nome de Exibição</Label>
                               <Input 
-                                id="profile-name-skeleton" 
+                                id="profile-name" 
                                 value={displayName} 
                                 onChange={(e) => setDisplayName(e.target.value)} 
                                 placeholder="O seu nome público" 
@@ -927,6 +943,7 @@ export default function DashboardPage() {
                               />
                               <p className="text-xs text-muted-foreground">@{session?.user?.username} (não pode ser alterado)</p>
                           </div>
+                          {/* --- [FIM DO NOVO CAMPO] --- */}
                           
                           {/* Bio */}
                           <div className="space-y-1">
@@ -1001,7 +1018,7 @@ export default function DashboardPage() {
                             <p className="text-xs text-muted-foreground">Escolha quais listas são visíveis na sua página pública.</p>
                             <div className="space-y-3 pt-2">
                               <div className="flex items-center justify-between rounded-md border p-3">
-                                <Label htmlFor="showToWatch" className="text-sm font-medium cursor-pointer">Próximos Conteúdos</Label>
+                                <Label htmlFor="showToWatch" className="text-sm font-medium cursor-pointer">Próximo Conteúdo</Label>
                                 <Switch id="showToWatch" checked={showToWatch} onCheckedChange={setShowToWatch} disabled={isSavingSettings} />
                               </div>
                               <div className="flex items-center justify-between rounded-md border p-3">

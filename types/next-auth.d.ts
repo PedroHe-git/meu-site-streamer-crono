@@ -1,62 +1,53 @@
 // types/next-auth.d.ts (Atualizado)
 
-import NextAuth, { DefaultSession } from "next-auth"
-import { JWT } from "next-auth/jwt"
+import NextAuth, { DefaultSession, DefaultUser } from "next-auth";
+import { JWT, DefaultJWT } from "next-auth/jwt"; // Importar JWT e DefaultJWT
 import { UserRole, ProfileVisibility } from "@prisma/client";
 
-// Estende o tipo 'user' dentro da sessão
+// Estende o tipo 'User' base do NextAuth
 declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string;
-      username: string;
-      role: UserRole;
-      bio?: string | null;
-      profileVisibility: ProfileVisibility;
-      image?: string | null; 
-      twitchUsername?: string | null;
-      // --- [MUDANÇA AQUI] ---
-      showToWatchList: boolean;
-      showWatchingList: boolean;
-      showWatchedList: boolean;
-      showDroppedList: boolean;
-      // --- [FIM DA MUDANÇA] ---
-    } & DefaultSession["user"] 
-  }
-
-  // Estende o tipo User base (usado no login inicial)
-  interface User {
-    username: string;
+  /**
+   * O 'DefaultUser' já tem 'name', 'email', 'image'.
+   * Nós estendemo-lo para incluir os nossos campos do Prisma.
+   */
+  interface User extends DefaultUser {
+    id: string; // Garantir que o ID está no User
     role: UserRole;
-    bio?: string | null;
+    username: string;
+    bio: string | null;
     profileVisibility: ProfileVisibility;
-    image?: string | null; 
-    twitchUsername?: string | null;
-    // --- [MUDANÇA AQUI] ---
+    twitchUsername: string | null;
     showToWatchList: boolean;
     showWatchingList: boolean;
     showWatchedList: boolean;
     showDroppedList: boolean;
-    // --- [FIM DA MUDANÇA] ---
+  }
+
+  /**
+   * A 'Session' agora usa a nossa interface 'User' personalizada,
+   * que já contém 'name' e 'image' do DefaultUser.
+   */
+  interface Session extends DefaultSession {
+    user: User;
   }
 }
 
-// Estende o tipo JWT (JSON Web Token)
+// Estende o 'JWT'
 declare module "next-auth/jwt" {
-  interface JWT {
+  /**
+   * O 'DefaultJWT' já tem 'name', 'email', e 'picture' (para a imagem).
+   * Nós só precisamos de adicionar os NOSSOS campos customizados.
+   */
+  interface JWT extends DefaultJWT {
     id: string;
-    username: string;
     role: UserRole;
-    bio?: string | null;
+    username: string;
+    bio: string | null;
     profileVisibility: ProfileVisibility;
-    image?: string | null; 
-    twitchUsername?: string | null;
-    // --- [MUDANÇA AQUI] ---
+    twitchUsername: string | null;
     showToWatchList: boolean;
     showWatchingList: boolean;
     showWatchedList: boolean;
     showDroppedList: boolean;
-    // --- [FIM DA MUDANÇA] ---
-    name: string | null;
   }
 }

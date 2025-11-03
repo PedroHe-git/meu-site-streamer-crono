@@ -17,7 +17,7 @@ function RegisterForm() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"CREATOR" | "VISITOR">("VISITOR"); 
+  //const [role, setRole] = useState<"CREATOR" | "VISITOR">("VISITOR");  bloquear criação de conta como criador
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(""); 
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +44,7 @@ function RegisterForm() {
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST", headers: { "Content-Type": "application/json", },
-        body: JSON.stringify({ name, username, email, password, role }),
+        body: JSON.stringify({ name, username, email, password, }),
       });
       
       const data = await res.json();
@@ -99,7 +99,8 @@ function RegisterForm() {
            </div>
            <div className="space-y-1"> 
              <Label htmlFor="email" className="text-muted-foreground">Email</Label> 
-             <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={isLoading} className="placeholder:text-muted-foreground"/> 
+             <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={isLoading} className="placeholder:text-muted-foreground"/>
+             <p className="text-xs text-muted-foreground">Um email de verificação será encaminhado</p> 
            </div>
            <div className="space-y-1"> 
              <Label htmlFor="password" className="text-muted-foreground">Senha</Label> 
@@ -107,9 +108,9 @@ function RegisterForm() {
            </div>
 
           {/* --- [MUDANÇA VISUAL AQUI] --- */}
-           <div className="space-y-2 pt-2">
+           {/*<div className="space-y-2 pt-2">
                <Label className="text-muted-foreground">Qual o seu objetivo?</Label>
-               {/* Adiciona 'space-y-3' para espaçar os cards */}
+               
                <RadioGroup 
                  value={role} 
                  onValueChange={(value: "CREATOR" | "VISITOR") => setRole(value)} 
@@ -117,13 +118,12 @@ function RegisterForm() {
                  className="space-y-3 pt-1" 
                >
                  
-                 {/* Card 1: Creator */}
-                 {/* O Label agora é o card clicável */}
+                
                  <Label 
                    htmlFor="role-creator" 
                    className="flex items-start space-x-3 rounded-md border bg-card p-4 cursor-pointer transition-colors hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary"
                  >
-                   {/* O RadioGroupItem fica dentro do Label */}
+                   
                    <RadioGroupItem value="CREATOR" id="role-creator" />
                    <div className="flex flex-col">
                      <span className="font-semibold text-foreground">Criar e gerir cronogramas</span>
@@ -133,7 +133,7 @@ function RegisterForm() {
                    </div>
                  </Label>
                  
-                 {/* Card 2: Visitor */}
+                 /* Card 2: Visitor 
                  <Label 
                    htmlFor="role-visitor" 
                    className="flex items-start space-x-3 rounded-md border bg-card p-4 cursor-pointer transition-colors hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary"

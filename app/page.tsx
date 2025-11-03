@@ -181,7 +181,7 @@ export default function HomePage() {
             <div className="space-y-3">
               <h3 className="text-xl font-semibold text-primary">Organize as suas Listas</h3>
               <p className="text-muted-foreground text-sm">
-                 Utilize as listas Para Assistir, Assistindo, Já Assistou e Abandonados, para ter mais controle sobre seus Itens
+                 Utilize as listas Próximo Conteúdo, Essa Semana, Já Assistou e Abandonados, para ter mais controle sobre seus Itens
               </p>
             </div>
           </div>

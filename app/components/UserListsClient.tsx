@@ -169,8 +169,8 @@ export default function UserListsClient({
 
       {/* --- [MUDANÇA 4: Renderização Condicional] --- */}
       {/* Renderiza as secções apenas se a flag for true */}
-      {showWatching && renderListSection("Assistindo", "WATCHING")}
-      {showToWatch && renderListSection("Para Assistir", "TO_WATCH")}
+      {showWatching && renderListSection("Essa Semana", "WATCHING")}
+      {showToWatch && renderListSection("Próximo Conteúdo", "TO_WATCH")}
       {showWatched && renderListSection("Já Assistido", "WATCHED", "opacity-70")}
       {showDropped && renderListSection("Abandonados", "DROPPED", "opacity-50")}
 

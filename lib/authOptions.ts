@@ -1,4 +1,4 @@
-// lib/authOptions.ts (FINALMENTE CORRIGIDO)
+// lib/authOptions.ts (Corrigido)
 
 import { AuthOptions } from "next-auth";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
@@ -11,8 +11,11 @@ import { v4 as uuidv4 } from "uuid";
 
 const prisma = new PrismaClient();
 
+// Nota: O 'User' do NextAuth é importado de 'next-auth' e já foi estendido
+// no nosso ficheiro types/next-auth.d.ts
+
 export const authOptions: AuthOptions = {
-  // @ts-ignore
+  // @ts-ignore 
   adapter: PrismaAdapter(prisma),
   providers: [
     TwitchProvider({
@@ -85,6 +88,7 @@ export const authOptions: AuthOptions = {
         if (!isCorrectPassword) {
           throw new Error("Credenciais inválidas");
         }
+        // @ts-ignore - O 'user' do Prisma corresponde ao 'User' do NextAuth
         return user; 
       },
     }),
@@ -125,22 +129,26 @@ export const authOptions: AuthOptions = {
       return true; 
     },
 
+    // --- [INÍCIO DA CORREÇÃO] ---
     async jwt({ token, user, trigger, session }) {
       
       // 1. No login inicial (objeto 'user' está presente)
+      // O 'user' aqui é o 'User' do 'authorize' ou 'profile'
       if (user) {
+        // @ts-ignore
         token.id = user.id;
-        token.name = user.name ?? null; // Converte 'undefined' para 'null'
+        token.name = user.name ?? null; 
+        token.picture = user.image ?? null; // Usamos 'picture' (padrão)
         // @ts-ignore
         token.role = user.role;
         // @ts-ignore
         token.username = user.username;
         // @ts-ignore
-        token.bio = user.bio ?? null; // Converte 'undefined' para 'null'
+        token.bio = user.bio ?? null; 
         // @ts-ignore
         token.profileVisibility = user.profileVisibility;
         // @ts-ignore
-        token.twitchUsername = user.twitchUsername ?? null; // Converte 'undefined' para 'null'
+        token.twitchUsername = user.twitchUsername ?? null; 
         // @ts-ignore
         token.showToWatchList = user.showToWatchList;
         // @ts-ignore
@@ -149,34 +157,32 @@ export const authOptions: AuthOptions = {
         token.showWatchedList = user.showWatchedList;
         // @ts-ignore
         token.showDroppedList = user.showDroppedList;
-        // @ts-ignore
-        token.picture = user.image ?? null; // Converte 'undefined' para 'null'
       }
 
       // 2. Ao chamar updateSession() (trigger é "update")
       if (trigger === "update" && session) {
         
+        // 'session' aqui são os dados passados para updateSession()
+        // O payload que nos interessa está em 'session.user'
         // @ts-ignore
-        if (session.user) {
-          // --- [INÍCIO DAS CORREÇÕES] ---
-          // Temos de usar '?? null' para garantir que 'undefined' não quebre os tipos do token
+        const userPayload = session.user;
+
+        if (userPayload) {
+          // Atualiza o token com os dados novos
+          token.name = userPayload.name ?? null;
+          token.picture = userPayload.image ?? null; // Usa 'picture'
           // @ts-ignore
-          token.name = session.user.name ?? null;
+          token.bio = userPayload.bio ?? null;
           // @ts-ignore
-          token.bio = session.user.bio ?? null;
+          token.profileVisibility = userPayload.profileVisibility;
           // @ts-ignore
-          token.profileVisibility = session.user.profileVisibility;
+          token.showToWatchList = userPayload.showToWatchList;
           // @ts-ignore
-          token.showToWatchList = session.user.showToWatchList;
+          token.showWatchingList = userPayload.showWatchingList;
           // @ts-ignore
-          token.showWatchingList = session.user.showWatchingList;
+          token.showWatchedList = userPayload.showWatchedList;
           // @ts-ignore
-          token.showWatchedList = session.user.showWatchedList;
-          // @ts-ignore
-          token.showDroppedList = session.user.showDroppedList;
-          // @ts-ignore
-          token.picture = session.user.image ?? null; 
-          // --- [FIM DAS CORREÇÕES] ---
+          token.showDroppedList = userPayload.showDroppedList;
         }
       }
       
@@ -184,12 +190,12 @@ export const authOptions: AuthOptions = {
     },
 
     async session({ session, token }) {
-      // Passa os dados do TOKEN para a SESSÃO
-      if (token) {
-        // @ts-ignore
-        session.user.name = token.name; 
+      // Copia os dados do 'token' (que está atualizado) para a 'session'
+      if (token && session.user) {
         // @ts-ignore
         session.user.id = token.id;
+        session.user.name = token.name;
+        session.user.image = token.picture; // Mapeia 'picture' (do JWT) para 'image' (da Sessão)
         // @ts-ignore
         session.user.role = token.role;
         // @ts-ignore
@@ -208,11 +214,10 @@ export const authOptions: AuthOptions = {
         session.user.showWatchedList = token.showWatchedList;
         // @ts-ignore
         session.user.showDroppedList = token.showDroppedList;
-        // @ts-ignore
-        session.user.image = token.picture; 
       }
       return session;
     },
+    // --- [FIM DA CORREÇÃO] ---
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === "development",
