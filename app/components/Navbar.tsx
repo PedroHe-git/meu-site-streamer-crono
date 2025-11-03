@@ -65,7 +65,7 @@ export default function Navbar() {
                 Registrar
               </Link>
               <Link href="/auth/signin" className={buttonVariants({ className: "h-9 px-4 text-sm" })}>
-                Login
+                Entrar
               </Link>
             </>
           )}
@@ -86,7 +86,7 @@ export default function Navbar() {
               )}
               
               <Button variant="outline" size="sm" onClick={() => signOut({ callbackUrl: '/' })} className="h-9 px-3 text-sm">
-                Logout
+                Sair
               </Button>
             </>
           )}

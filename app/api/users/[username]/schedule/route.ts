@@ -1,16 +1,13 @@
-// app/api/users/[username]/schedule/route.ts
+// app/api/users/[username]/schedule/route.ts (Atualizado)
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { ProfileVisibility } from "@prisma/client";
-// [MUDANÇA 1: Importar 'format']
 import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "date-fns";
-// [REMOVIDO] ptBR não é mais necessário aqui
 
 export const runtime = 'nodejs';
-// Força esta rota a ser dinâmica (sem cache de servidor)
 export const revalidate = 0; 
 
 
@@ -19,13 +16,21 @@ export async function GET(
   { params }: { params: { username: string } }
 ) {
   const session = await getServerSession(authOptions);
+  // @ts-ignore
+  const loggedInUserId = session?.user?.id;
   const { username } = params;
 
   try {
     // 1. Encontrar o utilizador do perfil
     const user = await prisma.user.findUnique({
-      where: { username: decodeURIComponent(username) },
-      select: { id: true, profileVisibility: true },
+      // --- [CORREÇÃO] ---
+      where: { username: decodeURIComponent(username).toLowerCase() },
+      // --- [FIM DA CORREÇÃO] ---
+      select: { 
+        id: true, 
+        profileVisibility: true,
+        showWatchingList: true
+      },
     });
 
     if (!user) {
@@ -35,11 +40,11 @@ export async function GET(
     }
 
     // 2. Verificar Privacidade
-    const isOwner = session?.user?.id === user.id;
+    const isOwner = loggedInUserId === user.id;
     let isFollowing = false;
-    if (session?.user?.id && !isOwner) {
+    if (loggedInUserId && !isOwner) {
       const follow = await prisma.follows.findFirst({
-        where: { followerId: session.user.id, followingId: user.id },
+        where: { followerId: loggedInUserId, followingId: user.id },
       });
       isFollowing = !!follow;
     }
@@ -55,19 +60,27 @@ export async function GET(
       );
     }
 
-    // 3. Obter o weekOffset da URL (ex: ?weekOffset=0)
+    if (!user.showWatchingList && !isOwner) {
+       return NextResponse.json({
+         items: [],
+         weekStart: format(new Date(), 'yyyy-MM-dd'),
+         weekEnd: format(new Date(), 'yyyy-MM-dd'),
+       });
+    }
+
+    // 3. Obter o weekOffset da URL
     const { searchParams } = new URL(request.url);
     const weekOffset = parseInt(searchParams.get('weekOffset') || '0');
 
-    // 4. Calcular o intervalo de datas
+    // 4. Calcular o intervalo de datas (Início na Segunda)
     const today = new Date();
-    // [MUDANÇA 2: Remover o 'locale' do cálculo para evitar bugs]
-    const weekOptions = { weekStartsOn: 0 as const }; 
+    const weekOptions = { weekStartsOn: 1 as const }; 
+    
     const targetDate = addDays(today, weekOffset * 7);
     const startDate = startOfDay(startOfWeek(targetDate, weekOptions));
     const endDate = endOfDay(endOfWeek(targetDate, weekOptions));
 
-    // 5. Buscar todos os itens (concluídos ou não) DENTRO desse intervalo
+    // 5. Buscar todos os itens DENTRO desse intervalo
     const scheduleItems = await prisma.scheduleItem.findMany({
       where: {
         userId: user.id,
@@ -77,7 +90,7 @@ export async function GET(
         },
       },
       include: {
-        media: true, // Inclui os detalhes da mídia
+        media: true,
       },
       orderBy: [
         { scheduledAt: "asc" },
@@ -88,7 +101,6 @@ export async function GET(
     // 6. Retorna os itens e as datas da semana
     return NextResponse.json({
       items: scheduleItems,
-      // [MUDANÇA 3: Formatar a data para 'yyyy-MM-dd']
       weekStart: format(startDate, 'yyyy-MM-dd'),
       weekEnd: format(endDate, 'yyyy-MM-dd'),
     });

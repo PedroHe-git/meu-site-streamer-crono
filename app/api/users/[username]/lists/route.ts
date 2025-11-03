@@ -1,153 +1,127 @@
-// app/api/users/[username]/lists/route.ts (Atualizado)
+// app/api/users/[username]/lists/route.ts (Corrigido)
 
-import { NextResponse, NextRequest } from "next/server";
-import prisma from '@/lib/prisma';
-import { Prisma, ProfileVisibility } from "@prisma/client";
-import { getServerSession } from "next-auth/next"; 
-import { authOptions } from "@/lib/authOptions"; 
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/authOptions";
+
+// --- [INÍCIO DA CORREÇÃO 1] ---
+// Importar o 'prisma' do 'lib' e os Enums corretos
+import prisma from "@/lib/prisma"; 
+import { MovieStatusType, ProfileVisibility } from "@prisma/client"; // Nome correto é MovieStatusType
+// --- [FIM DA CORREÇÃO 1] ---
 
 export const runtime = 'nodejs';
-export const revalidate = 0; // Força esta API a ser dinâmica
+export const revalidate = 0; 
 
-// Define os tipos de status válidos
-const validStatuses = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];
-type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
-
-// GET /api/users/{username}/lists?status=TO_WATCH&page=1&pageSize=20&searchTerm=...
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { username: string } }
 ) {
-  const { username } = params;
-  if (!username) {
-    return new NextResponse(JSON.stringify({ error: "Username é obrigatório" }), { status: 400 });
-  }
-
   try {
-    // 1. Obter sessão do visitante
     const session = await getServerSession(authOptions);
     // @ts-ignore
-    const visitorId = session?.user?.id;
+    const loggedInUserId = session?.user?.id;
+    const { username } = params;
 
-    // 2. Encontra o utilizador do perfil e as suas NOVAS flags de visibilidade
+    const url = new URL(request.url);
+    
+    // --- [INÍCIO DA CORREÇÃO 2] ---
+    // O tipo correto é 'MovieStatusType' (o Enum)
+    const status = url.searchParams.get("status") as MovieStatusType;
+    // --- [FIM DA CORREÇÃO 2] ---
+    
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const pageSize = 10; 
+
+    if (!status) {
+      return new NextResponse("Status não fornecido", { status: 400 });
+    }
+
+    // 1. Encontrar o utilizador do perfil
     const profileUser = await prisma.user.findUnique({
-      where: { username: decodeURIComponent(username) },
-      select: { 
-        id: true, 
+      where: { username: decodeURIComponent(username).toLowerCase() },
+      // Seleciona os campos necessários para a lógica de privacidade
+      select: {
+        id: true,
         profileVisibility: true,
-        // --- [MUDANÇA AQUI] ---
         showToWatchList: true,
         showWatchingList: true,
         showWatchedList: true,
-        showDroppedList: true
-        // --- [FIM DA MUDANÇA] ---
-      } 
+        showDroppedList: true,
+      }
     });
 
     if (!profileUser) {
-      return new NextResponse(JSON.stringify({ error: "Utilizador não encontrado" }), { status: 404 });
+      return new NextResponse("Utilizador não encontrado", { status: 404 });
     }
 
-    // 3. Verificar Permissão de Visualização (Geral do Perfil)
-    const isPublic = profileUser.profileVisibility === ProfileVisibility.PUBLIC;
-    const isOwnProfile = visitorId === profileUser.id;
+    // 2. Verificar a privacidade do perfil
     let isFollowing = false;
-
-    if (visitorId && !isOwnProfile) {
-      const followRecord = await prisma.follows.findUnique({
+    if (loggedInUserId && loggedInUserId !== profileUser.id) {
+      const follow = await prisma.follows.findUnique({
         where: {
           followerId_followingId: {
-            followerId: visitorId,
+            followerId: loggedInUserId,
             followingId: profileUser.id,
           },
         },
       });
-      isFollowing = !!followRecord;
+      isFollowing = !!follow;
     }
 
-    const canViewProfile = isPublic || isOwnProfile || (visitorId && isFollowing);
+    const isOwner = loggedInUserId === profileUser.id;
+    const isPrivateAndNotFollowed =
+      profileUser.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY &&
+      !isFollowing &&
+      !isOwner; 
 
-    if (!canViewProfile) {
-      return new NextResponse(JSON.stringify({ error: "Este perfil é privado." }), { status: 403 });
+    if (isPrivateAndNotFollowed) {
+      return NextResponse.json({ items: [], totalCount: 0, page: 1, pageSize });
     }
 
-    // 4. Se puder ver, continua...
-    
-    // Lê os parâmetros da URL
-    const { searchParams } = new URL(request.url);
-    const pageParam = searchParams.get('page');
-    const pageSizeParam = searchParams.get('pageSize');
-    const statusParam = searchParams.get('status');
-    const searchTerm = searchParams.get('searchTerm');
-
-    // Valida o status
-    if (!statusParam || !validStatuses.includes(statusParam)) {
-       return new NextResponse(JSON.stringify({ error: "Status inválido ou não especificado" }), { status: 400 });
+    // 3. Verificar a privacidade individual de cada lista (agora com 'isOwner')
+    if (status === "TO_WATCH" && !profileUser.showToWatchList && !isOwner) {
+      return NextResponse.json({ items: [], totalCount: 0, page: 1, pageSize });
     }
-    const statusFilter = statusParam as StatusKey;
-
-    // Define paginação
-    const page = pageParam ? parseInt(pageParam, 10) : 1;
-    const pageSize = pageSizeParam ? parseInt(pageSizeParam, 10) : 20; 
-    const skip = (page - 1) * pageSize;
-
-    // --- [MUDANÇA AQUI: Aplicar Regra de Visibilidade da Lista] ---
-    const listVisibilityMap = {
-      TO_WATCH: profileUser.showToWatchList,
-      WATCHING: profileUser.showWatchingList,
-      WATCHED: profileUser.showWatchedList,
-      DROPPED: profileUser.showDroppedList,
-    };
-
-    // Se a lista específica estiver oculta E o visitante não for o dono
-    if (!listVisibilityMap[statusFilter] && !isOwnProfile) {
-      // Retorna uma resposta vazia, como se a lista não tivesse itens.
-      return NextResponse.json({
-        items: [],
-        totalCount: 0,
-        page,
-        pageSize
-      });
+    if (status === "WATCHING" && !profileUser.showWatchingList && !isOwner) {
+      return NextResponse.json({ items: [], totalCount: 0, page: 1, pageSize });
     }
-    // --- [FIM DA MUDANÇA] ---
+    if (status === "WATCHED" && !profileUser.showWatchedList && !isOwner) {
+      return NextResponse.json({ items: [], totalCount: 0, page: 1, pageSize });
+    }
+    if (status === "DROPPED" && !profileUser.showDroppedList && !isOwner) {
+      return NextResponse.json({ items: [], totalCount: 0, page: 1, pageSize });
+    }
 
-    // Condição de busca (WHERE)
-    const whereCondition: Prisma.MediaStatusWhereInput = {
+    // 4. Se passou em todas as verificações, busca os dados
+    const whereClause = {
       userId: profileUser.id,
-      status: statusFilter,
+      status: status,
     };
-    if (searchTerm) {
-      whereCondition.media = {
-        title: {
-          contains: searchTerm,
-          mode: 'insensitive',
-        },
-      };
-    }
 
-    // Busca Paginada e Contagem Total
-    const [items, totalCount] = await Promise.all([
-      prisma.mediaStatus.findMany({
-        where: whereCondition,
-        include: { media: true }, 
-        skip: skip,
-        take: pageSize,
-        orderBy: { media: { title: 'asc' } }
-      }),
-      prisma.mediaStatus.count({
-        where: whereCondition,
-      })
-    ]);
-
-    return NextResponse.json({
-      items,
-      totalCount,
-      page,
-      pageSize
+    const totalCount = await prisma.mediaStatus.count({ where: whereClause });
+    const mediaStatus = await prisma.mediaStatus.findMany({
+      where: whereClause,
+      take: pageSize,
+      skip: (page - 1) * pageSize,
+      include: {
+        media: true, 
+      },
+      orderBy: { 
+        media: {
+          title: 'asc'
+        }
+      },
     });
 
+    return NextResponse.json({
+      items: mediaStatus,
+      totalCount,
+      page,
+      pageSize,
+    });
   } catch (error) {
-    console.error(`Erro ao buscar lista pública para ${username}:`, error);
-    return new NextResponse(JSON.stringify({ error: "Erro interno do servidor" }), { status: 500 });
+    console.error(`[USERS_LISTS_GET_${params.username}]`, error);
+    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
   }
 }

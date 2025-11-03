@@ -1,14 +1,12 @@
-// app/components/PublicScheduleView.tsx
+// app/components/PublicScheduleView.tsx (Atualizado)
 
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
 import { ScheduleItem, Media } from "@prisma/client";
 import Image from "next/image";
-// [MUDANÇA 1: Importar 'parse']
 import { format, addDays, startOfWeek, isSameDay, differenceInWeeks, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
-// [MUDANÇA 2: REMOVIDA a linha 'date-fns-tz' que causava o erro]
 
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css"; 
@@ -81,7 +79,6 @@ export default function PublicScheduleView({ username }: Props) {
       setIsLoading(true);
       setError(null);
       try {
-        // [MUDANÇA 3: Manter o 'cache-buster' para garantir que não há cache]
         const cacheBuster = `&cb=${new Date().getTime()}`;
         const res = await fetch(
           `/api/users/${username}/schedule?weekOffset=${weekOffset}${cacheBuster}`, 
@@ -103,24 +100,21 @@ export default function PublicScheduleView({ username }: Props) {
     fetchSchedule();
   }, [username, weekOffset]);
 
-  // [MUDANÇA 4: Usar 'parse' para ler a data 'yyyy-MM-dd' como local]
+  // 'startOfThisWeekDate' vai receber a Segunda-feira da API
   const startOfThisWeekDate = useMemo(() => {
     if (!data) return null;
-    // Converte a string "2025-11-02" para um objeto Date
-    // que representa a meia-noite LOCAL (corrigindo o bug do Sábado)
     return parse(data.weekStart, 'yyyy-MM-dd', new Date());
   }, [data]);
 
-  // Memoiza os 7 dias da semana
+  // 'daysOfWeek' vai renderizar 7 dias a partir de Segunda-feira
   const daysOfWeek = useMemo(() => {
     if (!startOfThisWeekDate) return [];
     return Array.from({ length: 7 }).map((_, i) => addDays(startOfThisWeekDate, i));
-  }, [startOfThisWeekDate]); // Depende da data corrigida
+  }, [startOfThisWeekDate]); 
 
   // Gera o Título da Semana
   const weekTitle = useMemo(() => {
     if (!data) return "A carregar...";
-    // [MUDANÇA 5: Usar 'parse' também para formatar o título]
     const start = format(parse(data.weekStart, 'yyyy-MM-dd', new Date()), "dd/MM");
     const end = format(parse(data.weekEnd, 'yyyy-MM-dd', new Date()), "dd/MM/yyyy");
     if (weekOffset === 0) return "Semana Atual";
@@ -133,8 +127,12 @@ export default function PublicScheduleView({ username }: Props) {
   const handleDateSelect = (date: Date | null) => {
     if (!date) return;
     const today = new Date();
-    // [MUDANÇA 6: Remover 'locale' do cálculo (igual à API)]
-    const weekOptions = { weekStartsOn: 0 as const }; 
+    
+    // --- [ MUDANÇA AQUI ] ---
+    // 0 = Domingo, 1 = Segunda-feira
+    const weekOptions = { weekStartsOn: 1 as const }; 
+    // --- [ FIM DA MUDANÇA ] ---
+
     const startOfTodayWeek = startOfWeek(today, weekOptions);
     const startOfSelectedWeek = startOfWeek(date, weekOptions);
     
@@ -160,7 +158,7 @@ export default function PublicScheduleView({ username }: Props) {
 
           <div className="flex gap-2">
             <DatePicker
-              selected={startOfThisWeekDate} // [MUDANÇA 7: Usar a data corrigida]
+              selected={startOfThisWeekDate} 
               onChange={handleDateSelect}
               locale="pt-BR"
               dateFormat="dd/MM/yyyy"
@@ -212,8 +210,6 @@ export default function PublicScheduleView({ username }: Props) {
         ) : (
           daysOfWeek.map(day => {
             const itemsForThisDay = data?.items.filter(item => {
-              // 'item.scheduledAt' é um ISO String (ex: 2025-11-03T14:00:00.000Z)
-              // new Date() converte-o para o fuso local automaticamente
               const scheduledDate = new Date(item.scheduledAt);
               return isSameDay(scheduledDate, day);
             }) || [];

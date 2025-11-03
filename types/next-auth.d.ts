@@ -57,5 +57,6 @@ declare module "next-auth/jwt" {
     showWatchedList: boolean;
     showDroppedList: boolean;
     // --- [FIM DA MUDANÇA] ---
+    name: string | null;
   }
 }

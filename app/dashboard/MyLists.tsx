@@ -1,4 +1,4 @@
-// app/darshbord/MyLists.tsx (Atualizado)
+// app/dashboard/MyLists.tsx (Corrigido)
 
 "use client";
 
@@ -20,7 +20,6 @@ type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 type ListTab = StatusKey;
 type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; page: number; pageSize: number; };
 
-// --- [ATUALIZAÇÃO DE PROPS AQUI] ---
 type MyListsProps = { 
   toWatchData: PaginatedListData; 
   watchingData: PaginatedListData; 
@@ -34,7 +33,7 @@ type MyListsProps = {
   setSearchTerm: (term: string) => void; 
   isUpdatingGlobal: boolean; 
   onMediaAdded: () => void;
-  onRemoveItem: (item: MediaStatusWithMedia) => void; // <-- [NOVA PROP]
+  onRemoveItem: (item: MediaStatusWithMedia) => void; 
 };
 
 // ActionButton
@@ -48,7 +47,7 @@ export default function MyLists({
   onUpdateStatus, onPageChange, onToggleWeekly,
   listLoadingStatus, searchTerm, setSearchTerm, isUpdatingGlobal,
   onMediaAdded,
-  onRemoveItem // <-- [RECEBE A NOVA PROP]
+  onRemoveItem 
 }: MyListsProps) {
 
   const [activeTab, setActiveTab] = useState<ListTab>("TO_WATCH");
@@ -63,22 +62,20 @@ export default function MyLists({
     let actionButtons;
     const isUpdating = isUpdatingGlobal || isLoadingCurrentList;
     const isWeekly = item.isWeekly;
+    // O seu código usa 'mediaType', o que está correto
     const isSerieOrAnime = item.media.mediaType === MediaType.SERIES || item.media.mediaType === MediaType.ANIME || item.media.mediaType === MediaType.OUTROS;
 
     switch (item.status) {
       
-      // --- [CORREÇÃO AQUI] ---
       case "TO_WATCH": 
         actionButtons = ( 
           <div className="flex flex-col sm:flex-row gap-1"> 
             <ActionButton label="Começar" colorClass="bg-blue-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "WATCHING")} /> 
             <ActionButton label="Já Assistido" colorClass="bg-gray-500" disabled={isUpdating} onClick={() => onUpdateStatus(item, "WATCHED")} /> 
-            {/* Agora chama a nova função onRemoveItem */}
             <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} /> 
           </div> 
         ); 
         break;
-      // --- [FIM DA CORREÇÃO] ---
 
       case "WATCHING":
         actionButtons = (
@@ -86,28 +83,35 @@ export default function MyLists({
             {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
             <ActionButton label="Abandonar" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "DROPPED")} />
             <ActionButton label="Pausar" colorClass="bg-yellow-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
-              <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} />
           </div>
         ); 
         break;
+        
+      // --- [INÍCIO DA CORREÇÃO] ---
       case "WATCHED": 
         actionButtons = ( 
           <div className="flex flex-col sm:flex-row gap-1 items-center">
             {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
             <ActionButton label="Ver de Novo" colorClass="bg-green-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
-            <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} />
+            {/* Adicionado o botão Remover */}
+            <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} /> 
           </div>
         ); 
         break;
+      // --- [FIM DA CORREÇÃO] ---
+
+      // --- [INÍCIO DA CORREÇÃO (BÓNUS)] ---
       case "DROPPED": 
         actionButtons = ( 
           <div className="flex flex-col sm:flex-row gap-1 items-center">
             {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
             <ActionButton label="Tentar de Novo" colorClass="bg-blue-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
-            <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} />
+            {/* Adicionado o botão Remover */}
+            <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} /> 
           </div>
         ); 
         break;
+      // --- [FIM DA CORREÇÃO (BÓNUS)] ---
     }
 
     const showProgress = isSerieOrAnime && (item.lastSeasonWatched !== null || item.lastEpisodeWatched !== null);
@@ -115,6 +119,7 @@ export default function MyLists({
     return (
       <li key={item.id} className="flex items-center justify-between gap-2 p-2 border-b last:border-b-0">
         <div className="flex items-center gap-3 overflow-hidden">
+          {/* O seu código original (correto) para a imagem: */}
           <Image src={item.media.posterPath || "/poster-placeholder.png"} width={40} height={60} alt={item.media.title} className="rounded flex-shrink-0" unoptimized={true} />
           <div className="flex flex-col overflow-hidden">
             <span className="text-sm truncate font-medium flex items-center gap-1 text-foreground" title={item.media.title}>
@@ -136,7 +141,7 @@ export default function MyLists({
     );
   };
   
-  // renderTabContent (sem mudanças)
+  // renderTabContent
   const renderTabContent = (statusKey: StatusKey) => { 
     const data = paginatedDataMap[statusKey]; 
     const isLoading = listLoadingStatus[statusKey]; 
@@ -155,6 +160,7 @@ export default function MyLists({
             </p> 
           ) : ( 
             <ul className="space-y-1"> 
+              {/* O seu código original (correto): */}
               {!isLoading && data.items.map(item => renderListItem(item, statusKey))} 
             </ul> 
           )} 
@@ -170,7 +176,7 @@ export default function MyLists({
     ); 
   };
   
-  // Return (sem mudanças)
+  // Return
   return (
     <div className="flex flex-col">
       
@@ -188,10 +194,10 @@ export default function MyLists({
         /> 
       </div>
 
-      <Tabs defaultValue="TO_WATCH" className="w-full">
+      <Tabs defaultValue="TO_WATCH" className="w-full" onValueChange={(value) => setActiveTab(value as ListTab)}>
         <TabsList className="grid w-full grid-cols-4 h-auto mb-4">
-          <TabsTrigger value="TO_WATCH" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-para-assistir">Para Assistir ({toWatchData.totalCount})</TabsTrigger>
-          <TabsTrigger value="WATCHING" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-assistindo">Assistindo ({watchingData.totalCount})</TabsTrigger>
+          <TabsTrigger value="TO_WATCH" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-para-assistir">Próximos Conteúdos ({toWatchData.totalCount})</TabsTrigger>
+          <TabsTrigger value="WATCHING" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-assistindo">Essa Semana ({watchingData.totalCount})</TabsTrigger>
           <TabsTrigger value="WATCHED" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-ja-assistido">Já Assistido ({watchedData.totalCount})</TabsTrigger>
           <TabsTrigger value="DROPPED" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-abandonados">Abandonados ({droppedData.totalCount})</TabsTrigger>
         </TabsList>

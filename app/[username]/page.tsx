@@ -1,49 +1,62 @@
-// app/[username]/page.tsx (Atualizado)
+// app/[username]/page.tsx (Corrigido)
 
-import prisma from '@/lib/prisma';
-import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
+import prisma from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import { Metadata } from "next";
 import { ProfileVisibility, UserRole, Prisma, MediaStatus, Media } from "@prisma/client"; 
-import { cn } from "@/lib/utils";
 
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Card, CardContent } from "@/components/ui/card";
+// --- [CORREÇÃO DE CAMINHOS DE IMPORT] ---
+// Garante que os caminhos para os componentes estão corretos
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Lock } from 'lucide-react';
-
 import FollowButton from "@/app/components/FollowButton";
 import UserListsClient from "@/app/components/UserListsClient";
-import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
 import PublicScheduleView from "@/app/components/PublicScheduleView";
+import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
+import { Badge } from "@/app/components/ui/badge";
+import {Lock } from "lucide-react"; // Adiciona o Lock
+// --- [FIM DA CORREÇÃO DE CAMINHOS] ---
 
-// Define o tipo que esperamos da query do Prisma
-type ProfileUserType = {
-    id: string;
-    username: string;
-    name: string | null;
-    image: string | null;
-    bio: string | null;
-    profileVisibility: ProfileVisibility;
-    role: UserRole;
-    twitchUsername: string | null; 
-    _count: {
-        followers: number;
-        following: number;
-    };
-    // --- [MUDANÇA AQUI] ---
-    // Adiciona os novos campos de visibilidade
-    showToWatchList: boolean;
-    showWatchingList: boolean;
-    showWatchedList: boolean;
-    showDroppedList: boolean;
-    // --- [FIM DA MUDANÇA] ---
-};
 
 // Tipos para as listas
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
 type InitialListData = { items: MediaStatusWithMedia[]; totalCount: number; };
 const PAGE_SIZE = 20;
+
+// Função de busca unificada
+async function fetchUserByUsername(username: string) {
+  const lowerCaseUsername = decodeURIComponent(username).toLowerCase();
+  
+  const user = await prisma.user.findUnique({
+    where: {
+      username: lowerCaseUsername, // Procura sempre em minúsculas
+    },
+    // Seleciona todos os campos necessários
+    select: {
+      id: true,
+      username: true, 
+      name: true,
+      image: true,
+      bio: true,
+      profileVisibility: true,
+      role: true, 
+      twitchUsername: true,
+      _count: {
+        select: {
+          followers: true,
+          following: true,
+        }
+      },
+      showToWatchList: true,
+      showWatchingList: true,
+      showWatchedList: true,
+      showDroppedList: true
+    }
+  });
+  return user;
+}
 
 // Função helper para buscar os dados de uma lista
 async function getInitialListData(
@@ -83,68 +96,75 @@ async function getInitialListData(
   }
 }
 
-// Força a página a ser dinâmica para refletir as mudanças de visibilidade
-export const revalidate = 0;
 
-export default async function PublicProfilePage({ params, searchParams }: { params: { username: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
+// generateMetadata (Atualizado)
+export async function generateMetadata({
+  params,
+}: {
+  params: { username: string };
+}): Promise<Metadata> {
+  const user = await fetchUserByUsername(params.username);
 
+  if (!user) {
+    return {
+      title: "Perfil Não Encontrado",
+    };
+  }
+
+  return {
+    title: `${user.name} (@${user.username})`,
+    description: user.bio || `Veja o perfil e o cronograma de ${user.name} no MeuCronograma.`,
+    openGraph: {
+      title: `${user.name} (@${user.username})`,
+      description: user.bio || "Veja o perfil e o cronograma.",
+      images: [
+        {
+          url: user.image || "/images/placeholder.png",
+          width: 800,
+          height: 600,
+          alt: user.name || user.username,
+        },
+      ],
+    },
+  };
+}
+
+// ProfilePage (Atualizado)
+export default async function ProfilePage({
+  params,
+  searchParams
+}: {
+  params: { username: string };
+  searchParams: { [key: string]: string | string[] | undefined }
+}) {
   const session = await getServerSession(authOptions);
-  const decodedUsername = decodeURIComponent(params.username);
-  
-  // 1. Buscar o utilizador do perfil (com os novos campos)
-  const profileUser = await prisma.user.findUnique({
-    where: { username: decodedUsername },
-    select: {
-      id: true,
-      username: true, 
-      name: true,
-      image: true,
-      bio: true,
-      profileVisibility: true,
-      role: true, 
-      twitchUsername: true,
-      _count: {
-        select: {
-          followers: true,
-          following: true,
-        }
-      },
-      // --- [MUDANÇA AQUI] ---
-      // Seleciona as flags de visibilidade do DB
-      showToWatchList: true,
-      showWatchingList: true,
-      showWatchedList: true,
-      showDroppedList: true
-      // --- [FIM DA MUDANÇA] ---
-    }
-  }) as ProfileUserType | null; 
+  const user = await fetchUserByUsername(params.username);
 
-  if (!profileUser) {
+  if (!user) {
     notFound();
   }
-  
-  // 2. Verificar se o visitante (sessão) está a seguir
+  // @ts-ignore
+  const loggedInUserId = session?.user?.id;
+  const isOwner = loggedInUserId === user.id;
+
   let isFollowing = false;
-  if (session?.user?.id) {
-    const followRelation = await prisma.follows.findFirst({
+  if (loggedInUserId && !isOwner) {
+    const follow = await prisma.follows.findUnique({
       where: {
-        followerId: session.user.id,
-        followingId: profileUser.id,
-      }
+        followerId_followingId: {
+          followerId: loggedInUserId,
+          followingId: user.id,
+        },
+      },
     });
-    isFollowing = !!followRelation;
+    isFollowing = !!follow;
   }
-  
-  // 3. Verificar Permissões de Privacidade
-  const isOwner = session?.user?.id === profileUser.id;
-  const canViewProfile = 
-    profileUser.profileVisibility === ProfileVisibility.PUBLIC || 
-    isOwner || 
-    (profileUser.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY && isFollowing);
 
-  const fallbackLetter = (profileUser.name || profileUser.username).charAt(0).toUpperCase();
+  const isPrivate = user.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY;
+  const canViewProfile = !isPrivate || isOwner || isFollowing;
+  const fallbackLetter = (user.name || user.username).charAt(0).toUpperCase();
 
-  // 4. Selecionar a aba ativa
+  // Selecionar a aba ativa
   const defaultTab = "cronograma";
   const allowedTabs = ["cronograma", "listas"];
   let activeTab = defaultTab;
@@ -153,7 +173,7 @@ export default async function PublicProfilePage({ params, searchParams }: { para
     activeTab = searchParams.tab;
   }
 
-  // 5. Buscar os dados das listas (agora verifica a visibilidade)
+  // Buscar os dados das listas (agora verifica a visibilidade)
   let initialLists: Record<string, InitialListData> = {
     toWatch: { items: [], totalCount: 0 },
     watching: { items: [], totalCount: 0 },
@@ -163,10 +183,10 @@ export default async function PublicProfilePage({ params, searchParams }: { para
 
   if (canViewProfile) {
     const [toWatchData, watchingData, watchedData, droppedData] = await Promise.all([
-      getInitialListData(profileUser.id, "TO_WATCH", profileUser.showToWatchList, isOwner),
-      getInitialListData(profileUser.id, "WATCHING", profileUser.showWatchingList, isOwner),
-      getInitialListData(profileUser.id, "WATCHED", profileUser.showWatchedList, isOwner),
-      getInitialListData(profileUser.id, "DROPPED", profileUser.showDroppedList, isOwner),
+      getInitialListData(user.id, "TO_WATCH", user.showToWatchList, isOwner),
+      getInitialListData(user.id, "WATCHING", user.showWatchingList, isOwner),
+      getInitialListData(user.id, "WATCHED", user.showWatchedList, isOwner),
+      getInitialListData(user.id, "DROPPED", user.showDroppedList, isOwner),
     ]);
     initialLists = {
       toWatch: toWatchData,
@@ -176,97 +196,89 @@ export default async function PublicProfilePage({ params, searchParams }: { para
     };
   }
 
+
   return (
-    <div className={cn("bg-background text-foreground")}>
-      <div className={cn(
-        "mx-auto max-w-3xl px-4 py-8 md:px-6 md:py-10" // Layout compacto e centrado
-      )}>
-
-        {/* Cabeçalho (Sempre visível) */}
-        <div className="text-center mb-12">
-            
-            <Avatar className="w-24 h-24 mx-auto mb-4 border-2 border-muted shadow-md">
-              <AvatarImage src={profileUser.image || undefined} alt={profileUser.username} />
-              <AvatarFallback className="text-4xl">{fallbackLetter}</AvatarFallback>
-            </Avatar>
-            
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2 flex items-center justify-center gap-3 flex-wrap">
-              <span>{profileUser.name || profileUser.username}</span>
-              {profileUser.role === UserRole.CREATOR && profileUser.twitchUsername && (
-                <LiveStatusIndicator username={decodedUsername} />
-              )}
-            </h1>
-
-            {profileUser.bio && (
-              <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-                {profileUser.bio}
-              </p>
+    <div className="mx-auto max-w-5xl p-4 md:p-6">
+      {/* Header do Perfil */}
+      <div className="flex flex-col sm:flex-row items-center gap-6 mb-8">
+        <Avatar className="h-28 w-28 border-4 border-muted">
+          <AvatarImage src={user.image || undefined} alt={user.username} />
+          <AvatarFallback className="text-4xl">{fallbackLetter}</AvatarFallback>
+        </Avatar>
+        <div className="flex-1 space-y-2 text-center sm:text-left">
+          <div className="flex items-center gap-3 justify-center sm:justify-start">
+            <h1 className="text-3xl font-bold">{user.name}</h1>
+            {user.role === UserRole.CREATOR && (
+              <Badge variant="outline" className="text-blue-500 border-blue-500">
+                Criador
+              </Badge>
             )}
-
-            {/* Contagens e Botão de Seguir */}
-            <div className="flex justify-center items-center gap-6 mt-6">
-              <div className="text-center">
-                <span className="text-xl font-bold block">{profileUser._count.followers}</span>
-                <span className="text-sm text-muted-foreground">Seguidores</span>
-              </div>
-              <div className="text-center">
-                <span className="text-xl font-bold block">{profileUser._count.following}</span>
-                <span className="text-sm text-muted-foreground">A Seguir</span>
-              </div>
-              
-              {session && !isOwner && (
-                <FollowButton
-                  username={decodedUsername} 
-                  initialIsFollowing={isFollowing}
-                  disabled={profileUser.role !== UserRole.CREATOR}
-                />
-              )}
+            {user.twitchUsername && <LiveStatusIndicator username={user.username} />}
+          </div>
+          <p className="text-lg text-muted-foreground">@{user.username}</p>
+          {user.bio && <p className="text-md text-foreground max-w-lg">{user.bio}</p>}
+          <div className="flex gap-4 justify-center sm:justify-start pt-2">
+            <div className="text-center">
+              <span className="font-bold">{user._count.followers}</span>
+              <span className="text-muted-foreground ml-1">Seguidores</span>
             </div>
-        </div>
-
-        {/* Conteúdo Principal (Listas e Cronograma) */}
-        {canViewProfile ? (
-          <Tabs defaultValue={activeTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto mb-8">
-              <TabsTrigger value="cronograma">Cronograma</TabsTrigger>
-              <TabsTrigger value="listas">Listas</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="cronograma">
-              <PublicScheduleView username={decodedUsername} />
-            </TabsContent>
-
-            <TabsContent value="listas">
-              <UserListsClient
-                username={decodedUsername}
-                initialToWatch={initialLists.toWatch}
-                initialWatching={initialLists.watching}
-                initialWatched={initialLists.watched}
-                initialDropped={initialLists.dropped}
-                // --- [MUDANÇA AQUI] ---
-                // Passa as flags de visibilidade (já com a lógica 'isOwner' aplicada)
-                showToWatch={profileUser.showToWatchList || isOwner}
-                showWatching={profileUser.showWatchingList || isOwner}
-                showWatched={profileUser.showWatchedList || isOwner}
-                showDropped={profileUser.showDroppedList || isOwner}
-                // --- [FIM DA MUDANÇA] ---
+            <div className="text-center">
+              <span className="font-bold">{user._count.following}</span>
+              <span className="text-muted-foreground ml-1">A Seguir</span>
+            </div>
+          </div>
+          <div className="pt-2 flex justify-center sm:justify-start">
+            
+            {/* --- [INÍCIO DA CORREÇÃO] --- */}
+            {/* O FollowButton espera o 'username' do perfil, não os IDs */}
+            {!isOwner && loggedInUserId && (
+              <FollowButton
+                username={user.username}
+                initialIsFollowing={isFollowing}
               />
-            </TabsContent>
+            )}
+            {/* --- [FIM DA CORREÇÃO] --- */}
 
-          </Tabs>
-        ) : (
-          // Ecrã de Perfil Privado
-          <Card className="max-w-md mx-auto mt-12">
-            <CardContent className="p-8 text-center">
-              <Lock className="w-16 h-16 text-muted-foreground mx-auto mb-6" />
-              <h2 className="text-2xl font-semibold mb-2">Perfil Privado</h2>
-              <p className="text-muted-foreground">
-                Este perfil é privado. Siga <span className="font-bold">{profileUser.username}</span> para ver o seu cronograma e listas.
-              </p>
-            </CardContent>
-          </Card>
-        )}
+          </div>
+        </div>
       </div>
+
+      {/* Conteúdo (Listas e Cronograma) */}
+      {!canViewProfile ? (
+        <div className="text-center py-20">
+          <Lock className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+          <h2 className="text-xl font-semibold">Este perfil é privado</h2>
+          <p className="text-muted-foreground">
+            Siga este utilizador para ver o seu cronograma e listas.
+          </p>
+        </div>
+      ) : (
+        <Tabs defaultValue={activeTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="cronograma">Cronograma</TabsTrigger>
+            <TabsTrigger value="listas">Listas</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="cronograma" className="mt-6">
+            <PublicScheduleView username={user.username} />
+          </TabsContent>
+          
+          <TabsContent value="listas" className="mt-6">
+            <UserListsClient
+              username={user.username}
+              initialToWatch={initialLists.toWatch}
+              initialWatching={initialLists.watching}
+              initialWatched={initialLists.watched}
+              initialDropped={initialLists.dropped}
+              // Passa as flags de visibilidade (já com a lógica 'isOwner' aplicada)
+              showToWatch={user.showToWatchList || isOwner}
+              showWatching={user.showWatchingList || isOwner}
+              showWatched={user.showWatchedList || isOwner}
+              showDropped={user.showDroppedList || isOwner}
+            />
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }

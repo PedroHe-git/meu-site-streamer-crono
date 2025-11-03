@@ -13,6 +13,7 @@ import { useSession, signIn } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility } from "@prisma/client";
 import Image from "next/image"; 
+import { Input } from "@/components/ui/input";
 
 // 2. Importações da Biblioteca de Corte
 import ReactCrop, { 
@@ -62,7 +63,7 @@ const STEP_PERFIL: Step = {
 };
 const STEP_LISTAS: Step = {
   target: '#tour-step-2-listas-busca',
-  content: 'Este é o seu painel principal. Pesquise filmes, animes, séries ou adicione manualmente, e organize-as em listas: "Para Assistir", "Assistindo".',
+  content: 'Este é o seu painel principal. Pesquise filmes, animes, séries ou adicione manualmente, e organize-as em listas: "Próximos Conteúdos", "Essa Semana".',
   placement: 'top',
 };
 const STEP_LISTAS_PARA_ASSISTIR: Step = {
@@ -146,6 +147,7 @@ export default function DashboardPage() {
   // Estados de Definições de Perfil
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
+  const [displayName, setDisplayName] = useState(session?.user?.name || "");
   const [bio, setBio] = useState(session?.user?.bio || "");
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -218,6 +220,7 @@ export default function DashboardPage() {
   // Carrega dados da sessão para os estados
   useEffect(() => {
     if (session?.user) {
+      setDisplayName(session.user.name || "");
       setBio(session.user.bio || "");
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
       
@@ -733,11 +736,11 @@ export default function DashboardPage() {
                             <p className="text-xs text-muted-foreground">Escolha quais listas são visíveis na sua página pública.</p>
                             <div className="space-y-3 pt-2">
                               <div className="flex items-center justify-between rounded-md border p-3">
-                                <Label htmlFor="showToWatch-skeleton" className="text-sm font-medium cursor-pointer">Para Assistir</Label>
+                                <Label htmlFor="showToWatch-skeleton" className="text-sm font-medium cursor-pointer">Próximos Conteúdos</Label>
                                 <Switch id="showToWatch-skeleton" checked={showToWatch} onCheckedChange={setShowToWatch} disabled={isSavingSettings} />
                               </div>
                               <div className="flex items-center justify-between rounded-md border p-3">
-                                <Label htmlFor="showWatching-skeleton" className="text-sm font-medium cursor-pointer">Assistindo</Label>
+                                <Label htmlFor="showWatching-skeleton" className="text-sm font-medium cursor-pointer">Essa Semana</Label>
                                 <Switch id="showWatching-skeleton" checked={showWatching} onCheckedChange={setShowWatching} disabled={isSavingSettings} />
                               </div>
                               <div className="flex items-center justify-between rounded-md border p-3">
@@ -910,6 +913,20 @@ export default function DashboardPage() {
                               <p className="text-xs text-blue-600 font-medium">Nova imagem pronta. Clique em &quot;Guardar&quot;.</p>
                             )}
                           </div>
+
+                          <div className="space-y-1">
+                              <Label htmlFor="profile-name-skeleton" className="text-sm font-medium text-foreground">Nome de Exibição</Label>
+                              <Input 
+                                id="profile-name-skeleton" 
+                                value={displayName} 
+                                onChange={(e) => setDisplayName(e.target.value)} 
+                                placeholder="O seu nome público" 
+                                maxLength={50} 
+                                className="placeholder:text-muted-foreground" 
+                                disabled={isSavingSettings} 
+                              />
+                              <p className="text-xs text-muted-foreground">@{session?.user?.username} (não pode ser alterado)</p>
+                          </div>
                           
                           {/* Bio */}
                           <div className="space-y-1">
@@ -984,11 +1001,11 @@ export default function DashboardPage() {
                             <p className="text-xs text-muted-foreground">Escolha quais listas são visíveis na sua página pública.</p>
                             <div className="space-y-3 pt-2">
                               <div className="flex items-center justify-between rounded-md border p-3">
-                                <Label htmlFor="showToWatch" className="text-sm font-medium cursor-pointer">Para Assistir</Label>
+                                <Label htmlFor="showToWatch" className="text-sm font-medium cursor-pointer">Próximos Conteúdos</Label>
                                 <Switch id="showToWatch" checked={showToWatch} onCheckedChange={setShowToWatch} disabled={isSavingSettings} />
                               </div>
                               <div className="flex items-center justify-between rounded-md border p-3">
-                                <Label htmlFor="showWatching" className="text-sm font-medium cursor-pointer">Assistindo</Label>
+                                <Label htmlFor="showWatching" className="text-sm font-medium cursor-pointer">Essa Semana</Label>
                                 <Switch id="showWatching" checked={showWatching} onCheckedChange={setShowWatching} disabled={isSavingSettings} />
                               </div>
                               <div className="flex items-center justify-between rounded-md border p-3">

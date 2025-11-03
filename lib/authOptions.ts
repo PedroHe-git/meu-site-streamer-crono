@@ -1,8 +1,7 @@
-// lib/authOptions.ts (Corrigido para o build)
+// lib/authOptions.ts (FINALMENTE CORRIGIDO)
 
 import { AuthOptions } from "next-auth";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-// Importamos o Enum 'UserRole' do Prisma
 import { PrismaClient, UserRole } from "@prisma/client";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
@@ -22,17 +21,12 @@ export const authOptions: AuthOptions = {
       
       profile(profile) {
         return {
-          // Campos padrão do NextAuth
           id: profile.sub, 
           name: profile.preferred_username, 
           email: profile.email,
           image: profile.picture, 
-          
-          // Campos personalizados obrigatórios
-          // --- [INÍCIO DA CORREÇÃO] ---
-          role: UserRole.VISITOR, // Usamos o Enum correto
-          // --- [FIM DA CORREÇÃO] ---
-          username: profile.preferred_username, 
+          role: UserRole.VISITOR, 
+          username: profile.preferred_username.toLowerCase(),
           twitchUsername: profile.preferred_username, 
           bio: null, 
           profileVisibility: 'PUBLIC', 
@@ -50,17 +44,12 @@ export const authOptions: AuthOptions = {
       
       profile(profile) {
         return {
-          // Campos padrão do NextAuth
           id: profile.sub,
           name: profile.name,
           email: profile.email,
           image: profile.picture,
-
-          // Campos personalizados obrigatórios
-          // --- [INÍCIO DA CORREÇÃO] ---
-          role: UserRole.VISITOR, // Usamos o Enum correto
-          // --- [FIM DA CORREÇÃO] ---
-          username: profile.email.split('@')[0], 
+          role: UserRole.VISITOR,
+          username: profile.email.split('@')[0].toLowerCase(), 
           twitchUsername: null, 
           bio: null, 
           profileVisibility: 'PUBLIC', 
@@ -96,7 +85,7 @@ export const authOptions: AuthOptions = {
         if (!isCorrectPassword) {
           throw new Error("Credenciais inválidas");
         }
-        return user; // Retorna o objeto user completo
+        return user; 
       },
     }),
   ],
@@ -104,10 +93,10 @@ export const authOptions: AuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
-    // Todos os outros callbacks estão corretos como os deixámos.
     async signIn({ user, account, profile }) {
       
       if (account?.provider === "credentials") {
+        // @ts-ignore
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!dbUser?.emailVerified) {
            console.log("Tentativa de login com email não verificado:", user.email);
@@ -125,9 +114,11 @@ export const authOptions: AuthOptions = {
            await prisma.user.update({
              where: { id: existingUser.id },
              data: {
+               // @ts-ignore
                twitchUsername: (profile as any)?.preferred_username,
              }
            });
+           // @ts-ignore
            user.twitchUsername = (profile as any)?.preferred_username;
         }
       }
@@ -139,29 +130,53 @@ export const authOptions: AuthOptions = {
       // 1. No login inicial (objeto 'user' está presente)
       if (user) {
         token.id = user.id;
+        token.name = user.name ?? null; // Converte 'undefined' para 'null'
+        // @ts-ignore
         token.role = user.role;
+        // @ts-ignore
         token.username = user.username;
-        token.bio = user.bio;
+        // @ts-ignore
+        token.bio = user.bio ?? null; // Converte 'undefined' para 'null'
+        // @ts-ignore
         token.profileVisibility = user.profileVisibility;
-        token.twitchUsername = user.twitchUsername;
+        // @ts-ignore
+        token.twitchUsername = user.twitchUsername ?? null; // Converte 'undefined' para 'null'
+        // @ts-ignore
         token.showToWatchList = user.showToWatchList;
+        // @ts-ignore
         token.showWatchingList = user.showWatchingList;
+        // @ts-ignore
         token.showWatchedList = user.showWatchedList;
+        // @ts-ignore
         token.showDroppedList = user.showDroppedList;
-        token.picture = user.image; 
+        // @ts-ignore
+        token.picture = user.image ?? null; // Converte 'undefined' para 'null'
       }
 
       // 2. Ao chamar updateSession() (trigger é "update")
       if (trigger === "update" && session) {
         
+        // @ts-ignore
         if (session.user) {
-          token.bio = session.user.bio;
+          // --- [INÍCIO DAS CORREÇÕES] ---
+          // Temos de usar '?? null' para garantir que 'undefined' não quebre os tipos do token
+          // @ts-ignore
+          token.name = session.user.name ?? null;
+          // @ts-ignore
+          token.bio = session.user.bio ?? null;
+          // @ts-ignore
           token.profileVisibility = session.user.profileVisibility;
+          // @ts-ignore
           token.showToWatchList = session.user.showToWatchList;
+          // @ts-ignore
           token.showWatchingList = session.user.showWatchingList;
-          token.showWatchedList = session.showWatchedList;
-          token.showDroppedList = session.showDroppedList;
-          token.picture = session.user.image; 
+          // @ts-ignore
+          token.showWatchedList = session.user.showWatchedList;
+          // @ts-ignore
+          token.showDroppedList = session.user.showDroppedList;
+          // @ts-ignore
+          token.picture = session.user.image ?? null; 
+          // --- [FIM DAS CORREÇÕES] ---
         }
       }
       
@@ -171,16 +186,29 @@ export const authOptions: AuthOptions = {
     async session({ session, token }) {
       // Passa os dados do TOKEN para a SESSÃO
       if (token) {
+        // @ts-ignore
+        session.user.name = token.name; 
+        // @ts-ignore
         session.user.id = token.id;
+        // @ts-ignore
         session.user.role = token.role;
+        // @ts-ignore
         session.user.username = token.username;
+        // @ts-ignore
         session.user.bio = token.bio;
+        // @ts-ignore
         session.user.profileVisibility = token.profileVisibility;
+        // @ts-ignore
         session.user.twitchUsername = token.twitchUsername;
+        // @ts-ignore
         session.user.showToWatchList = token.showToWatchList;
+        // @ts-ignore
         session.user.showWatchingList = token.showWatchingList;
+        // @ts-ignore
         session.user.showWatchedList = token.showWatchedList;
+        // @ts-ignore
         session.user.showDroppedList = token.showDroppedList;
+        // @ts-ignore
         session.user.image = token.picture; 
       }
       return session;
