@@ -1,17 +1,17 @@
-// app/api/users/[username]/lists/route.ts (Atualizado com Lógica de Privacidade)
+// app/api/users/[username]/lists/route.ts (Atualizado)
 
 import { NextResponse, NextRequest } from "next/server";
 import prisma from '@/lib/prisma';
-// --- Importações Adicionadas ---
-import { Prisma, ProfileVisibility } from "@prisma/client"; // Importa ProfileVisibility
-import { getServerSession } from "next-auth/next"; // Importa getServerSession
-import { authOptions } from "@/lib/authOptions"; // Importa authOptions
-// --- Fim das Importações ---
+import { Prisma, ProfileVisibility } from "@prisma/client";
+import { getServerSession } from "next-auth/next"; 
+import { authOptions } from "@/lib/authOptions"; 
 
 export const runtime = 'nodejs';
-export const revalidate = 0;
+export const revalidate = 0; // Força esta API a ser dinâmica
+
 // Define os tipos de status válidos
 const validStatuses = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];
+type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 
 // GET /api/users/{username}/lists?status=TO_WATCH&page=1&pageSize=20&searchTerm=...
 export async function GET(
@@ -24,48 +24,54 @@ export async function GET(
   }
 
   try {
-    // --- 1. Obter sessão do visitante ---
+    // 1. Obter sessão do visitante
     const session = await getServerSession(authOptions);
     // @ts-ignore
     const visitorId = session?.user?.id;
 
-    // --- 2. Encontra o utilizador do perfil e sua visibilidade ---
-    const user = await prisma.user.findUnique({
+    // 2. Encontra o utilizador do perfil e as suas NOVAS flags de visibilidade
+    const profileUser = await prisma.user.findUnique({
       where: { username: decodeURIComponent(username) },
-      select: { id: true, profileVisibility: true } // <-- Seleciona o novo campo
+      select: { 
+        id: true, 
+        profileVisibility: true,
+        // --- [MUDANÇA AQUI] ---
+        showToWatchList: true,
+        showWatchingList: true,
+        showWatchedList: true,
+        showDroppedList: true
+        // --- [FIM DA MUDANÇA] ---
+      } 
     });
 
-    if (!user) {
+    if (!profileUser) {
       return new NextResponse(JSON.stringify({ error: "Utilizador não encontrado" }), { status: 404 });
     }
 
-    // --- 3. Verificar Permissão de Visualização ---
-    const isPublic = user.profileVisibility === ProfileVisibility.PUBLIC;
-    const isOwnProfile = visitorId === user.id;
+    // 3. Verificar Permissão de Visualização (Geral do Perfil)
+    const isPublic = profileUser.profileVisibility === ProfileVisibility.PUBLIC;
+    const isOwnProfile = visitorId === profileUser.id;
     let isFollowing = false;
 
-    // Só verifica se segue se o visitante estiver logado E não for o dono do perfil
     if (visitorId && !isOwnProfile) {
       const followRecord = await prisma.follows.findUnique({
         where: {
           followerId_followingId: {
             followerId: visitorId,
-            followingId: user.id,
+            followingId: profileUser.id,
           },
         },
       });
       isFollowing = !!followRecord;
     }
 
-    // Verifica se o visitante pode ver
-    const canView = isPublic || isOwnProfile || (visitorId && isFollowing);
+    const canViewProfile = isPublic || isOwnProfile || (visitorId && isFollowing);
 
-    if (!canView) {
-      // Se não puder, retorna erro 403 (Proibido)
+    if (!canViewProfile) {
       return new NextResponse(JSON.stringify({ error: "Este perfil é privado." }), { status: 403 });
     }
 
-    // --- 4. Se puder ver, continua com a lógica original da API ---
+    // 4. Se puder ver, continua...
     
     // Lê os parâmetros da URL
     const { searchParams } = new URL(request.url);
@@ -78,16 +84,36 @@ export async function GET(
     if (!statusParam || !validStatuses.includes(statusParam)) {
        return new NextResponse(JSON.stringify({ error: "Status inválido ou não especificado" }), { status: 400 });
     }
-    const statusFilter = statusParam as Prisma.EnumMovieStatusTypeFilter['equals'];
+    const statusFilter = statusParam as StatusKey;
 
     // Define paginação
     const page = pageParam ? parseInt(pageParam, 10) : 1;
-    const pageSize = pageSizeParam ? parseInt(pageSizeParam, 10) : 20; // Padrão
+    const pageSize = pageSizeParam ? parseInt(pageSizeParam, 10) : 20; 
     const skip = (page - 1) * pageSize;
+
+    // --- [MUDANÇA AQUI: Aplicar Regra de Visibilidade da Lista] ---
+    const listVisibilityMap = {
+      TO_WATCH: profileUser.showToWatchList,
+      WATCHING: profileUser.showWatchingList,
+      WATCHED: profileUser.showWatchedList,
+      DROPPED: profileUser.showDroppedList,
+    };
+
+    // Se a lista específica estiver oculta E o visitante não for o dono
+    if (!listVisibilityMap[statusFilter] && !isOwnProfile) {
+      // Retorna uma resposta vazia, como se a lista não tivesse itens.
+      return NextResponse.json({
+        items: [],
+        totalCount: 0,
+        page,
+        pageSize
+      });
+    }
+    // --- [FIM DA MUDANÇA] ---
 
     // Condição de busca (WHERE)
     const whereCondition: Prisma.MediaStatusWhereInput = {
-      userId: user.id,
+      userId: profileUser.id,
       status: statusFilter,
     };
     if (searchTerm) {
@@ -103,7 +129,7 @@ export async function GET(
     const [items, totalCount] = await Promise.all([
       prisma.mediaStatus.findMany({
         where: whereCondition,
-        include: { media: true }, // Inclui a média para mostrar detalhes
+        include: { media: true }, 
         skip: skip,
         take: pageSize,
         orderBy: { media: { title: 'asc' } }

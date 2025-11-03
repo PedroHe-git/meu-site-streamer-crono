@@ -1,11 +1,9 @@
-// app/[username]/page.tsx
+// app/[username]/page.tsx (Atualizado)
 
 import prisma from '@/lib/prisma';
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
-// --- [MUDANÇA 1] ---
-// Importa Prisma e tipos necessários para a query
 import { ProfileVisibility, UserRole, Prisma, MediaStatus, Media } from "@prisma/client"; 
 import { cn } from "@/lib/utils";
 
@@ -19,30 +17,47 @@ import UserListsClient from "@/app/components/UserListsClient";
 import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
 import PublicScheduleView from "@/app/components/PublicScheduleView";
 
-export const revalidate = 0;
+// Define o tipo que esperamos da query do Prisma
+type ProfileUserType = {
+    id: string;
+    username: string;
+    name: string | null;
+    image: string | null;
+    bio: string | null;
+    profileVisibility: ProfileVisibility;
+    role: UserRole;
+    twitchUsername: string | null; 
+    _count: {
+        followers: number;
+        following: number;
+    };
+    // --- [MUDANÇA AQUI] ---
+    // Adiciona os novos campos de visibilidade
+    showToWatchList: boolean;
+    showWatchingList: boolean;
+    showWatchedList: boolean;
+    showDroppedList: boolean;
+    // --- [FIM DA MUDANÇA] ---
+};
 
-type PublicProfileProps = {
-  username: string;
-  name: string | null;
-  image: string | null;
-  bio: string | null;
-  profileVisibility: ProfileVisibility;
-  role: UserRole;
-  followersCount: number;
-  followingCount: number;
-}
-
-// --- [MUDANÇA 2] ---
-
-// 1. Definir tipos de dados que o UserListsClient espera
+// Tipos para as listas
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
 type InitialListData = { items: MediaStatusWithMedia[]; totalCount: number; };
-
-// 2. Definir o tamanho da página inicial
 const PAGE_SIZE = 20;
 
-// 3. Função helper para buscar os dados de uma lista
-async function getInitialListData(userId: string, status: Prisma.EnumMovieStatusTypeFilter['equals']): Promise<InitialListData> {
+// Função helper para buscar os dados de uma lista
+async function getInitialListData(
+  userId: string, 
+  status: Prisma.EnumMovieStatusTypeFilter['equals'],
+  isVisible: boolean, // Flag de visibilidade
+  isOwner: boolean     // Flag se é o dono
+): Promise<InitialListData> {
+  
+  // Se a lista não for visível E não for o dono a ver, retorna vazio
+  if (!isVisible && !isOwner) {
+    return { items: [], totalCount: 0 };
+  }
+
   const whereCondition: Prisma.MediaStatusWhereInput = {
     userId: userId,
     status: status,
@@ -64,19 +79,19 @@ async function getInitialListData(userId: string, status: Prisma.EnumMovieStatus
     return { items, totalCount };
   } catch (error) {
     console.error(`Falha ao buscar lista inicial ${status}:`, error);
-    // Retorna vazio em caso de erro
     return { items: [], totalCount: 0 };
   }
 }
-// --- [FIM DA MUDANÇA 2] ---
 
+// Força a página a ser dinâmica para refletir as mudanças de visibilidade
+export const revalidate = 0;
 
 export default async function PublicProfilePage({ params, searchParams }: { params: { username: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
 
   const session = await getServerSession(authOptions);
   const decodedUsername = decodeURIComponent(params.username);
   
-  // 1. Buscar o utilizador do perfil e contagens
+  // 1. Buscar o utilizador do perfil (com os novos campos)
   const profileUser = await prisma.user.findUnique({
     where: { username: decodedUsername },
     select: {
@@ -87,21 +102,28 @@ export default async function PublicProfilePage({ params, searchParams }: { para
       bio: true,
       profileVisibility: true,
       role: true, 
-      twitchUsername: true, // <-- Adicionado para o LiveStatusIndicator
+      twitchUsername: true,
       _count: {
         select: {
           followers: true,
           following: true,
         }
-      }
+      },
+      // --- [MUDANÇA AQUI] ---
+      // Seleciona as flags de visibilidade do DB
+      showToWatchList: true,
+      showWatchingList: true,
+      showWatchedList: true,
+      showDroppedList: true
+      // --- [FIM DA MUDANÇA] ---
     }
-  });
+  }) as ProfileUserType | null; 
 
   if (!profileUser) {
     notFound();
   }
   
-  // 2. Verificar se o visitante (sessão) está a seguir o utilizador do perfil
+  // 2. Verificar se o visitante (sessão) está a seguir
   let isFollowing = false;
   if (session?.user?.id) {
     const followRelation = await prisma.follows.findFirst({
@@ -122,7 +144,7 @@ export default async function PublicProfilePage({ params, searchParams }: { para
 
   const fallbackLetter = (profileUser.name || profileUser.username).charAt(0).toUpperCase();
 
-  // 4. Selecionar a aba ativa (padrão é 'cronograma')
+  // 4. Selecionar a aba ativa
   const defaultTab = "cronograma";
   const allowedTabs = ["cronograma", "listas"];
   let activeTab = defaultTab;
@@ -131,8 +153,7 @@ export default async function PublicProfilePage({ params, searchParams }: { para
     activeTab = searchParams.tab;
   }
 
-  // --- [MUDANÇA 3] ---
-  // 5. Buscar os dados das listas SE o perfil puder ser visto
+  // 5. Buscar os dados das listas (agora verifica a visibilidade)
   let initialLists: Record<string, InitialListData> = {
     toWatch: { items: [], totalCount: 0 },
     watching: { items: [], totalCount: 0 },
@@ -141,12 +162,11 @@ export default async function PublicProfilePage({ params, searchParams }: { para
   };
 
   if (canViewProfile) {
-    // Usamos Promise.all para buscar todas as listas em paralelo
     const [toWatchData, watchingData, watchedData, droppedData] = await Promise.all([
-      getInitialListData(profileUser.id, "TO_WATCH"),
-      getInitialListData(profileUser.id, "WATCHING"),
-      getInitialListData(profileUser.id, "WATCHED"),
-      getInitialListData(profileUser.id, "DROPPED"),
+      getInitialListData(profileUser.id, "TO_WATCH", profileUser.showToWatchList, isOwner),
+      getInitialListData(profileUser.id, "WATCHING", profileUser.showWatchingList, isOwner),
+      getInitialListData(profileUser.id, "WATCHED", profileUser.showWatchedList, isOwner),
+      getInitialListData(profileUser.id, "DROPPED", profileUser.showDroppedList, isOwner),
     ]);
     initialLists = {
       toWatch: toWatchData,
@@ -155,14 +175,11 @@ export default async function PublicProfilePage({ params, searchParams }: { para
       dropped: droppedData,
     };
   }
-  // --- [FIM DA MUDANÇA 3] ---
-
 
   return (
     <div className={cn("bg-background text-foreground")}>
       <div className={cn(
-        "container mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-10",
-        "transition-all duration-300 ease-in-out"
+        "mx-auto max-w-3xl px-4 py-8 md:px-6 md:py-10" // Layout compacto e centrado
       )}>
 
         {/* Cabeçalho (Sempre visível) */}
@@ -175,7 +192,6 @@ export default async function PublicProfilePage({ params, searchParams }: { para
             
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2 flex items-center justify-center gap-3 flex-wrap">
               <span>{profileUser.name || profileUser.username}</span>
-              {/* [MUDANÇA 4] Só renderiza se for CREATOR E tiver um twitchUsername vinculado */}
               {profileUser.role === UserRole.CREATOR && profileUser.twitchUsername && (
                 <LiveStatusIndicator username={decodedUsername} />
               )}
@@ -216,13 +232,10 @@ export default async function PublicProfilePage({ params, searchParams }: { para
               <TabsTrigger value="listas">Listas</TabsTrigger>
             </TabsList>
 
-            {/* Conteúdo da Aba "Cronograma" */}
             <TabsContent value="cronograma">
               <PublicScheduleView username={decodedUsername} />
             </TabsContent>
 
-            {/* --- [MUDANÇA 5] --- */}
-            {/* Conteúdo da Aba "Listas" */}
             <TabsContent value="listas">
               <UserListsClient
                 username={decodedUsername}
@@ -230,9 +243,15 @@ export default async function PublicProfilePage({ params, searchParams }: { para
                 initialWatching={initialLists.watching}
                 initialWatched={initialLists.watched}
                 initialDropped={initialLists.dropped}
+                // --- [MUDANÇA AQUI] ---
+                // Passa as flags de visibilidade (já com a lógica 'isOwner' aplicada)
+                showToWatch={profileUser.showToWatchList || isOwner}
+                showWatching={profileUser.showWatchingList || isOwner}
+                showWatched={profileUser.showWatchedList || isOwner}
+                showDropped={profileUser.showDroppedList || isOwner}
+                // --- [FIM DA MUDANÇA] ---
               />
             </TabsContent>
-            {/* --- [FIM DA MUDANÇA 5] --- */}
 
           </Tabs>
         ) : (

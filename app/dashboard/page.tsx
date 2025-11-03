@@ -1,3 +1,5 @@
+// app/dashboard/page.tsx (Atualizado)
+
 "use client";
 
 // 1. Importações de Hooks e Tipos
@@ -6,7 +8,7 @@ import {
   ChangeEvent, SyntheticEvent 
 } from "react";
 import { Step, STATUS, CallBackProps } from 'react-joyride'; 
-import { useSession, signIn } from "next-auth/react"; // <-- [ATUALIZADO] signIn adicionado
+import { useSession, signIn } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility } from "@prisma/client";
 import Image from "next/image"; 
@@ -24,7 +26,7 @@ import 'react-image-crop/dist/ReactCrop.css';
 import MediaSearch from "./MediaSearch";
 import MyLists from "./MyLists";
 import ScheduleManager from "./ScheduleManager";
-import FullCalendar from "./FullCalendar"; // <-- [ADICIONADO] Calendário
+import FullCalendar from "./FullCalendar"; 
 
 // 4. Importações de UI (shadcn)
 import { Label } from "@/components/ui/label";
@@ -35,6 +37,9 @@ import AppTour from '@/app/components/AppTour';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; 
 import { Pen } from "lucide-react"; 
+// --- [MUDANÇA 1: Importar Switch] ---
+import { Switch } from "@/components/ui/switch";
+// --- [FIM DA MUDANÇA 1] ---
 import { 
   Dialog, 
   DialogContent, 
@@ -44,13 +49,13 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 
-// Tipagem
+// ... (Tipagem e Passos do Tour - sem mudanças) ...
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
 type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; page: number; pageSize: number; };
 
-// Passos do Tour (Pode adicionar um para o calendário se quiser)
+// ... (Passos do Tour) ...
 const STEP_PERFIL: Step = {
   target: '#tour-step-1-perfil',
   content: 'Bem-vindo! Aqui pode personalizar a sua página com um avatar, bio e definir a sua privacidade.',
@@ -91,15 +96,13 @@ const STEP_LISTA_PROX_AGENDA: Step = {
   content: 'Gerencie seus itens agendados. Ao assistir clique em CONCLUÍDO ou VISTO! Caso não conseguiu ver clique em REMOVER',
   placement: 'top',
 };
-// [OPCIONAL] Novo passo do Tour para o Calendário
 const STEP_CALENDARIO: Step = {
   target: '#tour-step-4-calendario',
   content: 'Aqui tem uma visão completa do seu cronograma, mostrando todos os seus agendamentos passados e futuros.',
   placement: 'top',
 };
 
-
-// --- Função de ajuda para centrar o corte ---
+// ... (Função centerAspectCrop - sem mudanças) ...
 function centerAspectCrop(
   mediaWidth: number,
   mediaHeight: number,
@@ -124,14 +127,14 @@ function centerAspectCrop(
 export default function DashboardPage() {
   const { data: session, status, update: updateSession } = useSession();
 
-  // Estados das Listas
+  // ... (Estados das Listas - sem mudanças) ...
   const [toWatchData, setToWatchData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchingData, setWatchingData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [watchedData, setWatchedData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [droppedData, setDroppedData] = useState<PaginatedListData>({ items: [], totalCount: 0, page: 1, pageSize: 20 });
   const [scheduleItems, setScheduleItems] = useState<ScheduleItemWithMedia[]>([]);
   
-  // Estados de UI e Paginação
+  // ... (Estados de UI e Paginação - sem mudanças) ...
   const [currentPage, setCurrentPage] = useState<Record<StatusKey, number>>({ TO_WATCH: 1, WATCHING: 1, WATCHED: 1, DROPPED: 1, });
   const [searchTerm, setSearchTerm] = useState("");
   const [pageSize, setPageSize] = useState(20);
@@ -139,8 +142,6 @@ export default function DashboardPage() {
   const [isListLoading, setIsListLoading] = useState<Record<StatusKey, boolean>>({ TO_WATCH: false, WATCHING: false, WATCHED: false, DROPPED: false });
   const [isUpdating, setIsUpdating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-
-  // [ADICIONADO] Chave para forçar recarregamento do calendário
   const [calendarKey, setCalendarKey] = useState(0);
   
   // Estados de Definições de Perfil
@@ -151,10 +152,14 @@ export default function DashboardPage() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
   
-  // [REMOVIDO] Estado do twitchUsername removido
-  // const [twitchUsername, setTwitchUsername] = useState(session?.user?.twitchUsername || "");
+  // --- [INÍCIO DA MUDANÇA 2: Adicionar estados para os Switches] ---
+  const [showToWatch, setShowToWatch] = useState(session?.user?.showToWatchList ?? true);
+  const [showWatching, setShowWatching] = useState(session?.user?.showWatchingList ?? true);
+  const [showWatched, setShowWatched] = useState(session?.user?.showWatchedList ?? true);
+  const [showDropped, setShowDropped] = useState(session?.user?.showDroppedList ?? true);
+  // --- [FIM DA MUDANÇA 2] ---
 
-  // Estados para o Cropper de Avatar
+  // ... (Estados do Cropper - sem mudanças) ...
   const [previewImage, setPreviewImage] = useState<string | null>(null); 
   const [selectedFile, setSelectedFile] = useState<File | null>(null); 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,7 +171,7 @@ export default function DashboardPage() {
   const [isCropperOpen, setIsCropperOpen] = useState(false); 
   const [aspect, setAspect] = useState<number | undefined>(1 / 1); 
 
-  // Lógica do Tour
+  // ... (Lógica do Tour - sem mudanças) ...
   const [runTour, setRunTour] = useState(false);
   const tourSteps = useMemo(() => {
     const dynamicSteps: Step[] = [];
@@ -180,7 +185,7 @@ export default function DashboardPage() {
     dynamicSteps.push(STEP_LISTAS_PARA_ABANDONADOS);
     dynamicSteps.push(STEP_AGENDA);
     dynamicSteps.push(STEP_LISTA_PROX_AGENDA);
-    dynamicSteps.push(STEP_CALENDARIO); // <-- [ADICIONADO] Novo passo
+    dynamicSteps.push(STEP_CALENDARIO); 
     return dynamicSteps;
   }, [isCreator]);
 
@@ -217,12 +222,16 @@ export default function DashboardPage() {
       setBio(session.user.bio || "");
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
       setPreviewImage(session.user.image || null); 
-      // [REMOVIDO]
-      // setTwitchUsername(session.user.twitchUsername || "");
+      // --- [INÍCIO DA MUDANÇA 3: Sincronizar estados da sessão] ---
+      setShowToWatch(session.user.showToWatchList ?? true);
+      setShowWatching(session.user.showWatchingList ?? true);
+      setShowWatched(session.user.showWatchedList ?? true);
+      setShowDropped(session.user.showDroppedList ?? true);
+      // --- [FIM DA MUDANÇA 3] ---
     }
   }, [session?.user]);
   
-  // --- Funções de Busca de Dados ---
+  // --- (Funções de Busca de Dados - sem mudanças) ---
   const fetchListData = useCallback(async (listStatus: StatusKey, page: number = 1, search: string = "") => {
     setIsListLoading(prev => ({ ...prev, [listStatus]: true }));
     try {
@@ -247,8 +256,6 @@ export default function DashboardPage() {
 
   const fetchScheduleData = async () => {
     try {
-      // [ATUALIZADO] Removemos os parâmetros para que a API use o fallback
-      // e traga apenas os itens futuros para o "ScheduleManager"
       const resSchedule = await fetch("/api/schedule"); 
       if (!resSchedule.ok) { throw new Error('Falha ao buscar schedule'); }
       const scheduleData = await resSchedule.json();
@@ -296,7 +303,6 @@ export default function DashboardPage() {
       fetchScheduleData() // Busca dados para o ScheduleManager (lista)
     ]).finally(() => {
       setIsUpdating(false);
-      // [ATUALIZADO] Força o FullCalendar a recarregar
       setCalendarKey(prevKey => prevKey + 1); 
     });
   }, [fetchListData, searchTerm]); 
@@ -374,8 +380,7 @@ export default function DashboardPage() {
   // --- Fim das Funções de Busca de Dados ---
 
 
-  // --- [LÓGICA DO AVATAR E CROPPER] ---
-  
+  // --- (Lógica do Avatar/Cropper - sem mudanças) ---
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
   };
@@ -474,9 +479,8 @@ export default function DashboardPage() {
     }
     return newImageUrl; 
   };
-
-  // --- [ATUALIZADO] handleSaveSettings ---
-  // Removida a lógica do twitchUsername daqui
+  
+  // --- [INÍCIO DA MUDANÇA 4: Atualizar handleSaveSettings] ---
    const handleSaveSettings = async () => {
      if (!isCreator) return;
      
@@ -493,12 +497,16 @@ export default function DashboardPage() {
          setSettingsMessage("Upload concluído, a guardar definições...");
        }
 
-       // Etapa 2: Guardar Bio e Privacidade
+       // Etapa 2: Guardar Bio, Privacidade E NOVOS CAMPOS
        const payload = { 
          bio: bio,
-         profileVisibility: profileVisibility
-         // twitchUsername foi removido
+         profileVisibility: profileVisibility,
+         showToWatchList: showToWatch,
+         showWatchingList: showWatching,
+         showWatchedList: showWatched,
+         showDroppedList: showDropped,
        };
+       
        const res = await fetch('/api/profile/settings', {
          method: 'PUT', headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify(payload),
@@ -509,8 +517,8 @@ export default function DashboardPage() {
          throw new Error(d.error || 'Falha ao guardar definições.'); 
        }
        
-       // Não esperamos mais o twitchUsername de volta
-       const { bio: newBio, profileVisibility: newVisibility } = await res.json();
+       // A API agora retorna os campos atualizados
+       const newSettings = await res.json();
 
        // Etapa 3: Atualizar a Sessão UMA VEZ
        if (updateSession) {
@@ -518,10 +526,14 @@ export default function DashboardPage() {
            ...session, 
            user: {
              ...session?.user, 
-             image: newImageUrl,
-             bio: newBio,        
-             profileVisibility: newVisibility
-             // twitchUsername foi removido
+             image: newImageUrl, // Imagem (nova ou antiga)
+             bio: newSettings.bio, // Bio (da resposta da API)
+             profileVisibility: newSettings.profileVisibility, // Visibilidade (da API)
+             // Adiciona os novos campos para atualizar a sessão localmente
+             showToWatchList: newSettings.showToWatchList,
+             showWatchingList: newSettings.showWatchingList,
+             showWatchedList: newSettings.showWatchedList,
+             showDroppedList: newSettings.showDroppedList,
            }
          });
        }
@@ -536,7 +548,10 @@ export default function DashboardPage() {
        console.error("Erro ao guardar definições:", error);
        setSettingsMessage(""); 
        setActionError(`Erro: ${error.message}`);
-       setPreviewImage(session?.user?.image || null);
+       // Reverte a imagem de preview se o upload falhar mas a imagem foi selecionada
+       if (selectedFile) {
+         setPreviewImage(session?.user?.image || null);
+       }
      } finally {
        setIsSavingSettings(false);
        if (fileInputRef.current) {
@@ -544,15 +559,23 @@ export default function DashboardPage() {
        }
      }
    };
-  // --- [FIM DA LÓGICA DO AVATAR] ---
+  // --- [FIM DA MUDANÇA 4] ---
 
 
-  // --- ESTADOS DE CARREGAMENTO ---
+  // --- ESTADOS DE CARREGAMENTO (Com layout fixo para evitar flicker) ---
   if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
-  return (
-    <div className="mx-auto max-w-5xl p-4 md:p-6">
-      <p className="text-center pt-20 text-muted-foreground">A carregar...</p>
-    </div>
+    return (
+      <div className="mx-auto max-w-5xl p-4 md:p-6">
+        <p className="text-center pt-20 text-muted-foreground">A carregar...</p>
+      </div>
+    ); 
+  }
+  if (status === "unauthenticated") { 
+    if (typeof window !== 'undefined') { redirect("/auth/signin"); } 
+    return (
+      <div className="mx-auto max-w-5xl p-4 md:p-6">
+        <p className="text-center pt-20 text-muted-foreground">Redirecionando...</p>
+      </div>
     );
   }
 
@@ -610,7 +633,7 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
       
-
+      {/* Contêiner principal (com layout fixo) */}
       <div className="mx-auto max-w-5xl p-4 md:p-6">
         <h1 className="text-3xl md:text-4xl font-semibold mb-8">
           Olá, {firstName}!
@@ -677,13 +700,10 @@ export default function DashboardPage() {
                                <p className="text-xs text-muted-foreground">{200 - (bio?.length || 0)} caracteres restantes</p>
                           </div>
                           
-                          {/* --- [ATUALIZADO] Status da Live (Twitch) --- */}
+                          {/* Status da Live (Twitch) */}
                           <div className="space-y-2 pt-2">
                             <Label className="text-sm font-medium text-foreground">Status da Live (Twitch)</Label>
-                            
-                            {/* Verifica se a sessão AGORA tem o twitchUsername */}
                             {session?.user?.twitchUsername ? (
-                              // Se SIM, mostra a conta vinculada
                               <div className="flex items-center justify-between gap-2 rounded-md border border-input bg-background p-3">
                                 <div className="flex items-center gap-2 overflow-hidden">
                                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6441a5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-twitch flex-shrink-0"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7"/></svg>
@@ -694,7 +714,6 @@ export default function DashboardPage() {
                                 <span className="text-xs font-semibold text-green-600 flex-shrink-0">VINCULADO</span>
                               </div>
                             ) : (
-                              // Se NÃO, mostra o botão para vincular
                               <>
                                 <p className="text-xs text-muted-foreground pb-1">Para exibir o indicador &quot;LIVE&quot; no seu perfil, vincule sua conta da Twitch.</p>
                                 <Button 
@@ -708,7 +727,6 @@ export default function DashboardPage() {
                               </>
                             )}
                           </div>
-                          {/* --- [FIM DA ATUALIZAÇÃO] --- */}
 
                           {/* Privacidade */}
                           <div className="space-y-2 pt-2">
@@ -741,6 +759,31 @@ export default function DashboardPage() {
                               </Label>
                             </RadioGroup>
                           </div>
+
+                          {/* --- [INÍCIO DA MUDANÇA 5: Adicionar Switches] --- */}
+                          <div className="space-y-2 pt-2">
+                            <Label className="text-sm font-medium text-foreground">Visibilidade das Listas</Label>
+                            <p className="text-xs text-muted-foreground">Escolha quais listas são visíveis na sua página pública.</p>
+                            <div className="space-y-3 pt-2">
+                              <div className="flex items-center justify-between rounded-md border p-3">
+                                <Label htmlFor="showToWatch" className="text-sm font-medium cursor-pointer">Para Assistir</Label>
+                                <Switch id="showToWatch" checked={showToWatch} onCheckedChange={setShowToWatch} disabled={isSavingSettings} />
+                              </div>
+                              <div className="flex items-center justify-between rounded-md border p-3">
+                                <Label htmlFor="showWatching" className="text-sm font-medium cursor-pointer">Assistindo</Label>
+                                <Switch id="showWatching" checked={showWatching} onCheckedChange={setShowWatching} disabled={isSavingSettings} />
+                              </div>
+                              <div className="flex items-center justify-between rounded-md border p-3">
+                                <Label htmlFor="showWatched" className="text-sm font-medium cursor-pointer">Já Assistido</Label>
+                                <Switch id="showWatched" checked={showWatched} onCheckedChange={setShowWatched} disabled={isSavingSettings} />
+                              </div>
+                              <div className="flex items-center justify-between rounded-md border p-3">
+                                <Label htmlFor="showDropped" className="text-sm font-medium cursor-pointer">Abandonados</Label>
+                                <Switch id="showDropped" checked={showDropped} onCheckedChange={setShowDropped} disabled={isSavingSettings} />
+                              </div>
+                            </div>
+                          </div>
+                          {/* --- [FIM DA MUDANÇA 5] --- */}
 
                           {/* Botão de Guardar */}
                           <Button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full mt-2">
@@ -791,12 +834,11 @@ export default function DashboardPage() {
                    <ScheduleManager
                      agendaveisList={watchingData.items}
                      initialScheduleItems={scheduleItems}
-                     onScheduleChanged={handleDataChanged} // <-- Isto agora também atualiza o calendário
+                     onScheduleChanged={handleDataChanged} 
                    />
                  </CardContent>
                </Card>
 
-               {/* [ADICIONADO] Card do Calendário */}
                <Card id="tour-step-4-calendario">
                  <CardHeader>
                    <CardTitle>Calendário Completo</CardTitle>
@@ -805,7 +847,6 @@ export default function DashboardPage() {
                    </CardDescription>
                  </CardHeader>
                  <CardContent>
-                   {/* [ATUALIZADO] A prop 'key' força a atualização */}
                    <FullCalendar key={calendarKey} /> 
                  </CardContent>
                </Card>

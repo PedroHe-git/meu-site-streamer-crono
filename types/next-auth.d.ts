@@ -1,4 +1,4 @@
-// types/next-auth.d.ts (Corrigido)
+// types/next-auth.d.ts (Atualizado)
 
 import NextAuth, { DefaultSession } from "next-auth"
 import { JWT } from "next-auth/jwt"
@@ -13,18 +13,31 @@ declare module "next-auth" {
       role: UserRole;
       bio?: string | null;
       profileVisibility: ProfileVisibility;
-      image?: string | null; // <-- Verifique se esta linha existe
+      image?: string | null; 
       twitchUsername?: string | null;
+      // --- [MUDANÇA AQUI] ---
+      showToWatchList: boolean;
+      showWatchingList: boolean;
+      showWatchedList: boolean;
+      showDroppedList: boolean;
+      // --- [FIM DA MUDANÇA] ---
     } & DefaultSession["user"] 
   }
 
+  // Estende o tipo User base (usado no login inicial)
   interface User {
     username: string;
     role: UserRole;
     bio?: string | null;
     profileVisibility: ProfileVisibility;
-    image?: string | null; // <-- Verifique se esta linha existe
+    image?: string | null; 
     twitchUsername?: string | null;
+    // --- [MUDANÇA AQUI] ---
+    showToWatchList: boolean;
+    showWatchingList: boolean;
+    showWatchedList: boolean;
+    showDroppedList: boolean;
+    // --- [FIM DA MUDANÇA] ---
   }
 }
 
@@ -36,8 +49,13 @@ declare module "next-auth/jwt" {
     role: UserRole;
     bio?: string | null;
     profileVisibility: ProfileVisibility;
-    image?: string | null; // <-- Verifique se esta linha existe
+    image?: string | null; 
     twitchUsername?: string | null;
+    // --- [MUDANÇA AQUI] ---
+    showToWatchList: boolean;
+    showWatchingList: boolean;
+    showWatchedList: boolean;
+    showDroppedList: boolean;
+    // --- [FIM DA MUDANÇA] ---
   }
 }
-

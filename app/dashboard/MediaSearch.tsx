@@ -218,9 +218,9 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
           {/* --- [FIM DA MUDANÇA] --- */}
           
           <div className="flex gap-2 pt-2">
-              <Button onClick={(e) => handleManualAdd(e, "TO_WATCH")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. Para Ver"} </Button>
-              <Button onClick={(e) => handleManualAdd(e, "WATCHING")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. A Ver"} </Button>
-              <Button onClick={(e) => handleManualAdd(e, "WATCHED")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. Já Vi"} </Button>
+              <Button onClick={(e) => handleManualAdd(e, "TO_WATCH")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. Para Assistir"} </Button>
+              <Button onClick={(e) => handleManualAdd(e, "WATCHING")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. Assistindo"} </Button>
+              <Button onClick={(e) => handleManualAdd(e, "WATCHED")} disabled={loading || !manualTitle} variant="secondary" className="flex-1 h-8 text-xs"> {loading ? "..." : "Ad. Já Assistido"} </Button>
           </div>
         </form>
       )}
@@ -250,12 +250,12 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
             </div>
             
             <div className="flex flex-col gap-1 flex-shrink-0">
-                <Button onClick={() => addToList(media, "TO_WATCH")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Para Ver </Button>
+                <Button onClick={() => addToList(media, "TO_WATCH")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Para Assistir </Button>
                 {/* Mostra "A Ver" se for ANIME, SERIES, ou OUTROS */}
                 {(media.source === 'ANIME' || media.source === 'SERIES' || media.source === 'OUTROS') && (
-                  <Button onClick={() => addToList(media, "WATCHING")} size="sm" variant="outline" className="h-6 px-2 text-xs"> A Ver </Button>
+                  <Button onClick={() => addToList(media, "WATCHING")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Assistindo </Button>
                 )}
-                <Button onClick={() => addToList(media, "WATCHED")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Já Vi </Button>
+                <Button onClick={() => addToList(media, "WATCHED")} size="sm" variant="outline" className="h-6 px-2 text-xs"> Já Assistido </Button>
             </div>
           </li>
         ))}

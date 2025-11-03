@@ -1,3 +1,5 @@
+// lib/authOptions.ts (Atualizado)
+
 import NextAuth, { NextAuthOptions, User as NextAuthUser } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import TwitchProvider from "next-auth/providers/twitch";
@@ -5,9 +7,10 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
-import { UserRole, ProfileVisibility, Prisma } from "@prisma/client"; // <-- Importe o Prisma
+import { UserRole, ProfileVisibility, Prisma } from "@prisma/client"; 
 import { v4 as uuidv4 } from 'uuid';
 
+// Este tipo agora reflete a nossa definição em next-auth.d.ts
 interface SessionUser {
   id: string;
   name?: string | null;
@@ -18,6 +21,12 @@ interface SessionUser {
   profileVisibility: ProfileVisibility;
   image?: string | null;
   twitchUsername?: string | null; 
+  // --- [MUDANÇA AQUI] ---
+  showToWatchList: boolean;
+  showWatchingList: boolean;
+  showWatchedList: boolean;
+  showDroppedList: boolean;
+  // --- [FIM DA MUDANÇA] ---
 }
 
 export const authOptions: NextAuthOptions = {
@@ -36,7 +45,14 @@ export const authOptions: NextAuthOptions = {
           role: UserRole.VISITOR, 
           bio: null,
           profileVisibility: ProfileVisibility.PUBLIC,
-          twitchUsername: null, 
+          twitchUsername: null,
+          // --- [MUDANÇA AQUI] ---
+          // Define os padrões para novos utilizadores
+          showToWatchList: true,
+          showWatchingList: true,
+          showWatchedList: true,
+          showDroppedList: true,
+          // --- [FIM DA MUDANÇA] ---
         };
       },
     }),
@@ -51,12 +67,18 @@ export const authOptions: NextAuthOptions = {
           id: profile.sub,
           name: profile.preferred_username,
           email: profile.email,
-          image: profile.picture, // <-- Twitch já fornece a imagem
+          image: profile.picture,
           username: profile.preferred_username + '-' + uuidv4().substring(0, 4),
           role: UserRole.VISITOR,
           bio: null,
           profileVisibility: ProfileVisibility.PUBLIC,
-          twitchUsername: profile.preferred_username, 
+          twitchUsername: profile.preferred_username,
+          // --- [MUDANÇA AQUI] ---
+          showToWatchList: true,
+          showWatchingList: true,
+          showWatchedList: true,
+          showDroppedList: true,
+          // --- [FIM DA MUDANÇA] ---
         };
       },
     }),
@@ -75,6 +97,7 @@ export const authOptions: NextAuthOptions = {
               throw new Error("Por favor, verifique seu email antes de fazer login.");
             }
             
+            // Retorna o utilizador completo (incluindo os novos campos)
             return {
                 id: user.id,
                 name: user.name,
@@ -85,6 +108,12 @@ export const authOptions: NextAuthOptions = {
                 profileVisibility: user.profileVisibility,
                 image: user.image,
                 twitchUsername: user.twitchUsername,
+                // --- [MUDANÇA AQUI] ---
+                showToWatchList: user.showToWatchList,
+                showWatchingList: user.showWatchingList,
+                showWatchedList: user.showWatchedList,
+                showDroppedList: user.showDroppedList,
+                // --- [FIM DA MUDANÇA] ---
             };
         }
      }),
@@ -93,37 +122,22 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
 
   events: {
-    // --- [ INÍCIO DA MODIFICAÇÃO ] ---
     async linkAccount({ user, account, profile }) {
-      // Quando o utilizador vincula uma conta (ex: Twitch)
       if (account.provider === "twitch") {
-        
-        // Prepara os dados para atualizar no Prisma
         const dataToUpdate: Prisma.UserUpdateInput = {};
-
-        // 1. Adiciona o username da Twitch
         // @ts-ignore
         dataToUpdate.twitchUsername = profile.preferred_username || null;
-
-        // 2. Verifica a imagem
         // @ts-ignore
         const twitchPicture = profile.picture as string | null;
-
-        // SE o utilizador NÃO tiver uma imagem personalizada (user.image for null)
-        // E SE a Twitch forneceu uma imagem (twitchPicture não for null)
-        // ENTÃO, atualiza a imagem do utilizador.
         if (!user.image && twitchPicture) {
           dataToUpdate.image = twitchPicture;
         }
-
-        // 3. Atualiza o utilizador na base de dados
         await prisma.user.update({
           where: { id: user.id },
           data: dataToUpdate,
         });
       }
     }
-    // --- [ FIM DA MODIFICAÇÃO ] ---
   },
 
   callbacks: {
@@ -138,18 +152,19 @@ export const authOptions: NextAuthOptions = {
          token.profileVisibility = user.profileVisibility;
          token.image = user.image;
          token.twitchUsername = user.twitchUsername;
+         // --- [MUDANÇA AQUI] ---
+         token.showToWatchList = user.showToWatchList;
+         token.showWatchingList = user.showWatchingList;
+         token.showWatchedList = user.showWatchedList;
+         token.showDroppedList = user.showDroppedList;
+         // --- [FIM DA MUDANÇA] ---
       }
 
-      // --- [ INÍCIO DA MODIFICAÇÃO ] ---
-      // Quando uma nova conta é VINCULADA (ex: clicar em "Vincular Twitch" no dashboard)
-      // O 'profile' e 'account' estão disponíveis neste trigger
+      // Quando uma nova conta é VINCULADA (ex: Twitch)
       if (trigger === "update" && account && profile) {
-        
         if (account.provider === "twitch") {
           // @ts-ignore
           token.twitchUsername = profile.preferred_username;
-
-          // Atualiza o token com a imagem da Twitch, SE o token não tiver uma
           // @ts-ignore
           const twitchPicture = profile.picture as string | null;
           if (!token.image && twitchPicture) {
@@ -157,7 +172,6 @@ export const authOptions: NextAuthOptions = {
           }
         }
       }
-      // --- [ FIM DA MODIFICAÇÃO ] ---
 
       // Quando a sessão é atualizada manualmente (ex: salvar bio ou novo avatar)
       if (trigger === "update" && session?.user) {
@@ -167,10 +181,24 @@ export const authOptions: NextAuthOptions = {
         if (session.user.profileVisibility !== undefined) {
           token.profileVisibility = session.user.profileVisibility;
         }
-        // Se a sessão for atualizada com uma nova imagem (do upload), ela tem prioridade
         if (session.user.image !== undefined) {
             token.image = session.user.image;
         }
+        // --- [MUDANÇA AQUI] ---
+        // Atualiza o token com as novas definições de visibilidade
+        if (session.user.showToWatchList !== undefined) {
+          token.showToWatchList = session.user.showToWatchList;
+        }
+        if (session.user.showWatchingList !== undefined) {
+          token.showWatchingList = session.user.showWatchingList;
+        }
+        if (session.user.showWatchedList !== undefined) {
+          token.showWatchedList = session.user.showWatchedList;
+        }
+        if (session.user.showDroppedList !== undefined) {
+          token.showDroppedList = session.user.showDroppedList;
+        }
+        // --- [FIM DA MUDANÇA] ---
       }
 
       return token; 
@@ -187,6 +215,12 @@ export const authOptions: NextAuthOptions = {
         sessionUser.profileVisibility = token.profileVisibility as ProfileVisibility;
         sessionUser.image = token.image as string | null; 
         sessionUser.twitchUsername = token.twitchUsername as string | null;
+        // --- [MUDANÇA AQUI] ---
+        sessionUser.showToWatchList = token.showToWatchList;
+        sessionUser.showWatchingList = token.showWatchingList;
+        sessionUser.showWatchedList = token.showWatchedList;
+        sessionUser.showDroppedList = token.showDroppedList;
+        // --- [FIM DA MUDANÇA] ---
       }
       return session;
     },

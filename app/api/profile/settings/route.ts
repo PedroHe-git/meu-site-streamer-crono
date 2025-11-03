@@ -1,3 +1,5 @@
+// app/api/profile/settings/route.ts (Atualizado)
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
@@ -5,8 +7,9 @@ import prisma from '@/lib/prisma';
 import { Prisma, UserRole, ProfileVisibility } from "@prisma/client"; 
 
 export const runtime = 'nodejs';
+export const revalidate = 0; // Força a API a ser dinâmica
 
-// --- PUT: Atualiza as definições do perfil (Bio e Privacidade APENAS) ---
+// --- PUT: Atualiza as definições do perfil ---
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -21,8 +24,15 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json();
     
-    // --- MUDANÇA 1: 'image' foi removido daqui ---
-    const { bio, profileVisibility } = body; 
+    // --- [MUDANÇA 1: Receber novos campos] ---
+    const { 
+      bio, 
+      profileVisibility,
+      showToWatchList,
+      showWatchingList,
+      showWatchedList,
+      showDroppedList
+    } = body; 
 
     // --- Validações ---
     if (bio !== undefined && typeof bio !== 'string') {
@@ -34,21 +44,33 @@ export async function PUT(request: Request) {
     if (profileVisibility !== undefined && !['PUBLIC', 'FOLLOWERS_ONLY'].includes(profileVisibility)) {
       return new NextResponse(JSON.stringify({ error: "Visibilidade inválida." }), { status: 400 });
     }
-    // --- MUDANÇA 2: Validação da 'image' removida ---
-    
     // --- Fim Validações ---
 
-    // --- MUDANÇA 3: 'image' removida do objeto de atualização ---
     const dataToUpdate: Prisma.UserUpdateInput = {};
+    
+    // Adiciona apenas os campos que foram enviados
     if (bio !== undefined) dataToUpdate.bio = bio;
     if (profileVisibility !== undefined) dataToUpdate.profileVisibility = profileVisibility;
+    // --- [MUDANÇA 2: Adicionar novos campos] ---
+    if (showToWatchList !== undefined) dataToUpdate.showToWatchList = showToWatchList;
+    if (showWatchingList !== undefined) dataToUpdate.showWatchingList = showWatchingList;
+    if (showWatchedList !== undefined) dataToUpdate.showWatchedList = showWatchedList;
+    if (showDroppedList !== undefined) dataToUpdate.showDroppedList = showDroppedList;
+    // --- [FIM DA MUDANÇA 2] ---
 
     // Atualiza o utilizador
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: dataToUpdate,
-      // --- MUDANÇA 4: 'image' removida do 'select' de retorno ---
-      select: { bio: true, profileVisibility: true } 
+      // --- [MUDANÇA 3: Selecionar os novos campos para retornar] ---
+      select: { 
+        bio: true, 
+        profileVisibility: true,
+        showToWatchList: true,
+        showWatchingList: true,
+        showWatchedList: true,
+        showDroppedList: true
+      } 
     });
 
     return NextResponse.json(updatedUser);
@@ -61,4 +83,3 @@ export async function PUT(request: Request) {
     return new NextResponse(JSON.stringify({ error: "Erro interno ao guardar definições." }), { status: 500 });
   }
 }
-
