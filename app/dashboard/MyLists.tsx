@@ -86,6 +86,7 @@ export default function MyLists({
             {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
             <ActionButton label="Abandonar" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "DROPPED")} />
             <ActionButton label="Pausar" colorClass="bg-yellow-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
+              <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} />
           </div>
         ); 
         break;
@@ -93,7 +94,8 @@ export default function MyLists({
         actionButtons = ( 
           <div className="flex flex-col sm:flex-row gap-1 items-center">
             {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
-            <ActionButton label="Ver de Novo" colorClass="bg-green-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} /> 
+            <ActionButton label="Ver de Novo" colorClass="bg-green-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
+            <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} />
           </div>
         ); 
         break;
@@ -101,7 +103,8 @@ export default function MyLists({
         actionButtons = ( 
           <div className="flex flex-col sm:flex-row gap-1 items-center">
             {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
-            <ActionButton label="Tentar de Novo" colorClass="bg-blue-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} /> 
+            <ActionButton label="Tentar de Novo" colorClass="bg-blue-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
+            <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} />
           </div>
         ); 
         break;
