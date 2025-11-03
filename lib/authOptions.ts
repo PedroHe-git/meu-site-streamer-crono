@@ -1,13 +1,13 @@
-// lib/authOptions.ts (Atualizado para lidar com 'updateSession')
+// lib/authOptions.ts (Corrigido para o build)
 
 import { AuthOptions } from "next-auth";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { PrismaClient } from "@prisma/client";
+// Importamos o Enum 'UserRole' do Prisma
+import { PrismaClient, UserRole } from "@prisma/client";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import TwitchProvider from "next-auth/providers/twitch"; 
 import bcrypt from "bcrypt"; 
-import { sendVerificationEmail } from "@/lib/resend"; // (Verifique se este caminho está correto)
 import { v4 as uuidv4 } from "uuid";
 
 const prisma = new PrismaClient();
@@ -22,12 +22,24 @@ export const authOptions: AuthOptions = {
       
       profile(profile) {
         return {
+          // Campos padrão do NextAuth
           id: profile.sub, 
           name: profile.preferred_username, 
           email: profile.email,
-          image: profile.picture, // Importante
+          image: profile.picture, 
+          
+          // Campos personalizados obrigatórios
+          // --- [INÍCIO DA CORREÇÃO] ---
+          role: UserRole.VISITOR, // Usamos o Enum correto
+          // --- [FIM DA CORREÇÃO] ---
+          username: profile.preferred_username, 
           twitchUsername: profile.preferred_username, 
-          role: 'USER', 
+          bio: null, 
+          profileVisibility: 'PUBLIC', 
+          showToWatchList: true, 
+          showWatchingList: true, 
+          showWatchedList: true, 
+          showDroppedList: true, 
         };
       },
     }),
@@ -35,10 +47,32 @@ export const authOptions: AuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      
+      profile(profile) {
+        return {
+          // Campos padrão do NextAuth
+          id: profile.sub,
+          name: profile.name,
+          email: profile.email,
+          image: profile.picture,
+
+          // Campos personalizados obrigatórios
+          // --- [INÍCIO DA CORREÇÃO] ---
+          role: UserRole.VISITOR, // Usamos o Enum correto
+          // --- [FIM DA CORREÇÃO] ---
+          username: profile.email.split('@')[0], 
+          twitchUsername: null, 
+          bio: null, 
+          profileVisibility: 'PUBLIC', 
+          showToWatchList: true, 
+          showWatchingList: true, 
+          showWatchedList: true, 
+          showDroppedList: true, 
+        };
+      },
     }),
     
     CredentialsProvider({
-      // ... (provider de credenciais sem mudanças)
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "text" },
@@ -70,7 +104,7 @@ export const authOptions: AuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
-    // ... (signIn callback sem mudanças) ...
+    // Todos os outros callbacks estão corretos como os deixámos.
     async signIn({ user, account, profile }) {
       
       if (account?.provider === "credentials") {
@@ -100,8 +134,6 @@ export const authOptions: AuthOptions = {
       return true; 
     },
 
-    // --- [INÍCIO DA GRANDE CORREÇÃO] ---
-    // Adicionamos 'trigger' e 'session' aos argumentos
     async jwt({ token, user, trigger, session }) {
       
       // 1. No login inicial (objeto 'user' está presente)
@@ -116,27 +148,20 @@ export const authOptions: AuthOptions = {
         token.showWatchingList = user.showWatchingList;
         token.showWatchedList = user.showWatchedList;
         token.showDroppedList = user.showDroppedList;
-        token.picture = user.image; // Usamos 'picture' para a imagem no token
+        token.picture = user.image; 
       }
 
       // 2. Ao chamar updateSession() (trigger é "update")
-      // 'session' é o objeto que passámos para a função updateSession()
       if (trigger === "update" && session) {
-        console.log("JWT Update Triggered:", session); // Log de debug
         
-        // Atualiza o token com os novos dados do 'session.user'
         if (session.user) {
           token.bio = session.user.bio;
           token.profileVisibility = session.user.profileVisibility;
           token.showToWatchList = session.user.showToWatchList;
           token.showWatchingList = session.user.showWatchingList;
-          token.showWatchedList = session.user.showWatchedList;
-          token.showDroppedList = session.user.showDroppedList;
-          
-          // --- ESTA É A LINHA QUE FALTAVA ---
-          // Atualiza a imagem no token
+          token.showWatchedList = session.showWatchedList;
+          token.showDroppedList = session.showDroppedList;
           token.picture = session.user.image; 
-          // --- FIM DA LINHA QUE FALTAVA ---
         }
       }
       
@@ -156,15 +181,10 @@ export const authOptions: AuthOptions = {
         session.user.showWatchingList = token.showWatchingList;
         session.user.showWatchedList = token.showWatchedList;
         session.user.showDroppedList = token.showDroppedList;
-        
-        // --- E ESTA É A OUTRA METADE ---
-        // Lê sempre a imagem do 'token.picture'
         session.user.image = token.picture; 
-        // --- FIM DA OUTRA METADE ---
       }
       return session;
     },
-    // --- [FIM DA GRANDE CORREÇÃO] ---
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === "development",

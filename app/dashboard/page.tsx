@@ -1,4 +1,4 @@
-// app/dashboard/page.tsx (Corrigido para flicker vertical e horizontal)
+// app/dashboard/page.tsx (Corrigido para o build)
 
 "use client";
 
@@ -7,7 +7,8 @@ import {
   useState, useEffect, useCallback, useMemo, useRef, 
   ChangeEvent, SyntheticEvent 
 } from "react";
-import { Step, STATUS, CallBackProps } from 'react-joyride'; 
+// --- [MUDANÇA 1: Importar 'Props' do react-joyride] ---
+import { Step, STATUS, CallBackProps, Props } from 'react-joyride'; 
 import { useSession, signIn } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility } from "@prisma/client";
@@ -219,15 +220,17 @@ export default function DashboardPage() {
     if (session?.user) {
       setBio(session.user.bio || "");
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
+      
+      // Só atualiza a imagem de preview a partir da sessão
+      // se o utilizador NÃO tiver um ficheiro novo selecionado (em preview).
       if (!selectedFile) {
         setPreviewImage(session.user.image || null);
-      } 
-      // --- [Sincronizar estados da sessão] ---
+      }
+
       setShowToWatch(session.user.showToWatchList ?? true);
       setShowWatching(session.user.showWatchingList ?? true);
       setShowWatched(session.user.showWatchedList ?? true);
       setShowDropped(session.user.showDroppedList ?? true);
-      // --- [FIM] ---
     }
   }, [session?.user]);
   
@@ -488,16 +491,17 @@ export default function DashboardPage() {
      setSettingsMessage("A guardar..."); 
      setActionError(null);
 
-     let newImageUrl = session?.user?.image || null;
+     let newImageUrl = session?.user?.image || null; // Começa com a imagem antiga
 
      try {
        // Etapa 1: Fazer Upload da Imagem (se houver uma nova)
        if (selectedFile) {
-         newImageUrl = await handleAvatarUpload(); 
+         setSettingsMessage("A fazer upload...");
+         newImageUrl = await handleAvatarUpload(); // Obtém a nova URL (ex: Vercel Blob)
          setSettingsMessage("Upload concluído, a guardar definições...");
        }
 
-       // Etapa 2: Guardar Bio, Privacidade E NOVOS CAMPOS
+       // Etapa 2: Guardar Bio, Privacidade E A NOVA IMAGEM na API
        const payload = { 
          bio: bio,
          profileVisibility: profileVisibility,
@@ -505,6 +509,7 @@ export default function DashboardPage() {
          showWatchingList: showWatching,
          showWatchedList: showWatched,
          showDroppedList: showDropped,
+         image: newImageUrl, // --- Envia a URL da imagem para a API
        };
        
        const res = await fetch('/api/profile/settings', {
@@ -517,7 +522,7 @@ export default function DashboardPage() {
          throw new Error(d.error || 'Falha ao guardar definições.'); 
        }
        
-       // A API agora retorna os campos atualizados
+       // A API agora retorna todos os campos atualizados (incluindo a imagem)
        const newSettings = await res.json();
 
        // Etapa 3: Atualizar a Sessão UMA VEZ
@@ -526,10 +531,9 @@ export default function DashboardPage() {
            ...session, 
            user: {
              ...session?.user, 
-             image: newImageUrl, // Imagem (nova ou antiga)
-             bio: newSettings.bio, // Bio (da resposta da API)
-             profileVisibility: newSettings.profileVisibility, // Visibilidade (da API)
-             // Adiciona os novos campos para atualizar a sessão localmente
+             image: newSettings.image, // Usa a imagem confirmada pela API
+             bio: newSettings.bio,
+             profileVisibility: newSettings.profileVisibility,
              showToWatchList: newSettings.showToWatchList,
              showWatchingList: newSettings.showWatchingList,
              showWatchedList: newSettings.showWatchedList,
@@ -540,15 +544,14 @@ export default function DashboardPage() {
 
        // Etapa 4: Limpar e mostrar sucesso
        setSettingsMessage("Guardado!");
-       setSelectedFile(null); 
-       setPreviewImage(newImageUrl); 
-       setTimeout(() => setSettingsMessage(""), 4000);
+       setSelectedFile(null); // Limpa o ficheiro selecionado
        
      } catch (error: any) {
        console.error("Erro ao guardar definições:", error);
        setSettingsMessage(""); 
        setActionError(`Erro: ${error.message}`);
-       // Reverte a imagem de preview se o upload falhar mas a imagem foi selecionada
+       
+       // Reverte a imagem de preview se o upload falhar
        if (selectedFile) {
          setPreviewImage(session?.user?.image || null);
        }
@@ -586,7 +589,9 @@ export default function DashboardPage() {
         <AppTour
           run={runTour}
           steps={tourSteps}
-          onCallback={handleJoyrideCallback}
+          // --- [CORREÇÃO 1] ---
+          callback={handleJoyrideCallback} 
+          // --- [FIM DA CORREÇÃO] ---
         />
         <canvas
           ref={canvasRef}
@@ -769,7 +774,6 @@ export default function DashboardPage() {
            {/* --- [FIM DA CORREÇÃO DA SIDEBAR] --- */}
 
              {/* 2. Conteúdo Principal (Aqui mostramos o loading) */}
-             {/* --- [CORREÇÃO HORIZONTAL] Adicionado w-0 --- */}
              <main className="flex-1 w-0 space-y-6">
                 <Card>
                   <CardContent className="p-6 min-h-[300px] flex items-center justify-center">
@@ -800,7 +804,9 @@ export default function DashboardPage() {
       <AppTour
         run={runTour}
         steps={tourSteps}
-        onCallback={handleJoyrideCallback}
+        // --- [CORREÇÃO 2] ---
+        callback={handleJoyrideCallback}
+        // --- [FIM DA CORREÇÃO] ---
       />
       
       {/* Canvas Invisível para o corte */}
@@ -1017,7 +1023,6 @@ export default function DashboardPage() {
            </aside> 
 
            {/* 2. Conteúdo Principal */}
-           {/* --- [CORREÇÃO HORIZONTAL] Adicionado w-0 --- */}
            <main className="flex-1 w-0 space-y-6">
                
                <Card id="tour-step-2-listas-busca">
