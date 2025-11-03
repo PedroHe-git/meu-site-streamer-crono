@@ -23,14 +23,16 @@ function RegisterForm() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
+  // Em app/auth/register/page.tsx
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setError("");
     setSuccess(""); 
     setIsLoading(true);
     
-    // Validações
-    if (!name || !username || !email || !password || !role) { 
+    // Validações (CORRIGIDO: !role removido da verificação)
+    if (!name || !username || !email || !password) { 
       setError("Todos os campos são obrigatórios."); 
       setIsLoading(false); 
       return; 
@@ -44,7 +46,8 @@ function RegisterForm() {
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST", headers: { "Content-Type": "application/json", },
-        body: JSON.stringify({ name, username, email, password, }),
+         // CORRIGIDO: role removido do body
+        body: JSON.stringify({ name, username, email, password }),
       });
       
       const data = await res.json();
@@ -58,7 +61,8 @@ function RegisterForm() {
       setUsername("");
       setEmail("");
       setPassword("");
-      setRole("VISITOR");
+      // CORRIGIDO: linha removida
+      // setRole("VISITOR");
 
       setTimeout(() => {
         router.push('/auth/signin?status=registered');
