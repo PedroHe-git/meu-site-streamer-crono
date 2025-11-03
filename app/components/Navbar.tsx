@@ -1,3 +1,5 @@
+// app/components/Navbar.tsx (Atualizado)
+
 "use client";
 
 import Link from "next/link";
@@ -17,6 +19,8 @@ import FollowedCreatorsList from "./FollowedCreatorsList";
 
 // --- [MUDANÇA 1: Importar o Avatar] ---
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+// --- [NOVA IMPORTAÇÃO] ---
+import { cn } from "@/lib/utils";
 
 
 export default function Navbar() {
@@ -41,7 +45,19 @@ export default function Navbar() {
         
         <div className="flex items-center gap-3"> {/* Aumentado o gap para 3 */}
           
-          {status === "loading" && ( <span className="text-muted-foreground text-sm">A carregar...</span> )}
+          {/* --- [INÍCIO DA CORREÇÃO DO FLICKER] --- */}
+          {/* Substituímos o "A carregar..." por placeholders (esqueletos)
+            que têm o mesmo tamanho dos botões. 
+            Isto impede que a navbar mude de tamanho e "empurre" a página.
+          */}
+          {status === "loading" && (
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-20 rounded-md bg-muted animate-pulse" />
+              <div className="h-9 w-16 rounded-md bg-muted animate-pulse" />
+            </div>
+          )}
+          {/* --- [FIM DA CORREÇÃO] --- */}
+
           
           {status === "unauthenticated" && (
             <>
@@ -116,4 +132,3 @@ export default function Navbar() {
     </nav>
   );
 }
-

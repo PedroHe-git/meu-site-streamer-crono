@@ -1,4 +1,4 @@
-// app/dashboard/page.tsx (Atualizado)
+// app/dashboard/page.tsx (Corrigido para flicker vertical e horizontal)
 
 "use client";
 
@@ -37,9 +37,7 @@ import AppTour from '@/app/components/AppTour';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; 
 import { Pen } from "lucide-react"; 
-// --- [MUDANÇA 1: Importar Switch] ---
 import { Switch } from "@/components/ui/switch";
-// --- [FIM DA MUDANÇA 1] ---
 import { 
   Dialog, 
   DialogContent, 
@@ -152,12 +150,12 @@ export default function DashboardPage() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
   
-  // --- [INÍCIO DA MUDANÇA 2: Adicionar estados para os Switches] ---
+  // --- [Estados para os Switches] ---
   const [showToWatch, setShowToWatch] = useState(session?.user?.showToWatchList ?? true);
   const [showWatching, setShowWatching] = useState(session?.user?.showWatchingList ?? true);
   const [showWatched, setShowWatched] = useState(session?.user?.showWatchedList ?? true);
   const [showDropped, setShowDropped] = useState(session?.user?.showDroppedList ?? true);
-  // --- [FIM DA MUDANÇA 2] ---
+  // --- [FIM] ---
 
   // ... (Estados do Cropper - sem mudanças) ...
   const [previewImage, setPreviewImage] = useState<string | null>(null); 
@@ -221,13 +219,15 @@ export default function DashboardPage() {
     if (session?.user) {
       setBio(session.user.bio || "");
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
-      setPreviewImage(session.user.image || null); 
-      // --- [INÍCIO DA MUDANÇA 3: Sincronizar estados da sessão] ---
+      if (!selectedFile) {
+        setPreviewImage(session.user.image || null);
+      } 
+      // --- [Sincronizar estados da sessão] ---
       setShowToWatch(session.user.showToWatchList ?? true);
       setShowWatching(session.user.showWatchingList ?? true);
       setShowWatched(session.user.showWatchedList ?? true);
       setShowDropped(session.user.showDroppedList ?? true);
-      // --- [FIM DA MUDANÇA 3] ---
+      // --- [FIM] ---
     }
   }, [session?.user]);
   
@@ -480,7 +480,7 @@ export default function DashboardPage() {
     return newImageUrl; 
   };
   
-  // --- [INÍCIO DA MUDANÇA 4: Atualizar handleSaveSettings] ---
+  // --- (handleSaveSettings - sem mudanças) ---
    const handleSaveSettings = async () => {
      if (!isCreator) return;
      
@@ -559,17 +559,9 @@ export default function DashboardPage() {
        }
      }
    };
-  // --- [FIM DA MUDANÇA 4] ---
+  // --- [FIM] ---
 
 
-  // --- ESTADOS DE CARREGAMENTO (Com layout fixo para evitar flicker) ---
-  if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
-    return (
-      <div className="mx-auto max-w-5xl p-4 md:p-6">
-        <p className="text-center pt-20 text-muted-foreground">A carregar...</p>
-      </div>
-    ); 
-  }
   if (status === "unauthenticated") { 
     if (typeof window !== 'undefined') { redirect("/auth/signin"); } 
     return (
@@ -579,10 +571,230 @@ export default function DashboardPage() {
     );
   }
 
+  // --- [INÍCIO DA CORREÇÃO] ---
+  // Move estas definições para ANTES do bloco de carregamento
   const firstName = session?.user?.name?.split(' ')[0] || session?.user?.username || "";
   const fallbackLetter = (session?.user?.name || session?.user?.username || "U").charAt(0).toUpperCase();
 
-  // --- JSX ---
+  // --- ESTADOS DE CARREGAMENTO (Com layout fixo para evitar flicker) ---
+  if (status === "loading" || (status === "authenticated" && isLoadingData)) { 
+    
+    // Mantenha o esqueleto da página para evitar o "flicker"
+    return (
+      <>
+        {/* Renderiza o AppTour e o Canvas mesmo durante o load */}
+        <AppTour
+          run={runTour}
+          steps={tourSteps}
+          onCallback={handleJoyrideCallback}
+        />
+        <canvas
+          ref={canvasRef}
+          style={{
+            display: 'none',
+            objectFit: 'contain',
+          }}
+        />
+        {/* Não renderiza o Dialog do Cropper aqui */}
+
+        {/* Contêiner principal (Layout Fixo) */}
+        <div className="mx-auto max-w-5xl p-4 md:p-6">
+          
+          {/* O H1 já pode ser renderizado, pois {firstName} vem da sessão */}
+          <h1 className="text-3xl md:text-4xl font-semibold mb-8">
+            Olá, {firstName}!
+          </h1>
+
+          {/* O layout de 2 colunas também */}
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+
+             {/* 1. Sidebar (Renderiza O CONTEÚDO COMPLETO, pois depende apenas da sessão) */}
+             <aside className="lg:w-1/4 space-y-6">
+              
+              {/* Card Definições */}
+              {isCreator && (
+                  <Card id="tour-step-1-perfil">
+                      <CardHeader>
+                          <CardTitle>Personalizar Perfil</CardTitle>
+                          <CardDescription>Ajuste a sua página pública.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                          
+                          {/* UI do Avatar */}
+                          <div className="flex flex-col items-center space-y-2">
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={handleFileChange} 
+                              accept="image/png, image/jpeg, image/gif"
+                              className="hidden" 
+                            />
+                            <button
+                              type="button"
+                              onClick={handleAvatarClick}
+                              className="relative group rounded-full"
+                              title="Alterar avatar"
+                              disabled={isSavingSettings}
+                            >
+                              <Avatar className="h-24 w-24 border-2 border-muted">
+                                <AvatarImage 
+                                  src={previewImage || undefined} 
+                                  alt={session?.user?.username || "Avatar"} 
+                                />
+                                <AvatarFallback className="text-3xl">{fallbackLetter}</AvatarFallback>
+                              </Avatar>
+                              <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Pen className="h-6 w-6 text-white" />
+                              </div>
+                            </button>
+                            {!selectedFile && (
+                              <p className="text-xs text-muted-foreground">Clique no avatar para alterar a imagem.</p>
+                            )}
+                            {selectedFile && (
+                              <p className="text-xs text-blue-600 font-medium">Nova imagem pronta. Clique em &quot;Guardar&quot;.</p>
+                            )}
+                          </div>
+                          
+                          {/* Bio */}
+                          <div className="space-y-1">
+                              <Label htmlFor="profile-bio-skeleton" className="text-sm font-medium text-foreground">Bio Curta</Label>
+                              <Textarea id="profile-bio-skeleton" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Fale um pouco sobre si..." maxLength={200} className="h-24 placeholder:text-muted-foreground" disabled={isSavingSettings} />
+                               <p className="text-xs text-muted-foreground">{200 - (bio?.length || 0)} caracteres restantes</p>
+                          </div>
+                          
+                          {/* Status da Live (Twitch) */}
+                          <div className="space-y-2 pt-2">
+                            <Label className="text-sm font-medium text-foreground">Status da Live (Twitch)</Label>
+                            {session?.user?.twitchUsername ? (
+                              <div className="flex items-center justify-between gap-2 rounded-md border border-input bg-background p-3">
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6441a5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-twitch flex-shrink-0"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7"/></svg>
+                                  <span className="text-sm font-medium text-foreground truncate" title={session.user.twitchUsername}>
+                                    {session.user.twitchUsername}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-semibold text-green-600 flex-shrink-0">VINCULADO</span>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="text-xs text-muted-foreground pb-1">Para exibir o indicador &quot;LIVE&quot; no seu perfil, vincule sua conta da Twitch.</p>
+                                <Button 
+                                  variant="outline" 
+                                  className="w-full bg-[#6441a5] text-white hover:bg-[#583894]" 
+                                  onClick={() => signIn("twitch")}
+                                  disabled={isSavingSettings}
+                                >
+                                  Vincular com a Twitch
+                                </Button>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Privacidade */}
+                          <div className="space-y-2 pt-2">
+                            <Label className="text-sm font-medium text-foreground">Visibilidade do Perfil</Label>
+                            <RadioGroup 
+                              value={profileVisibility} 
+                              onValueChange={(value: ProfileVisibility) => setProfileVisibility(value)}
+                              disabled={isSavingSettings}
+                              className="space-y-2 pt-1"
+                            >
+                              <Label 
+                                htmlFor="visibility-public-skeleton" 
+                                className="flex items-center space-x-3 rounded-md border bg-background p-3 cursor-pointer transition-colors hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary"
+                              >
+                                <RadioGroupItem value="PUBLIC" id="visibility-public-skeleton" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-foreground text-sm">Público</span>
+                                  <span className="text-xs text-muted-foreground">Qualquer pessoa pode ver o seu perfil.</span>
+                                </div>
+                              </Label>
+                              <Label 
+                                htmlFor="visibility-followers-skeleton" 
+                                className="flex items-center space-x-3 rounded-md border bg-background p-3 cursor-pointer transition-colors hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary"
+                              >
+                                <RadioGroupItem value="FOLLOWERS_ONLY" id="visibility-followers-skeleton" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-foreground text-sm">Privado (Seguidores)</span>
+                                  <span className="text-xs text-muted-foreground">Apenas utilizadores que o seguem podem ver.</span>
+                                </div>
+                              </Label>
+                            </RadioGroup>
+                          </div>
+
+                          {/* --- [Switches de Visibilidade] --- */}
+                          <div className="space-y-2 pt-2">
+                            <Label className="text-sm font-medium text-foreground">Visibilidade das Listas</Label>
+                            <p className="text-xs text-muted-foreground">Escolha quais listas são visíveis na sua página pública.</p>
+                            <div className="space-y-3 pt-2">
+                              <div className="flex items-center justify-between rounded-md border p-3">
+                                <Label htmlFor="showToWatch-skeleton" className="text-sm font-medium cursor-pointer">Para Assistir</Label>
+                                <Switch id="showToWatch-skeleton" checked={showToWatch} onCheckedChange={setShowToWatch} disabled={isSavingSettings} />
+                              </div>
+                              <div className="flex items-center justify-between rounded-md border p-3">
+                                <Label htmlFor="showWatching-skeleton" className="text-sm font-medium cursor-pointer">Assistindo</Label>
+                                <Switch id="showWatching-skeleton" checked={showWatching} onCheckedChange={setShowWatching} disabled={isSavingSettings} />
+                              </div>
+                              <div className="flex items-center justify-between rounded-md border p-3">
+                                <Label htmlFor="showWatched-skeleton" className="text-sm font-medium cursor-pointer">Já Assistido</Label>
+                                <Switch id="showWatched-skeleton" checked={showWatched} onCheckedChange={setShowWatched} disabled={isSavingSettings} />
+                              </div>
+                              <div className="flex items-center justify-between rounded-md border p-3">
+                                <Label htmlFor="showDropped-skeleton" className="text-sm font-medium cursor-pointer">Abandonados</Label>
+                                <Switch id="showDropped-skeleton" checked={showDropped} onCheckedChange={setShowDropped} disabled={isSavingSettings} />
+                              </div>
+                            </div>
+                          </div>
+                          {/* --- [FIM] --- */}
+
+                          {/* Botão de Guardar */}
+                          <Button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full mt-2">
+                             {isSavingSettings ? "A guardar..." : "Guardar Definições"}
+                          </Button>
+                          {settingsMessage && <p className={`text-sm text-center font-medium ${actionError ? 'text-red-600' : 'text-green-600'}`}>{settingsMessage}</p>}
+                      </CardContent>
+                  </Card>
+              )}
+
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={handleStartTourClick}
+                disabled // Desabilita o botão de tour durante o load
+              >
+                Reiniciar Tour
+              </Button>
+
+           </aside>
+           {/* --- [FIM DA CORREÇÃO DA SIDEBAR] --- */}
+
+             {/* 2. Conteúdo Principal (Aqui mostramos o loading) */}
+             {/* --- [CORREÇÃO HORIZONTAL] Adicionado w-0 --- */}
+             <main className="flex-1 w-0 space-y-6">
+                <Card>
+                  <CardContent className="p-6 min-h-[300px] flex items-center justify-center">
+                    <p className="text-center text-muted-foreground">A carregar listas...</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-6 min-h-[300px] flex items-center justify-center">
+                    <p className="text-center text-muted-foreground">A carregar agendamentos...</p>
+                  </CardContent>
+                </Card>
+                 <Card>
+                  <CardContent className="p-6 min-h-[300px] flex items-center justify-center">
+                    <p className="text-center text-muted-foreground">A carregar calendário...</p>
+                  </CardContent>
+                </Card>
+             </main> 
+          </div> 
+        </div>
+      </>
+    ); 
+  }
+  // --- [FIM DA CORREÇÃO] ---
+
+  // --- JSX (Conteúdo Carregado) ---
   return (
     <>
       <AppTour
@@ -760,7 +972,7 @@ export default function DashboardPage() {
                             </RadioGroup>
                           </div>
 
-                          {/* --- [INÍCIO DA MUDANÇA 5: Adicionar Switches] --- */}
+                          {/* --- [Switches de Visibilidade] --- */}
                           <div className="space-y-2 pt-2">
                             <Label className="text-sm font-medium text-foreground">Visibilidade das Listas</Label>
                             <p className="text-xs text-muted-foreground">Escolha quais listas são visíveis na sua página pública.</p>
@@ -783,7 +995,7 @@ export default function DashboardPage() {
                               </div>
                             </div>
                           </div>
-                          {/* --- [FIM DA MUDANÇA 5] --- */}
+                          {/* --- [FIM] --- */}
 
                           {/* Botão de Guardar */}
                           <Button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full mt-2">
@@ -805,7 +1017,8 @@ export default function DashboardPage() {
            </aside> 
 
            {/* 2. Conteúdo Principal */}
-           <main className="flex-1 space-y-6">
+           {/* --- [CORREÇÃO HORIZONTAL] Adicionado w-0 --- */}
+           <main className="flex-1 w-0 space-y-6">
                
                <Card id="tour-step-2-listas-busca">
                  <CardContent className="p-6">
