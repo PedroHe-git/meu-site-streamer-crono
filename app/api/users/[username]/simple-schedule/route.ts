@@ -1,12 +1,12 @@
 // app/api/users/[username]/simple-schedule/route.ts
-// (NOVO ARQUIVO)
+// (ARQUIVO CORRIGIDO)
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { ProfileVisibility } from "@prisma/client";
-// --- [MUDANÇA] Importar 'isSameDay' ---
+// --- Importar 'isSameDay' ---
 import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, isSameDay } from "date-fns";
 
 export const runtime = 'nodejs';
@@ -29,7 +29,7 @@ export async function GET(
   const { username } = params;
 
   try {
-    // 1. Encontrar o utilizador do perfil (lógica idêntica à sua API existente)
+    // 1. Encontrar o utilizador do perfil
     const user = await prisma.user.findUnique({
       where: { username: decodeURIComponent(username).toLowerCase() },
       select: { 
@@ -45,7 +45,7 @@ export async function GET(
       });
     }
 
-    // 2. Verificar Privacidade (lógica idêntica à sua API existente)
+    // 2. Verificar Privacidade
     const isOwner = loggedInUserId === user.id;
     let isFollowing = false;
     if (loggedInUserId && !isOwner) {
@@ -73,11 +73,11 @@ export async function GET(
       return NextResponse.json(folgaSchedule);
     }
 
-    // 3. Obter o weekOffset da URL (lógica idêntica)
+    // 3. Obter o weekOffset da URL
     const { searchParams } = new URL(request.url);
     const weekOffset = parseInt(searchParams.get('weekOffset') || '0');
 
-    // 4. Calcular o intervalo de datas (Início na Segunda) (lógica idêntica)
+    // 4. Calcular o intervalo de datas (Início na Segunda)
     const today = new Date();
     const weekOptions = { weekStartsOn: 1 as const }; 
     
@@ -85,7 +85,7 @@ export async function GET(
     const startDate = startOfDay(startOfWeek(targetDate, weekOptions)); // Esta é a Segunda-feira
     const endDate = endOfDay(endOfWeek(targetDate, weekOptions));     // Este é o Domingo
 
-    // 5. Buscar todos os itens DENTRO desse intervalo (lógica idêntica)
+    // 5. Buscar todos os itens DENTRO desse intervalo
     const scheduleItems = await prisma.scheduleItem.findMany({
       where: {
         userId: user.id,
@@ -93,7 +93,7 @@ export async function GET(
           gte: startDate,
           lte: endDate,
         },
-        isCompleted: false, // <-- [RECOMENDAÇÃO] Apenas mostrar itens não concluídos
+        isCompleted: false, 
       },
       include: {
         media: true, // Precisamos da mídia para o título do evento
@@ -104,7 +104,7 @@ export async function GET(
       ],
     });
 
-    // --- [INÍCIO DA NOVA LÓGICA DE FORMATAÇÃO] ---
+    // --- [INÍCIO DA LÓGICA DE FORMATAÇÃO CORRIGIDA] ---
 
     // 6. Mapear os dias da semana para as abreviações
     const dayAbbreviations = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -114,16 +114,18 @@ export async function GET(
     for (let i = 0; i < 7; i++) {
       const currentDay = addDays(startDate, i);
       
-      // Encontra o *primeiro* item agendado para este dia
-      const eventForItem = scheduleItems.find(item => 
+      // Encontra *TODOS* os itens agendados para este dia
+      const eventsForDay = scheduleItems.filter(item => 
         isSameDay(new Date(item.scheduledAt), currentDay)
       );
 
-      if (eventForItem) {
-        // Se encontrar um evento, usa o título da mídia
+      if (eventsForDay.length > 0) {
+        // Se encontrar eventos, junta todos os títulos
+        const eventTitles = eventsForDay.map(item => item.media.title).join(" / ");
+        
         formattedSchedule.push({
           day: dayAbbreviations[i],
-          event: eventForItem.media.title, 
+          event: eventTitles, 
           active: true
         });
       } else {
@@ -139,7 +141,7 @@ export async function GET(
     // 8. Retorna o JSON formatado
     return NextResponse.json(formattedSchedule);
     
-    // --- [FIM DA NOVA LÓGICA DE FORMATAÇÃO] ---
+    // --- [FIM DA LÓGICA DE FORMATAÇÃO CORRIGIDA] ---
 
   } catch (error) {
     console.error(`Erro ao buscar cronograma simples para ${username}:`, error);
