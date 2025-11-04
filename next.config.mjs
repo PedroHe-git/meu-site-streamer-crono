@@ -1,3 +1,5 @@
+// next.config.mjs
+
 import path from 'path';
 
 // --- DEFINIÇÃO DA CSP (Sintaxe segura) ---
@@ -61,12 +63,33 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Aplica os cabeçalhos de segurança (CSP) a todas as rotas
         source: "/:path*",
         headers: securityHeaders,
       },
+      // --- [INÍCIO DA NOVA SEÇÃO DE CORS] ---
+      {
+        // Aplica os cabeçalhos de CORS APENAS às suas rotas de API
+        source: "app/api/users/[username]/simple-schedule",
+        headers: [
+          {
+            key: "Access-Control-Allow-Origin",
+            // Permite o seu localhost de testes
+            value: "http://localhost:3000", 
+          },
+          {
+            key: "Access-Control-Allow-Methods",
+            value: "GET",
+          },
+          {
+            key: "Access-Control-Allow-Headers",
+            value: "Content-Type",
+          },
+        ],
+      },
+      // --- [FIM DA NOVA SEÇÃO DE CORS] ---
     ];
   },
 };
 
 export default nextConfig;
-
