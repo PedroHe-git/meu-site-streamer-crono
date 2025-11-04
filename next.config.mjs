@@ -70,7 +70,7 @@ const nextConfig = {
       // --- [INÍCIO DA NOVA SEÇÃO DE CORS] ---
       {
         // Aplica os cabeçalhos de CORS APENAS às suas rotas de API
-        source: "app/api/users/[username]/simple-schedule",
+        source: "/app/api/users/[username]/simple-schedule",
         headers: [
           {
             key: "Access-Control-Allow-Origin",
