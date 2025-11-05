@@ -237,9 +237,9 @@ export default function DashboardPage() {
       setShowWatched(session.user.showWatchedList ?? true);
       setShowDropped(session.user.showDroppedList ?? true);
     }
-  }, [session?.user]);
+  }, [session?.user, selectedFile]); // [CORREÇÃO] Adicionado selectedFile à dependência
   
-  // --- (Funções de Busca de Dados - sem mudanças) ---
+  // --- (Funções de Busca de Dados - fetchListData sem mudanças) ---
   const fetchListData = useCallback(async (listStatus: StatusKey, page: number = 1, search: string = "") => {
     setIsListLoading(prev => ({ ...prev, [listStatus]: true }));
     try {
@@ -262,9 +262,16 @@ export default function DashboardPage() {
     }
   }, [pageSize]);
 
+  // --- [INÍCIO DA CORREÇÃO] ---
   const fetchScheduleData = async () => {
     try {
-      const resSchedule = await fetch("/api/schedule"); 
+      // Define o início do dia de "hoje" no fuso horário local do cliente
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      
+      // Envia a data como ISO string (que inclui o fuso horário)
+      const resSchedule = await fetch(`/api/schedule?start=${todayStart.toISOString()}`);
+
       if (!resSchedule.ok) { throw new Error('Falha ao buscar schedule'); }
       const scheduleData = await resSchedule.json();
       setScheduleItems(scheduleData);
@@ -273,6 +280,7 @@ export default function DashboardPage() {
       setScheduleItems([]);
     }
   };
+  // --- [FIM DA CORREÇÃO] ---
 
   useEffect(() => {
     if (status === "authenticated") {

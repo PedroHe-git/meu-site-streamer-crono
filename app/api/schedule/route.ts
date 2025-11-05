@@ -34,26 +34,37 @@ export async function GET(request: Request) {
       userId: user.id,
     };
 
-    // 2. Verifica se o FullCalendar enviou datas
+    // --- [INÍCIO DA CORREÇÃO] ---
+    // 2. Lógica de data atualizada
     if (startDate && endDate) {
-      // Se sim, usa o intervalo de datas do calendário
+      // Caso 1: FullCalendar (tem início E fim)
       whereCondition.scheduledAt = {
         gte: new Date(startDate),
         lte: new Date(endDate),
       };
-      // (NÃO filtramos por isCompleted, pois o calendário quer ver tudo)
-    } else {
-      // Se não, é o ScheduleManager (a lista) a pedir
-      // Busca apenas itens futuros e não concluídos
+      // (Não filtra por isCompleted, pois o calendário quer ver tudo)
+
+    } else if (startDate && !endDate) {
+      // Caso 2: ScheduleManager (tem apenas início)
+      // O 'startDate' é o início do "hoje" do cliente, vindo como ISO string
       whereCondition.scheduledAt = {
-        gte: new Date(new Date().setHours(0, 0, 0, 0)),
+        gte: new Date(startDate),
+      };
+      whereCondition.isCompleted = false; // A lista só mostra itens pendentes
+
+    } else {
+      // Caso 3: Fallback (se nenhuma data for enviada - comportamento antigo)
+      // Esta lógica pode ter problemas de fuso horário em Vercel (UTC)
+      whereCondition.scheduledAt = {
+        gte: new Date(new Date().setHours(0, 0, 0, 0)), 
       };
       whereCondition.isCompleted = false;
     }
+    // --- [FIM DA CORREÇÃO] ---
 
     // 3. Busca no banco de dados USANDO a 'whereCondition' correta
     const scheduleItems = await prisma.scheduleItem.findMany({
-      where: whereCondition, // <--- ESTA É A CORREÇÃO
+      where: whereCondition, 
       include: {
         media: true, // Inclui a mídia
       },
@@ -178,4 +189,3 @@ export async function DELETE(request: Request) {
     return new NextResponse(JSON.stringify({ error: "Erro interno ao deletar item" }), { status: 500 });
   }
 }
-
