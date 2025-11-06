@@ -265,12 +265,10 @@ export default function DashboardPage() {
   // --- [INÍCIO DA CORREÇÃO] ---
   const fetchScheduleData = async () => {
     try {
-      // Define o início do dia de "hoje" no fuso horário local do cliente
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      
-      // Envia a data como ISO string (que inclui o fuso horário)
-      const resSchedule = await fetch(`/api/schedule?start=${todayStart.toISOString()}`);
+      // Em vez de enviar a data de "hoje", pedimos a lista de "pendentes".
+      // O FullCalendar continuará a enviar "start" e "end",
+      // mas esta chamada (para a lista) só enviará "list=pending".
+      const resSchedule = await fetch(`/api/schedule?list=pending`);
 
       if (!resSchedule.ok) { throw new Error('Falha ao buscar schedule'); }
       const scheduleData = await resSchedule.json();

@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('start');
     const endDate = searchParams.get('end');
+    const listType = searchParams.get('list');
 
     // Define a condição base
     const whereCondition: Prisma.ScheduleItemWhereInput = {
@@ -37,24 +38,22 @@ export async function GET(request: Request) {
     // --- [INÍCIO DA CORREÇÃO] ---
     // 2. Lógica de data atualizada
     if (startDate && endDate) {
-      // Caso 1: FullCalendar (tem início E fim)
+      // Caso 1: FullCalendar (tem início E fim) - Nenhuma mudança aqui
       whereCondition.scheduledAt = {
         gte: new Date(startDate),
         lte: new Date(endDate),
       };
       // (Não filtra por isCompleted, pois o calendário quer ver tudo)
 
-    } else if (startDate && !endDate) {
-      // Caso 2: ScheduleManager (tem apenas início)
-      // O 'startDate' é o início do "hoje" do cliente, vindo como ISO string
-      whereCondition.scheduledAt = {
-        gte: new Date(startDate),
-      };
-      whereCondition.isCompleted = false; // A lista só mostra itens pendentes
+    } else if (listType === 'pending') {
+      // Caso 2: Lista do Dashboard (envia list=pending)
+      // Não aplica filtro de data! Busca todos os pendentes.
+      whereCondition.isCompleted = false;
 
     } else {
-      // Caso 3: Fallback (se nenhuma data for enviada - comportamento antigo)
-      // Esta lógica pode ter problemas de fuso horário em Vercel (UTC)
+      // Caso 3: Fallback (se a API for chamada sem parâmetros)
+      // Mantém a lógica de "hoje em diante" (que era o bug original)
+      // mas o nosso dashboard não vai mais cair aqui.
       whereCondition.scheduledAt = {
         gte: new Date(new Date().setHours(0, 0, 0, 0)), 
       };
