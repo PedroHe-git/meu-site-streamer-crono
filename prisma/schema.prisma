@@ -55,6 +55,7 @@ model User {
 
   // --- Campos de Personalização ---
   bio              String?   @db.Text // Mantido
+  profileBannerUrl String?
   
   profileVisibility ProfileVisibility @default(PUBLIC)
   twitchUsername   String?           @unique

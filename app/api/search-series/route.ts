@@ -1,67 +1,61 @@
 // app/api/search-series/route.ts
-
-import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse } from "next/server";
 
 export const runtime = 'nodejs';
 export const revalidate = 0;
 
-// Não precisamos mais do 'date-fns' aqui, o frontend já cuida disso
-// import { parseISO, getYear } from 'date-fns';
-
-export async function GET(request: NextRequest) {
-  const tmdbApiKey = process.env.TMDB_API_KEY;
-  if (!tmdbApiKey) {
-    return NextResponse.json(
-      { error: 'Chave da API do TMDB não configurada' },
-      { status: 500 }
-    );
-  }
-
+export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get('query');
+  
+  // 1. Corrigido: Ouve o parâmetro "q"
+  const query = searchParams.get("q");
 
   if (!query) {
-    return NextResponse.json(
-      { error: 'Termo de busca (query) é obrigatório' },
-      { status: 400 }
-    );
+    return new NextResponse(JSON.stringify({ error: "Query 'q' faltando" }), { status: 400 });
   }
 
+  const tmdbApiKey = process.env.TMDB_API_KEY;
+  if (!tmdbApiKey) {
+    console.error("Chave API do TMDB não configurada");
+    return new NextResponse(JSON.stringify({ error: "Chave API não configurada" }), { status: 500 });
+  }
+
+  // 2. Corrigido: Usa api_key na URL
+  const url = `https://api.themoviedb.org/3/search/tv?query=${encodeURIComponent(
+    query
+  )}&language=pt-BR&include_adult=false&api_key=${tmdbApiKey}`; // <--- AUTENTICAÇÃO CORRETA
+
+  const options = {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      // Remove o Header "Authorization"
+    },
+  };
+
   try {
-    const tmdbUrl = `https://api.themoviedb.org/3/search/tv?query=${encodeURIComponent(
-      query
-    )}&language=pt-BR&include_adult=false`;
-
-    // Autenticação Bearer Token (igual à sua API de filmes)
-    const options = {
-      method: 'GET',
-      headers: {
-        accept: 'application/json',
-        Authorization: `Bearer ${tmdbApiKey}`,
-      },
-    };
-
-    const res = await fetch(tmdbUrl, options);
-
+    const res = await fetch(url, options);
     if (!res.ok) {
-      const errorDetails = await res.json();
-      console.error("Erro detalhado do TMDB (/api/search-series):", errorDetails);
-      throw new Error(`Falha ao buscar no TMDB: ${errorDetails.status_message || res.statusText}`);
+      const errorData = await res.json();
+      console.error("Falha ao buscar dados de Séries no TMDB:", errorData);
+      throw new Error(errorData.status_message || "Falha ao buscar dados do TMDB");
     }
-
     const data = await res.json();
 
-    // --- [MUDANÇA PRINCIPAL AQUI] ---
-    // Retornamos 'data.results' (dados brutos),
-    // exatamente como sua API de filmes /api/search/route.ts faz.
-    // O seu componente MediaSearch.tsx vai cuidar da formatação.
-    return NextResponse.json(data.results);
+    // 3. Formata os dados para o MediaSearch.tsx
+    // (TV shows usam "name" e "first_air_date")
+    const results = data.results.map((serie: any) => ({
+      source: "SERIES", // Define a fonte
+      sourceId: serie.id,
+      title: serie.name, // <--- Campo correto para TV
+      posterPath: serie.poster_path ? `https://image.tmdb.org/t/p/w500${serie.poster_path}` : null,
+      releaseYear: serie.first_air_date ? parseInt(serie.first_air_date.split('-')[0]) : null, // <--- Campo correto para TV
+    }));
 
-  } catch (error) {
-    console.error('Erro na API /api/search-series:', error);
-    return NextResponse.json(
-      { error: 'Erro interno do servidor' },
-      { status: 500 }
-    );
+    return NextResponse.json(results); // Retorna os dados formatados
+
+  } catch (error: any) {
+    console.error("Erro na API de busca de Séries:", error.message);
+    return new NextResponse(JSON.stringify({ error: "Erro interno ao buscar séries" }), { status: 500 });
   }
 }

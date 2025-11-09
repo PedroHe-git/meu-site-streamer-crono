@@ -1,172 +1,422 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import DatePicker, { registerLocale } from "react-datepicker";
-import { ptBR } from "date-fns/locale/pt-BR";
-registerLocale("pt-BR", ptBR);
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
-import { Media, MediaStatus, ScheduleItem, MediaType } from "@prisma/client";
-import "react-datepicker/dist/react-datepicker.css";
-import { FiRefreshCw } from 'react-icons/fi';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, } from "@/components/ui/alert-dialog";
+import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarIcon, Clock, Check, X, Plus, Trash2, Loader2, Calendar as CalendarIconLucide } from "lucide-react"; 
+import { Calendar as ShadCalendar } from "@/components/ui/calendar";
+
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ImageWithFallback } from "@/components/ui/image-with-fallback";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
+// Tipos
+type MediaType = "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
+type MediaItem = {
+  id: string; 
+  mediaId: string;
+  title: string;
+  mediaType: MediaType; // Corrigido de 'type'
+  posterPath: string; 
+  status: string;
+  isWeekly?: boolean;
+  lastSeason?: number;
+  lastEpisode?: number;
+};
 
-// Tipagem (sem mudanças)
-type MediaStatusWithMedia = MediaStatus & { media: Media };
-type ScheduleItemWithMedia = ScheduleItem & { media: Media };
-type Props = { agendaveisList: MediaStatusWithMedia[]; initialScheduleItems: ScheduleItemWithMedia[]; onScheduleChanged: () => void; };
+type ScheduleItem = {
+  id: string;
+  mediaId: string;
+  scheduledAt: string; 
+  horario: string | null; 
+  isCompleted: boolean; 
+  season?: number | null;
+  episode?: number | null;
+  episodeEnd?: number | null;
+  media: any; 
+};
 
-export default function ScheduleManager({ agendaveisList, initialScheduleItems, onScheduleChanged, }: Props) {
-  // Estados (sem mudanças)
-  const [selectedMediaId, setSelectedMediaId] = useState<string>(""); 
-  const [scheduledAt, setScheduledAt] = useState<Date>(new Date()); 
-  const [horario, setHorario] = useState<string>(""); 
-  const [seasonNumber, setSeasonNumber] = useState<number | "">(""); 
-  const [episodeNumber, setEpisodeNumber] = useState<number | "">(""); 
-  const [episodeNumberEnd, setEpisodeNumberEnd] = useState<number | "">(""); 
-  const [scheduleItems, setScheduleItems] = useState(initialScheduleItems); 
-  const [loading, setLoading] = useState(false); 
-  const [message, setMessage] = useState(""); 
-  const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false); 
-  const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false); 
-  const [itemToConfirm, setItemToConfirm] = useState<ScheduleItemWithMedia | null>(null);
+type ScheduleManagerProps = {
+  mediaItems: MediaItem[]; 
+  scheduleItems: ScheduleItem[];
+  onAddSchedule: (newSchedule: ScheduleItem) => void;
+  onRemoveSchedule: (id: string) => void;
+  onCompleteSchedule: (id: string) => void;
+};
 
-  useEffect(() => { setScheduleItems(initialScheduleItems); }, [initialScheduleItems]);
+export default function ScheduleManager({
+  mediaItems,
+  scheduleItems,
+  onAddSchedule,
+  onRemoveSchedule,
+  onCompleteSchedule,
+}: ScheduleManagerProps) {
+  const [selectedMedia, setSelectedMedia] = useState(""); 
+  const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
+  const [error, setError] = useState("");
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  const selectedItemInfo = useMemo(() => agendaveisList.find( (item) => item.mediaId === selectedMediaId ), [agendaveisList, selectedMediaId]);
-  const isMovie = selectedItemInfo?.media.mediaType === MediaType.MOVIE;
+  const today = new Date(new Date().setHours(0, 0, 0, 0));
 
-  // handleAddItem (sem mudanças)
-  const handleAddItem = async (e: React.FormEvent) => { 
-    e.preventDefault(); 
-    if (!selectedMediaId) { setMessage("Selecione um item."); return; } 
-    setLoading(true); setMessage(""); 
-    try { 
-      const res = await fetch("/api/schedule", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mediaId: selectedMediaId, scheduledAt: scheduledAt.toISOString(), horario: horario || null, seasonNumber: seasonNumber || null, episodeNumber: episodeNumber || null, episodeNumberEnd: episodeNumberEnd || null, }), }); 
-      if (!res.ok) throw new Error(await res.text()); 
-      setMessage("Item adicionado!"); 
-      setSelectedMediaId(""); setHorario(""); setSeasonNumber(""); setEpisodeNumber(""); setEpisodeNumberEnd(""); 
-      onScheduleChanged(); 
-    } catch (error: any) { setMessage(`Erro: ${error.message}`); 
-    } finally { setLoading(false); } 
+  const getMediaById = (id: string) => mediaItems.find((m) => m.mediaId === id);
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+    });
   };
-  
-  // handleRemoveItem (sem mudanças)
-  const handleRemoveItem = (item: ScheduleItemWithMedia) => { 
-    setItemToConfirm(item); 
-    setIsRemoveDialogOpen(true); 
-  };
-  
-  // handleCompleteItem (sem mudanças)
-  const handleCompleteItem = (item: ScheduleItemWithMedia) => { 
-    setItemToConfirm(item); 
-    setIsCompleteDialogOpen(true); 
-  };
-  
-  // confirmRemoveItem (sem mudanças)
-  const confirmRemoveItem = async () => { 
-    if (!itemToConfirm) return; 
-    setLoading(true); setMessage(""); 
-    try { 
-      const res = await fetch(`/api/schedule?id=${itemToConfirm.id}`, { method: "DELETE" }); 
-      if (!res.ok) throw new Error(await res.text()); 
-      setMessage("Item removido."); 
-      onScheduleChanged(); 
-    } catch (error: any) { setMessage(`Erro ao remover: ${error.message}`); 
-    } finally { 
-      setLoading(false); 
-      setItemToConfirm(null); 
-      setIsRemoveDialogOpen(false); 
-    } 
-  };
 
-  // --- [MUDANÇA AQUI] ---
-  // confirmCompleteItem (Atualizado para usar a nova resposta da API)
-  const confirmCompleteItem = async () => { 
-    if (!itemToConfirm) return; 
-    setLoading(true); setMessage(""); 
-    try { 
-      const res = await fetch("/api/schedule/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scheduleItemId: itemToConfirm.id }), }); 
+  const handleAddSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMedia || !scheduleDate) {
+      setError("Selecione uma mídia e uma data.");
+      return;
+    }
+    
+    const key = `add-${selectedMedia}`;
+    setLoadingStates(prev => ({ ...prev, [key]: true }));
+    setError("");
+
+    try {
+      const scheduleData = {
+        mediaId: selectedMedia, 
+        scheduledAt: scheduleDate.toISOString(),
+        horario: scheduleTime || null,
+      };
+
+      const res = await fetch("/api/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(scheduleData),
+      });
+
+      if (!res.ok) {
+        throw new Error("Falha ao agendar");
+      }
       
-      if (!res.ok) { 
+      const newScheduleItem = await res.json();
+      onAddSchedule(newScheduleItem); 
+      
+      setSelectedMedia("");
+      setScheduleDate(undefined);
+      setScheduleTime("");
+      
+    } catch (err: any) {
+      setError(err.message || "Ocorreu um erro ao agendar.");
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleComplete = async (id: string) => {
+    const key = `complete-${id}`;
+    setLoadingStates(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await fetch('/api/schedule/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scheduleItemId: id }), 
+      });
+      if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || "Falha ao concluir item"); 
-      }
-
-      const result = await res.json();
-      
-      // Lê a flag 'isWeekly' da resposta da API
-      if (result.isWeekly) {
-        setMessage("Progresso semanal atualizado!");
-      } else {
-        setMessage("Item concluído e movido para 'Já Assistido'!");
+        console.error("Falha ao completar (API):", errorData);
+        throw new Error('Falha ao completar');
       }
       
-      onScheduleChanged(); // Atualiza as listas
+      onCompleteSchedule(id); 
       
-    } catch (error: any) { 
-      setMessage(`Erro ao concluir: ${error.message}`); 
-    } finally { 
-      setLoading(false); 
-      setItemToConfirm(null); 
-      setIsCompleteDialogOpen(false); 
-    } 
+    } catch (error: any) {
+      console.error(error.message);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [key]: false }));
+    }
   };
-  // --- [FIM DA MUDANÇA] ---
 
-  // Lógica para verificar se o item a confirmar é semanal
-  const isConfirmItemWeekly = useMemo(() => {
-    if (!itemToConfirm) return false;
-    const mediaStatus = agendaveisList.find(ms => ms.mediaId === itemToConfirm.mediaId);
-    return mediaStatus?.isWeekly ?? false;
-  }, [itemToConfirm, agendaveisList]);
+  const handleRemove = async (id: string) => {
+    const key = `remove-${id}`;
+    setLoadingStates(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await fetch(`/api/schedule?id=${id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error('Falha ao remover');
+
+      onRemoveSchedule(id); 
+
+    } catch (error: any) {
+      console.error(error.message);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [key]: false }));
+    }
+  };
   
+  const { upcomingSchedules, completedSchedules } = useMemo(() => {
+    if (!Array.isArray(scheduleItems)) return { upcomingSchedules: [], completedSchedules: [] };
+
+    const upcoming = scheduleItems
+      .filter(item => !item.isCompleted)
+      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+      
+    const completed = scheduleItems
+      .filter(item => item.isCompleted)
+      .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
+
+    return { upcomingSchedules: upcoming, completedSchedules: completed };
+  }, [scheduleItems]);
+
 
   return (
-    <div className="space-y-6">
-      {/* Formulário (sem mudanças) */}
-      <form onSubmit={handleAddItem} className="space-y-4">
-         <div> <Label htmlFor="schedule-select-media">Item (da lista &ldquo;Essa Semana&rdquo;)</Label> <Select value={selectedMediaId} onValueChange={setSelectedMediaId}> <SelectTrigger id="schedule-select-media" className="mt-1"> <SelectValue placeholder="Selecione um item..." /> </SelectTrigger> <SelectContent> {agendaveisList.map((ms) => ( <SelectItem key={ms.mediaId} value={ms.mediaId}> {ms.media.title} </SelectItem> ))} </SelectContent> </Select> </div>
-          <div className="grid grid-cols-2 gap-4"> <div> <Label>Data</Label> <DatePicker selected={scheduledAt} onChange={(date: Date | null) => { if (date) { setScheduledAt(date); } }} dateFormat="dd/MM/yyyy" locale="pt-BR" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 mt-1" minDate={new Date()} /> </div> <div> <Label htmlFor="schedule-time">Horário (Opc.)</Label> <Input id="schedule-time" type="time" value={horario} onChange={(e) => setHorario(e.target.value)} className="mt-1" /> </div> </div>
-          {!isMovie && selectedMediaId && ( <div className="grid grid-cols-3 gap-2 pt-2"> <div> <Label htmlFor="schedule-season">Temp.</Label> <Input id="schedule-season" type="number" min="0" value={seasonNumber} onChange={(e) => setSeasonNumber(e.target.value === '' ? '' : parseInt(e.target.value))} placeholder="T" className="mt-1"/> </div> <div> <Label htmlFor="schedule-ep-start">Ep. Início</Label> <Input id="schedule-ep-start" type="number" min="0" value={episodeNumber} onChange={(e) => setEpisodeNumber(e.target.value === '' ? '' : parseInt(e.target.value))} placeholder="Ep" className="mt-1"/> </div> <div> <Label htmlFor="schedule-ep-end">Ep. Fim (Opc.)</Label> <Input id="schedule-ep-end" type="number" min="0" value={episodeNumberEnd} onChange={(e) => setEpisodeNumberEnd(e.target.value === '' ? '' : parseInt(e.target.value))} placeholder="Fim" className="mt-1"/> </div> </div> )}
-          <Button type="submit" disabled={loading} className="w-full"> {loading ? "A guardar..." : "Agendar Item"} </Button>
-          {message && <p className="text-sm text-center text-muted-foreground pt-1">{message}</p>}
-      </form>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <Card className="md:col-span-1 shadow-lg border-2">
+        <CardHeader>
+          <CardTitle>Agendar Sessão</CardTitle>
+          <CardDescription>
+            Escolha um item da sua lista "Essa Semana"
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleAddSchedule} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="media-select">Mídia</Label>
+              <Select
+                value={selectedMedia}
+                onValueChange={setSelectedMedia}
+              >
+                <SelectTrigger id="media-select">
+                  <SelectValue placeholder="Selecione uma mídia..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {mediaItems.length > 0 ? (
+                    mediaItems.map((item) => (
+                      <SelectItem key={item.id} value={item.mediaId}>
+                        {item.title}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      Nenhum item em "Essa Semana"
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
 
-      {/* Lista do Cronograma Atual (sem mudanças) */}
-       <div id="tour-step-lista-agendamentos" className="space-y-4 pt-4 border-t"> <h3 className="text-xl font-semibold">Próximos Agendamentos</h3> {scheduleItems.length === 0 && ( <p className="text-muted-foreground text-sm">Nenhum item agendado.</p> )} <ul className="space-y-2 max-h-96 overflow-y-auto pr-2"> {scheduleItems.map(item => { const mediaStatusInfo = agendaveisList.find(ms => ms.mediaId === item.mediaId); const isItemWeekly = mediaStatusInfo?.isWeekly ?? false; return ( <li key={item.id} className="flex justify-between items-center text-sm gap-2 p-3 border rounded-md shadow-sm"> <div className="flex flex-col overflow-hidden mr-2"> <span className="font-semibold truncate flex items-center gap-1" title={item.media.title}> {item.media.title} {isItemWeekly && (<FiRefreshCw className="inline text-blue-500 flex-shrink-0" title="Item Semanal"/>)} </span> <span className="text-xs text-indigo-600 dark:text-indigo-400 whitespace-nowrap"> {format(new Date(item.scheduledAt), "EEE, dd/MM/yy", { locale: ptBR })} {item.horario && (<span className="text-slate-500 dark:text-slate-400 font-medium"> {' às ' + item.horario} </span> )} </span> {(item.seasonNumber || item.episodeNumber) && ( <span className="text-xs font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap"> {item.seasonNumber && `T${item.seasonNumber}`} {item.episodeNumber && !item.episodeNumberEnd && ` E${item.episodeNumber}`} {item.episodeNumber && item.episodeNumberEnd && ` E${item.episodeNumber}-${item.episodeNumberEnd}`} </span> )} </div> <div className="flex gap-2 flex-shrink-0"> <Button variant={isItemWeekly ? "default" : "secondary"} size="sm" className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white disabled:opacity-50" onClick={() => handleCompleteItem(item)} disabled={loading} title={isItemWeekly ? "Marcar episódio(s) como visto(s)" : "Concluir e mover para 'Já Assistido'"} > {isItemWeekly ? "Visto" : "Concluir"} </Button> <Button variant="destructive" size="sm" className="h-7 px-2 text-xs disabled:opacity-50" onClick={() => handleRemoveItem(item)} disabled={loading} title="Remover do agendamento" > Remover </Button> </div> </li> ); })} </ul> </div>
+            <div className="space-y-4">
+              {/* Calendário - CORRIGIDO */}
+              <div className="space-y-2">
+                <Label htmlFor="schedule-date">Data</Label>
+                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="schedule-date"
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !scheduleDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">
+                        {scheduleDate ? format(scheduleDate, "PPP", { locale: ptBR }) : "Escolha uma data"}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <ShadCalendar
+                      mode="single"
+                      selected={scheduleDate}
+                      onSelect={(date) => {
+                        setScheduleDate(date);
+                        setIsCalendarOpen(false);
+                      }}
+                      disabled={(date) => date < today}
+                      initialFocus
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
 
+              {/* Horário */}
+              <div className="space-y-2">
+                <Label htmlFor="schedule-time">Horário (Opcional)</Label>
+                <Input
+                  id="schedule-time"
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            
+            {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {/* AlertDialogs (sem mudanças) */}
-       <AlertDialog open={isRemoveDialogOpen} onOpenChange={setIsRemoveDialogOpen}> <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle>Confirmar Remoção</AlertDialogTitle> <AlertDialogDescription> Tem a certeza que deseja remover &ldquo;{itemToConfirm?.media?.title}&rdquo; do cronograma? </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel> <Button variant="destructive" onClick={confirmRemoveItem} disabled={loading}> {loading ? "A remover..." : "Remover"} </Button> </AlertDialogFooter> </AlertDialogContent> </AlertDialog>
-       <AlertDialog open={isCompleteDialogOpen} onOpenChange={setIsCompleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Conclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              {isConfirmItemWeekly ?
-                `Marcar o episódio/intervalo agendado de "${itemToConfirm?.media?.title}" como visto? O item permanecerá na lista 'Essa Semana'.`
-              : `Marcar "${itemToConfirm?.media?.title}" como concluído e movê-lo para a lista 'Já Assistido'?`
-              }
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
-             <Button
-                variant={isConfirmItemWeekly ? "default" : "secondary"}
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={confirmCompleteItem}
-                disabled={loading}
-             >
-               {loading ? "A processar..." : (isConfirmItemWeekly ? "Confirmar Visto" : "Confirmar Conclusão")}
+            <Button type="submit" className="w-full" disabled={loadingStates[`add-${selectedMedia}`]}>
+              {loadingStates[`add-${selectedMedia}`] ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agendar Item
+                </>
+              )}
             </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="md:col-span-2 shadow-lg border-2">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Próximos Agendamentos</span>
+            <Badge>{upcomingSchedules.length}</Badge>
+          </CardTitle>
+          <CardDescription>
+            Itens que você planejou assistir.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 max-h-[600px] overflow-y-auto">
+            {upcomingSchedules.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                Nenhum item agendado.
+              </p>
+            ) : (
+              upcomingSchedules.map((schedule) => {
+                const media = getMediaById(schedule.mediaId); 
+                if (!media) return null;
+                
+                const isLoading = loadingStates[`complete-${schedule.id}`] || loadingStates[`remove-${schedule.id}`];
+
+                return (
+                  <div
+                    key={schedule.id}
+                    className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-muted/50 rounded-lg"
+                  >
+                    <ImageWithFallback
+                      src={media.posterPath} 
+                      alt={media.title}
+                      width={60}
+                      height={90}
+                      className="rounded-md object-cover flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold line-clamp-1">{media.title}</h4>
+                      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                        <CalendarIconLucide className="h-4 w-4" />
+                        <span>{formatDate(schedule.scheduledAt)}</span> 
+                      </div>
+                      {schedule.horario && (
+                        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                          <Clock className="h-4 w-4" />
+                          <span>{schedule.horario}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-red-600"
+                        onClick={() => handleRemove(schedule.id)}
+                        disabled={isLoading}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleComplete(schedule.id)}
+                        disabled={isLoading}
+                        className="bg-green-600 text-white hover:bg-green-700 hover:text-white"
+                      >
+                        {isLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                        <span className="ml-2 hidden sm:inline">Concluir</span>
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </CardContent>
+      </Card>
+      
+      {completedSchedules.length > 0 && (
+         <Card className="md:col-span-3 shadow-lg border-2">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Concluídos Recentemente</span>
+              <Badge variant="secondary">{completedSchedules.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {completedSchedules.slice(0, 5).map(schedule => { 
+                const media = getMediaById(schedule.mediaId);
+                if (!media) return null;
+
+                return (
+                  <div
+                    key={schedule.id}
+                    className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
+                  >
+                    <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium line-clamp-1">{media.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(schedule.scheduledAt)}
+                      </p>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="text-muted-foreground hover:text-red-600"
+                      onClick={() => handleRemove(schedule.id)}
+                      disabled={loadingStates[`remove-${schedule.id}`]}
+                    >
+                      {loadingStates[`remove-${schedule.id}`] ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

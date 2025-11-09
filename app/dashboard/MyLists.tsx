@@ -1,212 +1,331 @@
-// app/dashboard/MyLists.tsx (Corrigido)
-
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import Image from "next/image";
-import { Media, MediaStatus, MediaType } from "@prisma/client";
-import { FiRefreshCw } from 'react-icons/fi';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState } from "react";
+import { Film, Tv, Play, Check, X, Trash2, RefreshCw, ChevronLeft, ChevronRight, Search, Loader2 } from "lucide-react"; 
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import MediaSearch from "./MediaSearch";
+import { ImageWithFallback } from "@/components/ui/image-with-fallback";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-// Tipagem
-type MediaStatusWithMedia = MediaStatus & { media: Media; };
-type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
-type ListTab = StatusKey;
-type PaginatedListData = { items: MediaStatusWithMedia[]; totalCount: number; page: number; pageSize: number; };
+// Tipos
+type MediaType = "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
+type MediaStatus = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 
-type MyListsProps = { 
-  toWatchData: PaginatedListData; 
-  watchingData: PaginatedListData; 
-  watchedData: PaginatedListData; 
-  droppedData: PaginatedListData; 
-  onUpdateStatus: (item: MediaStatusWithMedia, newStatus: StatusKey) => void; 
-  onPageChange: (listStatus: StatusKey, newPage: number) => void; 
-  onToggleWeekly: (item: MediaStatusWithMedia) => void; 
-  listLoadingStatus: Record<StatusKey, boolean>; 
-  searchTerm: string; 
-  setSearchTerm: (term: string) => void; 
-  isUpdatingGlobal: boolean; 
-  onMediaAdded: () => void;
-  onRemoveItem: (item: MediaStatusWithMedia) => void; 
+type MediaItem = {
+  id: string; // ID do MediaStatus
+  title: string;
+  // --- [CORREÇÃO 1] ---
+  mediaType: MediaType; // Corrigido de 'type' para 'mediaType'
+  // --- [FIM DA CORREÇÃO] ---
+  posterPath: string; 
+  status: MediaStatus;
+  isWeekly?: boolean;
+  lastSeason?: number;
+  lastEpisode?: number;
+  tmdbId: number;
+  episodes?: number;
+  seasons?: number;
+  media: any; // Adicionado para compatibilidade
 };
 
-// ActionButton
-type ActionButtonProps = { onClick: () => void; label: string; colorClass: string; disabled: boolean; };
-function ActionButton({ onClick, label, colorClass, disabled }: ActionButtonProps) { return ( <Button onClick={onClick} disabled={disabled} size="sm" className={`h-6 px-2 text-xs ${colorClass} hover:${colorClass}/90`} > {label} </Button> ); }
+type MediaListsProps = {
+  items: MediaItem[];
+  counts: {
+    TO_WATCH: number;
+    WATCHING: number;
+    WATCHED: number;
+    DROPPED: number;
+  };
+  searchTerm: string;
+  onSearchChange: (term: string) => void;
+  onUpdateStatus: (id: string, status: MediaItem['status']) => void;
+  onRemove: (id: string) => void;
+  onToggleWeekly: (id: string, isWeekly: boolean) => void;
+};
 
-
-// Componente Principal
 export default function MyLists({
-  toWatchData, watchingData, watchedData, droppedData,
-  onUpdateStatus, onPageChange, onToggleWeekly,
-  listLoadingStatus, searchTerm, setSearchTerm, isUpdatingGlobal,
-  onMediaAdded,
-  onRemoveItem 
-}: MyListsProps) {
+  items,
+  counts,
+  searchTerm,
+  onSearchChange,
+  onUpdateStatus,
+  onRemove,
+  onToggleWeekly,
+}: MediaListsProps) {
+  const [activeList, setActiveList] = useState<MediaStatus>("TO_WATCH");
+  const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
 
-  const [activeTab, setActiveTab] = useState<ListTab>("TO_WATCH");
+  const filteredByStatus = items.filter(
+    (item) =>
+      item.status === activeList &&
+      item.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const paginatedDataMap: Record<ListTab, PaginatedListData> = { TO_WATCH: toWatchData, WATCHING: watchingData, WATCHED: watchedData, DROPPED: droppedData, };
-  const currentData = paginatedDataMap[activeTab];
-  const isLoadingCurrentList = listLoadingStatus[activeTab]; 
-  const totalPages = Math.ceil(currentData.totalCount / currentData.pageSize);
-
-  // renderListItem
-  const renderListItem = (item: MediaStatusWithMedia, listStatus: StatusKey) => {
-    let actionButtons;
-    const isUpdating = isUpdatingGlobal || isLoadingCurrentList;
-    const isWeekly = item.isWeekly;
-    // O seu código usa 'mediaType', o que está correto
-    const isSerieOrAnime = item.media.mediaType === MediaType.SERIES || item.media.mediaType === MediaType.ANIME || item.media.mediaType === MediaType.OUTROS;
-
-    switch (item.status) {
-      
-      case "TO_WATCH": 
-        actionButtons = ( 
-          <div className="flex flex-col sm:flex-row gap-1"> 
-            <ActionButton label="Começar" colorClass="bg-blue-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "WATCHING")} /> 
-            <ActionButton label="Já Assistido" colorClass="bg-gray-500" disabled={isUpdating} onClick={() => onUpdateStatus(item, "WATCHED")} /> 
-            <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} /> 
-          </div> 
-        ); 
-        break;
-
-      case "WATCHING":
-        actionButtons = (
-          <div className="flex flex-col sm:flex-row gap-1 items-center">
-            {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
-            <ActionButton label="Abandonar" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "DROPPED")} />
-            <ActionButton label="Pausar" colorClass="bg-yellow-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
-          </div>
-        ); 
-        break;
-        
-      // --- [INÍCIO DA CORREÇÃO] ---
-      case "WATCHED": 
-        actionButtons = ( 
-          <div className="flex flex-col sm:flex-row gap-1 items-center">
-            {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
-            <ActionButton label="Ver de Novo" colorClass="bg-green-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
-            {/* Adicionado o botão Remover */}
-            <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} /> 
-          </div>
-        ); 
-        break;
-      // --- [FIM DA CORREÇÃO] ---
-
-      // --- [INÍCIO DA CORREÇÃO (BÓNUS)] ---
-      case "DROPPED": 
-        actionButtons = ( 
-          <div className="flex flex-col sm:flex-row gap-1 items-center">
-            {isSerieOrAnime && ( <div className="flex items-center mr-2"> <Checkbox id={`weekly-${item.id}`} checked={isWeekly} onCheckedChange={() => onToggleWeekly(item)} disabled={isUpdating} className="h-4 w-4" /> <Label htmlFor={`weekly-${item.id}`} className="ml-1 text-xs text-muted-foreground cursor-pointer" title="Marcar como item semanal"> Semanal </Label> </div> )}
-            <ActionButton label="Tentar de Novo" colorClass="bg-blue-600" disabled={isUpdating} onClick={() => onUpdateStatus(item, "TO_WATCH")} />
-            {/* Adicionado o botão Remover */}
-            <ActionButton label="Remover" colorClass="bg-red-600" disabled={isUpdating} onClick={() => onRemoveItem(item)} /> 
-          </div>
-        ); 
-        break;
-      // --- [FIM DA CORREÇÃO (BÓNUS)] ---
+  const getTypeIcon = (type: MediaType) => {
+    switch (type) {
+      case "MOVIE":
+        return <Film className="h-5 w-5" />;
+      case "SERIES":
+        return <Tv className="h-5 w-5" />;
+      case "ANIME":
+        return <Play className="h-5 w-5" />;
+      default:
+        return <Film className="h-5 w-5" />;
     }
+  };
 
-    const showProgress = isSerieOrAnime && (item.lastSeasonWatched !== null || item.lastEpisodeWatched !== null);
+  // Funções de API (Corrigidas)
+  const handleStatusChange = async (id: string, newStatus: MediaStatus) => {
+    const key = `${id}-status`;
+    setLoadingStates(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await fetch(`/api/mediastatus`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar');
+      
+      onUpdateStatus(id, newStatus);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [key]: false }));
+    }
+  };
 
+  const handleRemove = async (id: string) => {
+    const key = `${id}-remove`;
+    setLoadingStates(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await fetch(`/api/mediastatus?id=${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error('Falha ao remover');
+      
+      onRemove(id);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [key]: false }));
+    }
+  };
+  
+  const handleToggleWeekly = async (id: string, isWeekly: boolean) => {
+    const key = `${id}-weekly`;
+    setLoadingStates(prev => ({ ...prev, [key]: true }));
+    try {
+       const res = await fetch(`/api/mediastatus`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isWeekly }),
+      });
+      if (!res.ok) throw new Error('Falha ao atualizar');
+      
+      onToggleWeekly(id, isWeekly);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [key]: false }));
+    }
+  };
+  // Fim das Funções de API
+
+  const renderMediaCard = (item: MediaItem) => {
+    const isLoading = Object.values(loadingStates).some(val => val === true);
+    
     return (
-      <li key={item.id} className="flex items-center justify-between gap-2 p-2 border-b last:border-b-0">
-        <div className="flex items-center gap-3 overflow-hidden">
-          {/* O seu código original (correto) para a imagem: */}
-          <Image src={item.media.posterPath || "/poster-placeholder.png"} width={40} height={60} alt={item.media.title} className="rounded flex-shrink-0" unoptimized={true} />
-          <div className="flex flex-col overflow-hidden">
-            <span className="text-sm truncate font-medium flex items-center gap-1 text-foreground" title={item.media.title}>
-              {item.media.title}
-              {isWeekly && ( <FiRefreshCw className="text-blue-500 flex-shrink-0" title="Item Semanal" /> )}
+      <Card key={item.id} className="flex flex-col sm:flex-row gap-4 p-4 shadow-sm">
+        <ImageWithFallback
+          src={item.posterPath} 
+          alt={item.title}
+          width={100}
+          height={150}
+          className="rounded-md object-cover mx-auto sm:mx-0"
+        />
+        <div className="flex-1 flex flex-col justify-between">
+          <div>
+            <span className="inline-flex items-center gap-2 text-muted-foreground mb-1">
+              {/* --- [CORREÇÃO 2] --- */}
+              {getTypeIcon(item.mediaType)}
+              <span className="text-xs uppercase">{item.mediaType}</span>
+              {/* --- [FIM DA CORREÇÃO 2] --- */}
             </span>
-            {showProgress && item.status !== 'TO_WATCH' && (
-              <span className="text-xs font-bold text-primary">
-                {item.status === 'WATCHING' && isWeekly ? 'Progresso:' : 'Visto até:'}
-                {item.lastSeasonWatched && ` T${item.lastSeasonWatched}`}
-                {item.lastEpisodeWatched && !item.lastEpisodeWatchedEnd && ` E${item.lastEpisodeWatched}`}
-                {item.lastEpisodeWatched && item.lastEpisodeWatchedEnd && ` E${item.lastEpisodeWatched}-${item.lastEpisodeWatchedEnd}`}
-              </span>
-            )}
+            <h3 className="text-lg font-bold line-clamp-2">{item.title}</h3>
+          </div>
+
+          {/* --- [CORREÇÃO 3] --- */}
+          {/* Adiciona a verificação item.mediaType !== "MOVIE" */}
+          {item.status === "WATCHING" && item.mediaType !== "MOVIE" && (
+            <div className="flex items-center gap-4 my-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={`weekly-${item.id}`}
+                  checked={item.isWeekly}
+                  onCheckedChange={(checked) => handleToggleWeekly(item.id, !!checked)}
+                  disabled={loadingStates[`${item.id}-weekly`]}
+                />
+                <Label htmlFor={`weekly-${item.id}`} className="text-sm cursor-pointer">
+                  Ep. Semanal
+                </Label>
+              </div>
+            </div>
+          )}
+          {/* --- [FIM DA CORREÇÃO 3] --- */}
+
+
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <Select
+              value={item.status}
+              onValueChange={(newStatus) => handleStatusChange(item.id, newStatus as MediaStatus)}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="h-9 text-xs w-full sm:w-[150px]">
+                <SelectValue placeholder="Mover para..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="TO_WATCH">Próximos</SelectItem>
+                <SelectItem value="WATCHING">Esta Semana</SelectItem>
+                <SelectItem value="WATCHED">Assistidos</SelectItem>
+                <SelectItem value="DROPPED">Abandonados</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-red-600"
+                  disabled={isLoading}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Isto irá remover "{item.title}" permanentemente das suas listas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => handleRemove(item.id)}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Remover
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            
+            {loadingStates[`${item.id}-status`] || loadingStates[`${item.id}-remove`] || loadingStates[`${item.id}-weekly`] ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : null}
           </div>
         </div>
-        <div className="flex-shrink-0">{actionButtons}</div>
-      </li>
+      </Card>
     );
   };
-  
-  // renderTabContent
-  const renderTabContent = (statusKey: StatusKey) => { 
-    const data = paginatedDataMap[statusKey]; 
-    const isLoading = listLoadingStatus[statusKey]; 
-    const totalPages = Math.ceil(data.totalCount / data.pageSize); 
-    return ( 
-      <div className="mt-4"> 
-        <div className="min-h-[200px] relative"> 
-          {isLoading && ( 
-            <div className="absolute inset-0 bg-background/75 flex items-center justify-center z-10 rounded-md"> 
-              <span className="text-muted-foreground">A carregar...</span> 
-            </div> 
-          )} 
-          {!isLoading && data.items.length === 0 ? ( 
-            <p className="text-muted-foreground text-sm text-center py-10"> 
-              {searchTerm ? "Nenhum item encontrado." : "Nenhum item nesta lista."} 
-            </p> 
-          ) : ( 
-            <ul className="space-y-1"> 
-              {/* O seu código original (correto): */}
-              {!isLoading && data.items.map(item => renderListItem(item, statusKey))} 
-            </ul> 
-          )} 
-        </div> 
-        {!isLoading && totalPages > 1 && ( 
-          <div className="flex justify-between items-center mt-4 pt-4 border-t text-sm"> 
-            <Button onClick={() => onPageChange(statusKey, data.page - 1)} disabled={data.page <= 1 || isLoading} variant="outline" size="sm"> &larr; Anterior </Button> 
-            <span className="text-muted-foreground"> Página {data.page} de {totalPages} </span> 
-            <Button onClick={() => onPageChange(statusKey, data.page + 1)} disabled={data.page >= totalPages || isLoading} variant="outline" size="sm"> Próxima &rarr; </Button> 
-          </div> 
-        )} 
-      </div> 
-    ); 
-  };
-  
-  // Return
+
   return (
-    <div className="flex flex-col">
-      
-      <MediaSearch onMediaAdded={onMediaAdded} />
-      
-      <Separator className="my-6" />
+    <div className="space-y-6">
+      <Card className="shadow-lg border-2">
+        <CardHeader>
+          <CardTitle>Filtrar Minhas Listas</CardTitle>
+          <CardDescription>
+            Encontre rapidamente um item em todas as suas listas
+          </CardDescription>
+          <div className="relative pt-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar nas suas listas..."
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </CardHeader>
+      </Card>
 
-      <div className="mb-4">
-        <Input 
-          type="text" 
-          value={searchTerm} 
-          onChange={(e) => setSearchTerm(e.target.value)} 
-          placeholder="Filtrar listas..." 
-          className="placeholder:text-muted-foreground"
-        /> 
-      </div>
+      <Card className="shadow-lg border-2">
+        <CardContent className="p-4 sm:p-6">
+          <Tabs
+            value={activeList}
+            onValueChange={(value) => setActiveList(value as MediaStatus)}
+          >
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto sm:h-10">
+              <TabsTrigger value="TO_WATCH" className="relative">
+                <span className="hidden sm:inline">Próximos</span>
+                <span className="sm:hidden">Ver</span>
+                <Badge className="ml-2 bg-purple-600">{counts.TO_WATCH}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="WATCHING" className="relative">
+                <span className="hidden sm:inline">Esta Semana</span>
+                <span className="sm:hidden">Vendo</span>
+                <Badge className="ml-2 bg-blue-600">{counts.WATCHING}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="WATCHED" className="relative">
+                <span className="hidden sm:inline">Já Assistidos</span>
+                <span className="sm:hidden">Vistos</span>
+                <Badge className="ml-2 bg-green-600">{counts.WATCHED}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="DROPPED" className="relative">
+                Abandonados
+                <Badge className="ml-2 bg-orange-600">{counts.DROPPED}</Badge>
+              </TabsTrigger>
+            </TabsList>
 
-      <Tabs defaultValue="TO_WATCH" className="w-full" onValueChange={(value) => setActiveTab(value as ListTab)}>
-        <TabsList className="grid w-full grid-cols-4 h-auto mb-4">
-          <TabsTrigger value="TO_WATCH" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-para-assistir">Próximos Conteúdos ({toWatchData.totalCount})</TabsTrigger>
-          <TabsTrigger value="WATCHING" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-assistindo">Essa Semana ({watchingData.totalCount})</TabsTrigger>
-          <TabsTrigger value="WATCHED" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-ja-assistido">Já Assistido ({watchedData.totalCount})</TabsTrigger>
-          <TabsTrigger value="DROPPED" className="text-xs sm:text-sm px-1 h-full whitespace-normal" id="tour-step-lista-abandonados">Abandonados ({droppedData.totalCount})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="TO_WATCH">{renderTabContent("TO_WATCH")}</TabsContent>
-        <TabsContent value="WATCHING">{renderTabContent("WATCHING")}</TabsContent>
-        <TabsContent value="WATCHED">{renderTabContent("WATCHED")}</TabsContent>
-        <TabsContent value="DROPPED">{renderTabContent("DROPPED")}</TabsContent>
-      </Tabs>
+            <TabsContent value={activeList} className="space-y-4 pt-6">
+              {filteredByStatus.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <div className="mb-4 text-6xl opacity-30">
+                    {getTypeIcon(
+                      activeList === "WATCHING" ? "SERIES" : "MOVIE"
+                    )}
+                  </div>
+                  <p className="font-semibold">Nenhum item nesta lista</p>
+                  {searchTerm ? (
+                    <p className="text-sm mt-2">Tente ajustar sua busca</p>
+                  ) : (
+                    <p className="text-sm mt-2">Adicione mídias usando a busca</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredByStatus.map(renderMediaCard)}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }

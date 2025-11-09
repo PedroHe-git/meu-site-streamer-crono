@@ -3,12 +3,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
-
-// --- [INÍCIO DA CORREÇÃO 1] ---
-// Importar o 'prisma' do 'lib' e os Enums corretos
 import prisma from "@/lib/prisma"; 
-import { MovieStatusType, ProfileVisibility } from "@prisma/client"; // Nome correto é MovieStatusType
-// --- [FIM DA CORREÇÃO 1] ---
+import { MovieStatusType, ProfileVisibility, Prisma } from "@prisma/client"; // Importa Prisma para tipos
 
 export const runtime = 'nodejs';
 export const revalidate = 0; 
@@ -25,22 +21,22 @@ export async function GET(
 
     const url = new URL(request.url);
     
-    // --- [INÍCIO DA CORREÇÃO 2] ---
-    // O tipo correto é 'MovieStatusType' (o Enum)
     const status = url.searchParams.get("status") as MovieStatusType;
-    // --- [FIM DA CORREÇÃO 2] ---
     
+    // --- [INÍCIO DA CORREÇÃO 1] ---
+    // Ler o searchTerm e o pageSize da URL (o seu ficheiro antigo não fazia isto)
     const page = parseInt(url.searchParams.get("page") || "1", 10);
-    const pageSize = 10; 
+    const pageSize = parseInt(url.searchParams.get("pageSize") || "10", 10); // O PaginatedList envia 10
+    const searchTerm = url.searchParams.get("searchTerm") || ""; // Ler o searchTerm
+    // --- [FIM DA CORREÇÃO 1] ---
 
     if (!status) {
       return new NextResponse("Status não fornecido", { status: 400 });
     }
 
-    // 1. Encontrar o utilizador do perfil
-    const profileUser = await prisma.user.findUnique({
-      where: { username: decodeURIComponent(username).toLowerCase() },
-      // Seleciona os campos necessários para a lógica de privacidade
+    // 1. Encontrar o utilizador do perfil (Corrigido para usar findFirst com insensitive mode)
+    const profileUser = await prisma.user.findFirst({
+      where: { username: { equals: decodeURIComponent(username), mode: 'insensitive' } },
       select: {
         id: true,
         profileVisibility: true,
@@ -58,7 +54,7 @@ export async function GET(
     // 2. Verificar a privacidade do perfil
     let isFollowing = false;
     if (loggedInUserId && loggedInUserId !== profileUser.id) {
-      const follow = await prisma.follows.findUnique({
+      const follow = await prisma.follows.findUnique({ // Corrigido para 'follows'
         where: {
           followerId_followingId: {
             followerId: loggedInUserId,
@@ -79,7 +75,7 @@ export async function GET(
       return NextResponse.json({ items: [], totalCount: 0, page: 1, pageSize });
     }
 
-    // 3. Verificar a privacidade individual de cada lista (agora com 'isOwner')
+    // 3. Verificar a privacidade individual de cada lista
     if (status === "TO_WATCH" && !profileUser.showToWatchList && !isOwner) {
       return NextResponse.json({ items: [], totalCount: 0, page: 1, pageSize });
     }
@@ -94,10 +90,20 @@ export async function GET(
     }
 
     // 4. Se passou em todas as verificações, busca os dados
-    const whereClause = {
+    
+    // --- [INÍCIO DA CORREÇÃO 2] ---
+    // Adicionar o filtro de 'searchTerm' ao whereClause
+    const whereClause: Prisma.MediaStatusWhereInput = { // Tipo explícito
       userId: profileUser.id,
       status: status,
+      media: { // Filtra na tabela 'Media' relacionada
+        title: {
+          contains: searchTerm,
+          mode: 'insensitive', // Ignora maiúsculas/minúsculas
+        },
+      },
     };
+    // --- [FIM DA CORREÇÃO 2] ---
 
     const totalCount = await prisma.mediaStatus.count({ where: whereClause });
     const mediaStatus = await prisma.mediaStatus.findMany({

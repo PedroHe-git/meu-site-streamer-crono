@@ -1,53 +1,80 @@
 // app/api/search/route.ts
 import { NextResponse } from "next/server";
 
-
 export const runtime = 'nodejs';
 export const revalidate = 0;
 
-// Esta função será chamada quando acessarmos /api/search?query=...
 export async function GET(request: Request) {
-  // 1. Pegamos o "query" da URL
+  console.log("\n--- [INÍCIO DEBUG /api/search] ---");
+
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get("query");
+  
+  // 1. Verifica o parâmetro "q"
+  const query = searchParams.get("q");
 
   if (!query) {
-    return new NextResponse("Query de busca faltando", { status: 400 });
+    console.log("Erro 400: Parâmetro 'q' não encontrado.");
+    console.log("--- [FIM DEBUG /api/search] ---");
+    return new NextResponse(JSON.stringify({ error: "Query 'q' faltando" }), { status: 400 });
   }
+  console.log(`Parâmetro 'q' recebido: ${query}`);
 
-  // 2. Pegamos nossa chave secreta do .env
+  // 2. Verifica a Chave de API
   const tmdbApiKey = process.env.TMDB_API_KEY;
   if (!tmdbApiKey) {
-    return new NextResponse("Chave API do TMDB não configurada", { status: 500 });
+    console.error("Erro 500: TMDB_API_KEY não foi encontrada no .env!");
+    console.log("--- [FIM DEBUG /api/search] ---");
+    return new NextResponse(JSON.stringify({ error: "Chave API não configurada" }), { status: 500 });
   }
+  
+  // Log para verificar se a chave foi lida (escondendo a maior parte)
+  console.log(`TMDB_API_KEY encontrada: ...${tmdbApiKey.slice(-4)}`);
 
-  // 3. Montamos a URL da API externa
+  // 3. Monta a URL de Autenticação v3 (com api_key)
   const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(
     query
-  )}&language=pt-BR&include_adult=false`;
+  )}&language=pt-BR&include_adult=false&api_key=${tmdbApiKey}`;
+  
+  // Loga a URL (sem a chave) para confirmar que está correta
+  console.log(`Enviando requisição para o TMDB: ${url.replace(tmdbApiKey, "SUA_CHAVE")}`);
 
   const options = {
     method: "GET",
     headers: {
       accept: "application/json",
-      // A API do TMDB usa "Bearer Token"
-      Authorization: `Bearer ${tmdbApiKey}`,
     },
   };
 
   try {
-    // 4. Chamamos a API externa e retornamos a resposta
+    // 4. Tenta fazer a chamada
     const res = await fetch(url, options);
+    
     if (!res.ok) {
-      throw new Error("Falha ao buscar dados do TMDB");
+      const errorData = await res.json(); // Pega a mensagem de erro do TMDB
+      console.error("Erro 500: Falha ao buscar dados do TMDB. Resposta do TMDB:", errorData);
+      console.log("--- [FIM DEBUG /api/search] ---");
+      throw new Error(errorData.status_message || "Falha ao buscar dados do TMDB");
     }
+
     const data = await res.json();
+    console.log("Sucesso: Dados recebidos do TMDB.");
 
-    // Retornamos apenas a lista de 'results' para o nosso frontend
-    return NextResponse.json(data.results);
+    // 5. Formata a resposta
+    const results = data.results.map((movie: any) => ({
+      source: "MOVIE",
+      sourceId: movie.id,
+      title: movie.title,
+      posterPath: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : null,
+      releaseYear: movie.release_date ? parseInt(movie.release_date.split('-')[0]) : null,
+    }));
+    
+    console.log(`Enviando ${results.length} resultados formatados para o frontend.`);
+    console.log("--- [FIM DEBUG /api/search] ---");
+    return NextResponse.json(results);
 
-  } catch (error) {
-    console.error("Erro na API de busca:", error);
-    return new NextResponse("Erro interno ao buscar filmes", { status: 500 });
+  } catch (error: any) {
+    console.error("Erro 500: Catch na API de busca:", error.message);
+    console.log("--- [FIM DEBUG /api/search] ---");
+    return new NextResponse(JSON.stringify({ error: "Erro interno ao buscar filmes" }), { status: 500 });
   }
 }

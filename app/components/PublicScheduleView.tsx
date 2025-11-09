@@ -1,263 +1,180 @@
-// app/components/PublicScheduleView.tsx (Atualizado)
-
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { ScheduleItem, Media } from "@prisma/client";
-import Image from "next/image";
-import { format, addDays, startOfWeek, isSameDay, differenceInWeeks, parse } from "date-fns";
+import { useState, useEffect, useMemo } from "react";
+import { Media, ScheduleItem } from "@prisma/client";
+import { Loader2, CalendarOff, Clock, Calendar } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ImageWithFallback } from "@/components/ui/image-with-fallback";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 
-import DatePicker, { registerLocale } from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css"; 
-
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react"; 
-import { cn } from "@/lib/utils";
-
-registerLocale("pt-BR", ptBR);
-
+// Tipos
 type ScheduleItemWithMedia = ScheduleItem & { media: Media };
 
-interface Props {
+type PublicScheduleViewProps = {
   username: string;
-}
-
-type ScheduleData = {
-  items: ScheduleItemWithMedia[];
-  weekStart: string; // Agora é "yyyy-MM-dd"
-  weekEnd: string;   // Agora é "yyyy-MM-dd"
 };
 
-// Componente para um único item da lista (sem mudanças)
-function ScheduleListItem({ item, isCompleted }: { item: ScheduleItemWithMedia; isCompleted: boolean }) {
-  return (
-    <div className={cn(
-      "flex items-start gap-3",
-      isCompleted && "opacity-60"
-    )}>
-      <Image
-        src={item.media.posterPath || "/placeholder.png"}
-        alt={item.media.title}
-        width={40}
-        height={60}
-        className="rounded-sm object-cover w-10 h-15 flex-shrink-0"
-        unoptimized
-      />
-      <div className="flex-grow">
-        <h4 className={cn(
-          "font-semibold text-foreground",
-          isCompleted && "line-through"
-        )}>
-          {item.media.title}
-        </h4>
-        <p className="text-sm text-primary font-medium">
-          {item.seasonNumber !== null && `T${item.seasonNumber}`}
-          {item.episodeNumber !== null && ` E${item.episodeNumber}`}
-          {item.episodeNumberEnd !== null && item.episodeNumber !== null && item.episodeNumberEnd > item.episodeNumber && `-${item.episodeNumberEnd}`}
-        </p>
-      </div>
-      {item.horario && (
-        <span className="text-sm font-medium text-muted-foreground flex-shrink-0">{item.horario}</span>
-      )}
-    </div>
-  );
+// Funções de formatar data
+function formatDate(date: Date) {
+  return format(date, "EEEE, dd 'de' MMMM", { locale: ptBR }); 
+}
+function formatSimpleDate(date: Date) {
+  return format(date, "PPP", { locale: ptBR }); 
 }
 
-
-export default function PublicScheduleView({ username }: Props) {
-  const [data, setData] = useState<ScheduleData | null>(null);
-  const [weekOffset, setWeekOffset] = useState(0); 
+export default function PublicScheduleView({ username }: PublicScheduleViewProps) {
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItemWithMedia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // useEffect para buscar os dados
   useEffect(() => {
     const fetchSchedule = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const cacheBuster = `&cb=${new Date().getTime()}`;
-        const res = await fetch(
-          `/api/users/${username}/schedule?weekOffset=${weekOffset}${cacheBuster}`, 
-          { cache: 'no-store' }
-        );
-
+        const res = await fetch(`/api/users/${username}/simple-schedule`);
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Não foi possível carregar o cronograma.");
+          throw new Error("Não foi possível carregar o cronograma.");
         }
-        const data: ScheduleData = await res.json();
-        setData(data);
+        const data = await res.json();
+        setScheduleItems(data);
       } catch (err: any) {
         setError(err.message);
       } finally {
         setIsLoading(false);
       }
     };
+
     fetchSchedule();
-  }, [username, weekOffset]);
+  }, [username]);
 
-  // 'startOfThisWeekDate' vai receber a Segunda-feira da API
-  const startOfThisWeekDate = useMemo(() => {
-    if (!data) return null;
-    return parse(data.weekStart, 'yyyy-MM-dd', new Date());
-  }, [data]);
+  // Lógica de Agrupamento
+  const groupedSchedules = useMemo(() => {
+    if (scheduleItems.length === 0) return [];
+    const groups = new Map<string, { date: Date; items: ScheduleItemWithMedia[] }>();
+    scheduleItems.forEach((item) => {
+      if (!item.media) return; 
+      const dateKey = new Date(item.scheduledAt).toDateString(); 
+      if (!groups.has(dateKey)) {
+        groups.set(dateKey, {
+          date: new Date(item.scheduledAt),
+          items: [],
+        });
+      }
+      groups.get(dateKey)!.items.push(item);
+    });
+    return Array.from(groups.values());
+  }, [scheduleItems]); 
 
-  // 'daysOfWeek' vai renderizar 7 dias a partir de Segunda-feira
-  const daysOfWeek = useMemo(() => {
-    if (!startOfThisWeekDate) return [];
-    return Array.from({ length: 7 }).map((_, i) => addDays(startOfThisWeekDate, i));
-  }, [startOfThisWeekDate]); 
-
-  // Gera o Título da Semana
-  const weekTitle = useMemo(() => {
-    if (!data) return "A carregar...";
-    const start = format(parse(data.weekStart, 'yyyy-MM-dd', new Date()), "dd/MM");
-    const end = format(parse(data.weekEnd, 'yyyy-MM-dd', new Date()), "dd/MM/yyyy");
-    if (weekOffset === 0) return "Semana Atual";
-    if (weekOffset === -1) return "Semana Passada";
-    if (weekOffset === 1) return "Próxima Semana";
-    return `Semana de ${start} a ${end}`;
-  }, [data, weekOffset]);
-
-  // Lógica do Date Picker
-  const handleDateSelect = (date: Date | null) => {
-    if (!date) return;
-    const today = new Date();
-    
-    // --- [ MUDANÇA AQUI ] ---
-    // 0 = Domingo, 1 = Segunda-feira
-    const weekOptions = { weekStartsOn: 1 as const }; 
-    // --- [ FIM DA MUDANÇA ] ---
-
-    const startOfTodayWeek = startOfWeek(today, weekOptions);
-    const startOfSelectedWeek = startOfWeek(date, weekOptions);
-    
-    const newOffset = differenceInWeeks(startOfSelectedWeek, startOfTodayWeek);
-    setWeekOffset(newOffset);
-  };
-
-
-  if (error) {
-    return <div className="text-center py-10 text-red-500">{error}</div>;
+  // --- (Estados de Loading, Erro, e Vazio) ---
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[200px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
+  if (error) {
+    return (
+      <div className="text-center p-8 text-red-600">
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (scheduleItems.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg">
+        <CalendarOff className="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-xl font-semibold">Cronograma Vazio</h3>
+        <p className="text-muted-foreground">Este criador ainda não agendou nenhum item.</p>
+      </div>
+    );
+  }
+
+  // --- Layout de Carrossel ---
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-          <CardTitle className="text-2xl md:text-3xl text-primary">
-            Cronograma
-            <span className="text-lg md:text-xl text-muted-foreground ml-2">
-              ({weekTitle})
-            </span>
-          </CardTitle>
+    <div className="space-y-8">
+      {groupedSchedules.map((dayGroup) => (
+        <div key={dayGroup.date.toISOString()}>
+          
+          <h2 className="text-2xl font-bold mb-4 capitalize">
+            {formatDate(dayGroup.date)}
+          </h2>
 
-          <div className="flex gap-2">
-            <DatePicker
-              selected={startOfThisWeekDate} 
-              onChange={handleDateSelect}
-              locale="pt-BR"
-              dateFormat="dd/MM/yyyy"
-              customInput={
-                <Button variant="outline" size="icon" disabled={isLoading} title="Selecionar data">
-                  <CalendarIcon className="w-4 h-4" />
-                </Button>
-              }
-            />
-            
-            {weekOffset !== 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setWeekOffset(0)}
-                disabled={isLoading}
-                className="h-9 px-3"
-              >
-                Voltar à Semana Atual
-              </Button>
-            )}
-
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => setWeekOffset(w => w - 1)} 
-              disabled={isLoading}
-              title="Semana anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              size="icon" 
-              onClick={() => setWeekOffset(w => w + 1)} 
-              disabled={isLoading}
-              title="Próxima semana"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-6">
-        {isLoading ? (
-          <div className="text-center py-10 text-muted-foreground">A carregar semana...</div>
-        ) : (
-          daysOfWeek.map(day => {
-            const itemsForThisDay = data?.items.filter(item => {
-              const scheduledDate = new Date(item.scheduledAt);
-              return isSameDay(scheduledDate, day);
-            }) || [];
-            
-            const pendingItems = itemsForThisDay.filter(item => !item.isCompleted);
-            const completedItems = itemsForThisDay.filter(item => item.isCompleted);
-
-            return (
-              <div key={day.toString()}>
-                <h3 className="text-lg font-semibold mb-3 capitalize text-foreground">
-                  {format(day, "EEEE", { locale: ptBR })}
-                  <span className="text-base text-muted-foreground font-normal ml-2">
-                    ({format(day, "dd/MM")})
-                  </span>
-                </h3>
+          <Carousel
+            opts={{
+              align: "start",
+              loop: false,
+            }}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-4">
+              {dayGroup.items.map((item) => (
                 
-                <div className="pl-4 border-l-2 border-border space-y-3">
-                  {pendingItems.length > 0 && (
-                    <div className="space-y-3">
-                      {pendingItems.map(item => (
-                        <ScheduleListItem key={item.id} item={item} isCompleted={false} />
-                      ))}
-                    </div>
-                  )}
-                  {completedItems.length > 0 && (
-                    <>
-                      {pendingItems.length > 0 && (
-                        <div className="flex items-center gap-2 pt-2">
-                          <span className="text-xs font-medium text-muted-foreground">Histórico</span>
-                          <Separator className="flex-1" />
+                // --- [INÍCIO DA CORREÇÃO] ---
+                // Alteramos as classes 'basis' para mostrar mais itens
+                <CarouselItem key={item.id} className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5">
+                {/* --- [FIM DA CORREÇÃO] --- */}
+
+                  <div className="p-1">
+                    <Card className="shadow-md">
+                      <CardContent className="flex flex-col p-0">
+                        <ImageWithFallback
+                          src={item.media.posterPath}
+                          alt={item.media.title}
+                          width={500}
+                          height={750}
+                          className="w-full h-60 object-cover rounded-t-lg"
+                        />
+                        <div className="p-4 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Badge variant="outline">
+                              {item.media.mediaType === "MOVIE" ? "Filme" :
+                               item.media.mediaType === "SERIES" ? "Série" :
+                               item.media.mediaType === "ANIME" ? "Anime" : "Outro"}
+                            </Badge>
+                            {item.isCompleted && (
+                              <Badge className="bg-green-600">Concluído</Badge>
+                            )}
+                          </div>
+                          <h3 className="text-lg font-semibold truncate" title={item.media.title}>
+                            {item.media.title}
+                          </h3>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4" />
+                              <span>{formatSimpleDate(new Date(item.scheduledAt))}</span>
+                            </div>
+                            {item.horario && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4" />
+                                <span>{item.horario}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div className="space-y-3">
-                        {completedItems.map(item => (
-                          <ScheduleListItem key={item.id} item={item} isCompleted={true} />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                  {pendingItems.length === 0 && completedItems.length === 0 && (
-                     <p className="text-muted-foreground text-sm">Nenhum item agendado.</p>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </CardContent>
-    </Card>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious className="absolute left-[-20px] top-1/2 -translate-y-1/2" />
+            <CarouselNext className="absolute right-[-20px] top-1/2 -translate-y-1/2" />
+          </Carousel>
+        </div>
+      ))}
+    </div>
   );
 }

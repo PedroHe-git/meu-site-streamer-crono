@@ -2,23 +2,20 @@
 import { NextResponse } from "next/server";
 
 export const runtime = 'nodejs';
-export const revalidate = 0;
+export const revalidate = 0; 
 
-// Esta função será chamada quando acedermos a /api/search-anime?query=...
 export async function GET(request: Request) {
-  // 1. Pegamos o "query" da URL
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get("query");
+  
+  // 1. CORREÇÃO: Ouvir o parâmetro "q" (enviado pelo MediaSearch.tsx)
+  const query = searchParams.get("q"); 
 
   if (!query) {
-    return new NextResponse("Query de busca faltando", { status: 400 });
+    return new NextResponse(JSON.stringify({ error: "Query 'q' faltando" }), { status: 400 });
   }
 
-  // 2. Montamos a URL da API Jikan (MyAnimeList)
-  //    &sfw = "Safe For Work" (Filtra conteúdo adulto, igual ao que fizemos no TMDB)
-  const url = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(
-    query
-  )}&sfw`;
+  // 2. MANTER a API Jikan (como o seu projeto original)
+  const url = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=10&sfw=true`; // Adicionado sfw=true para segurança
 
   const options = {
     method: "GET",
@@ -28,20 +25,32 @@ export async function GET(request: Request) {
   };
 
   try {
-    // 3. Chamamos a API externa (NÃO precisa de chave/token!)
     const res = await fetch(url, options);
+    
     if (!res.ok) {
-      throw new Error("Falha ao buscar dados do Jikan (MyAnimeList)");
+      const errorData = await res.json();
+      console.error("Falha ao buscar dados do Jikan:", errorData);
+      throw new Error(errorData.message || "Falha ao buscar dados do Jikan");
     }
-
+    
     const data = await res.json();
 
-    // 4. Retornamos os resultados
-    //    (Importante: A Jikan API envolve os resultados num objeto 'data')
-    return NextResponse.json(data.data);
+    // 3. CORREÇÃO: Formatar a resposta do Jikan para o formato do MediaSearch.tsx
+    // Jikan usa 'data.data'
+    // MediaSearch espera { source, sourceId, title, posterPath, releaseYear }
+    
+    const results = data.data.map((anime: any) => ({
+      source: "ANIME", // Definir a fonte
+      sourceId: anime.mal_id, // ID do MyAnimeList
+      title: anime.title,
+      posterPath: anime.images?.jpg?.image_url || null,
+      releaseYear: anime.year || (anime.aired?.from ? parseInt(anime.aired.from.split('-')[0]) : null),
+    }));
 
-  } catch (error) {
-    console.error("Erro na API de busca de anime:", error);
-    return new NextResponse("Erro interno ao buscar animes", { status: 500 });
+    return NextResponse.json(results); // Retornar os dados formatados
+
+  } catch (error: any) {
+    console.error("Erro na API de busca de Animes (Jikan):", error.message);
+    return new NextResponse(JSON.stringify({ error: "Erro interno ao buscar animes" }), { status: 500 });
   }
 }

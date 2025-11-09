@@ -1,186 +1,169 @@
-// app/components/UserListsClient.tsx (Atualizado)
-
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import Image from "next/image";
-import { Media, MediaStatus } from '@prisma/client';
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import PaginatedList from "./PaginatedList"; 
+import { Lock, Search } from "lucide-react"; 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"; 
 import { Input } from "@/components/ui/input"; 
+import { Badge } from "@/components/ui/badge"; // <-- [NOVO] Importar Badge
 
-// Tipagem
-type MediaStatusWithMedia = MediaStatus & { media: Media; };
-type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
-type InitialListData = { items: MediaStatusWithMedia[]; totalCount: number; };
-type PaginatedListData = InitialListData & { page: number; pageSize: number; };
-
-// --- [MUDANÇA 1: Atualizar Props] ---
-type Props = { 
-  username: string; 
-  initialToWatch: InitialListData; 
-  initialWatching: InitialListData; 
-  initialWatched: InitialListData; 
-  initialDropped: InitialListData;
-  // Adiciona as novas flags de visibilidade
-  showToWatch: boolean;
-  showWatching: boolean;
-  showWatched: boolean;
-  showDropped: boolean;
+type ListCounts = {
+  TO_WATCH: number;
+  WATCHING: number;
+  WATCHED: number;
+  DROPPED: number;
 };
-// --- [FIM DA MUDANÇA 1] ---
 
-const PAGE_SIZE = 20;
+type UserListsClientProps = {
+  username: string;
+  showToWatchList: boolean;
+  showWatchingList: boolean;
+  showWatchedList: boolean;
+  showDroppedList: boolean;
+  isOwner: boolean; 
+  counts: ListCounts; // <-- [NOVO] Aceita o prop de contagens
+};
 
-export default function UserListsClient({ 
-  username, 
-  initialToWatch, initialWatching, initialWatched, initialDropped,
-  // --- [MUDANÇA 2: Receber as novas props] ---
-  showToWatch, showWatching, showWatched, showDropped
-  // --- [FIM DA MUDANÇA 2] ---
-}: Props) {
+// Componente para a mensagem de privacidade
+const PrivacyMessage = () => (
+  <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg">
+    <Lock className="h-12 w-12 text-muted-foreground mb-4" />
+    <h3 className="text-xl font-semibold">Lista Privada</h3>
+    <p className="text-muted-foreground">O dono deste perfil tornou esta lista privada.</p>
+  </div>
+);
 
-  // ... (Estados - sem mudanças)
-  const [listData, setListData] = useState<Record<StatusKey, PaginatedListData>>({ TO_WATCH: { ...initialToWatch, page: 1, pageSize: PAGE_SIZE }, WATCHING: { ...initialWatching, page: 1, pageSize: PAGE_SIZE }, WATCHED: { ...initialWatched, page: 1, pageSize: PAGE_SIZE }, DROPPED: { ...initialDropped, page: 1, pageSize: PAGE_SIZE }, });
-  const [loadingStatus, setLoadingStatus] = useState<Record<StatusKey, boolean>>({ TO_WATCH: false, WATCHING: false, WATCHED: false, DROPPED: false });
+export default function UserListsClient({
+  username,
+  showToWatchList,
+  showWatchingList,
+  showWatchedList,
+  showDroppedList,
+  isOwner, 
+  counts, // <-- [NOVO] Recebe as contagens
+}: UserListsClientProps) {
+  
   const [searchTerm, setSearchTerm] = useState("");
 
-  // fetchPage (lógica interna permanece a mesma)
-  const fetchPage = async (status: StatusKey, page: number, search: string) => { 
-    setLoadingStatus(prev => ({ ...prev, [status]: true })); 
-    try { 
-      // [MUDANÇA 3: Adicionar 'cache-buster' ao fetch para garantir dados novos]
-      const cacheBuster = `&cb=${new Date().getTime()}`;
-      const params = new URLSearchParams({ 
-        username: username, // A API do Canvas espera 'username' como search param
-        status: status, 
-        page: page.toString(), 
-        pageSize: PAGE_SIZE.toString(), 
-      }); 
-      if (search) { params.append('searchTerm', search); } 
-      
-      const res = await fetch(`/api/users/[username]/lists?${params.toString()}${cacheBuster}`, {
-        cache: 'no-store' // Força o navegador a não usar cache
-      }); 
-      // [FIM DA MUDANÇA 3]
+  const canViewToWatch = isOwner || showToWatchList;
+  const canViewWatching = isOwner || showWatchingList;
+  const canViewWatched = isOwner || showWatchedList;
+  const canViewDropped = isOwner || showDroppedList;
 
-      if (!res.ok) { throw new Error(`Falha ao buscar página ${page} de ${status}`); } 
-      const data: PaginatedListData = await res.json(); 
-      setListData(prev => ({ ...prev, [status]: data })); 
-    } catch (error) { 
-      console.error(`Erro ao buscar página ${page} de ${status}:`, error); 
-      // Não redefina os dados em caso de erro, mantenha os dados iniciais (vazios)
-    } finally { 
-      setLoadingStatus(prev => ({ ...prev, [status]: false })); 
-    } 
-  };
+  const defaultOpenLists: string[] = [];
+  if (canViewToWatch) defaultOpenLists.push("to-watch");
+  if (canViewWatching) defaultOpenLists.push("watching");
   
-  // useEffect Search (lógica interna permanece a mesma)
-  useEffect(() => { 
-    const handler = setTimeout(() => { 
-      // Só busca se a flag de visibilidade for verdadeira
-      if (showToWatch) fetchPage("TO_WATCH", 1, searchTerm); 
-      if (showWatching) fetchPage("WATCHING", 1, searchTerm); 
-      if (showWatched) fetchPage("WATCHED", 1, searchTerm); 
-      if (showDropped) fetchPage("DROPPED", 1, searchTerm); 
-    }, 500); 
-    return () => clearTimeout(handler); 
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */ 
-  }, [searchTerm, username, showToWatch, showWatching, showWatched, showDropped]); // Adiciona as flags às dependências
-
-  // renderListSection (sem mudanças)
-  const renderListSection = (title: string, statusKey: StatusKey, opacityClass = "opacity-100") => {
-    const data = listData[statusKey] || { items: [], totalCount: 0, page: 1, pageSize: PAGE_SIZE };
-    const isLoading = loadingStatus[statusKey];
-    const totalPages = Math.ceil(data.totalCount / data.pageSize);
-    let listContent;
-
-    if (isLoading) {
-      listContent = <div className="text-center py-4 text-muted-foreground">A carregar...</div>;
-    } else {
-      const validItems = (data.items || []).filter(ms => ms && ms.media);
-      if (validItems.length === 0) {
-        listContent = (
-          <p className="text-muted-foreground italic text-center py-6">
-            {searchTerm ? "Nenhum item encontrado." : `Nenhum item na lista "${title}" ainda.`}
-          </p>
-        );
-      } else {
-        listContent = (
-          <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 ${opacityClass}`}>
-            {validItems.map((ms) => (
-              <div key={ms.id} className="bg-card border rounded-lg shadow-md overflow-hidden transition-transform duration-300 hover:scale-105 hover:shadow-lg">
-                <Image
-                  src={ ms.media.posterPath || "/poster-placeholder.png" }
-                  width={500} height={750} alt={ms.media.title}
-                  className="w-full h-auto"
-                  style={{ width: 'auto' }}
-                  unoptimized={true}
-                  priority={data.page === 1 && validItems.indexOf(ms) < 5}
-                />
-                <div className="p-3 h-20 flex flex-col justify-center">
-                  <h3 className="text-sm font-semibold text-center text-foreground line-clamp-2">
-                    {ms.media.title}
-                  </h3>
-                  {ms.lastSeasonWatched !== null && (
-                    <p className="text-xs text-center text-primary font-medium">
-                      Visto até T{ms.lastSeasonWatched} E{ms.lastEpisodeWatched}{ms.lastEpisodeWatchedEnd && ms.lastEpisodeWatchedEnd > ms.lastEpisodeWatched! ? `-${ms.lastEpisodeWatchedEnd}` : ''}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-      }
-    }
-    return (
-      <div className="mb-14">
-        <h2 className={`text-3xl font-semibold mb-6 border-b-2 ${title.includes('Assistido') || title.includes('Abandonados') ? 'border-border' : 'border-primary'} pb-3 text-foreground`}>
-          {title} ({data.totalCount})
-        </h2>
-        {listContent}
-        {!isLoading && totalPages > 1 && (
-          <div className="flex justify-between items-center mt-6 pt-4 border-t border-border text-sm">
-            <Button onClick={() => fetchPage(statusKey, data.page - 1, searchTerm)} disabled={data.page <= 1 || isLoading} variant="outline" size="sm">
-              Anterior
-            </Button>
-            <span className="text-muted-foreground"> Página {data.page} de {totalPages} </span>
-            <Button onClick={() => fetchPage(statusKey, data.page + 1, searchTerm)} disabled={data.page >= totalPages || isLoading} variant="outline" size="sm">
-              Próxima
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
+  const anyListVisible = canViewToWatch || canViewWatching || canViewWatched || canViewDropped;
 
   return (
-    <div>
-      {/* Barra de Pesquisa */}
-       <div className="mb-8">
-         <Input
-           type="text"
-           value={searchTerm}
-           onChange={(e) => setSearchTerm(e.target.value)}
-           placeholder="Pesquisar em todas as listas..."
-           className="w-full p-3 text-base shadow-sm placeholder:text-muted-foreground"
-         />
-       </div>
+    <div className="space-y-6">
+      
+      {/* Barra de Pesquisa (Mantida) */}
+      <Card className="shadow-lg border-2">
+        <CardHeader>
+          <CardTitle>Listas de {username}</CardTitle>
+          <CardDescription>
+            Veja o que este criador está a acompanhar.
+          </CardDescription>
+          <div className="relative pt-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar nas listas do criador..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </CardHeader>
+      </Card>
 
-      {/* --- [MUDANÇA 4: Renderização Condicional] --- */}
-      {/* Renderiza as secções apenas se a flag for true */}
-      {showWatching && renderListSection("Essa Semana", "WATCHING")}
-      {showToWatch && renderListSection("Próximo Conteúdo", "TO_WATCH")}
-      {showWatched && renderListSection("Já Assistido", "WATCHED", "opacity-70")}
-      {showDropped && renderListSection("Abandonados", "DROPPED", "opacity-50")}
+      {/* --- [INÍCIO DA CORREÇÃO DO LAYOUT] --- */}
+      {/* Trocamos o div/Tabs por um Accordion */}
+      {anyListVisible ? (
+        <Accordion
+          type="multiple" 
+          defaultValue={defaultOpenLists} 
+          className="space-y-6"
+        >
+          
+          {canViewToWatch && (
+            <AccordionItem value="to-watch" className="border-2 shadow-lg rounded-lg bg-card">
+              <AccordionTrigger className="p-6 text-lg font-semibold">
+                {/* [NOVO] Adiciona o div e o Badge */}
+                <div className="flex items-center gap-2">
+                  <span>Próximo Conteúdo</span>
+                  <Badge className="bg-purple-600">{counts.TO_WATCH}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="p-6 pt-0">
+                <PaginatedList key="to-watch" username={username} status="TO_WATCH" searchTerm={searchTerm} />
+              </AccordionContent>
+            </AccordionItem>
+          )}
 
-      {/* Mensagem se todas estiverem ocultas */}
-      {!showWatching && !showToWatch && !showWatched && !showDropped && (
-        <p className="text-muted-foreground italic text-center py-10">
-          O criador escondeu todas as suas listas.
-        </p>
+          {canViewWatching && (
+            <AccordionItem value="watching" className="border-2 shadow-lg rounded-lg bg-card">
+              <AccordionTrigger className="p-6 text-lg font-semibold">
+                {/* [NOVO] Adiciona o div e o Badge */}
+                <div className="flex items-center gap-2">
+                  <span>Essa Semana</span>
+                  <Badge className="bg-blue-600">{counts.WATCHING}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="p-6 pt-0">
+                <PaginatedList key="watching" username={username} status="WATCHING" searchTerm={searchTerm} />
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {canViewWatched && (
+            <AccordionItem value="watched" className="border-2 shadow-lg rounded-lg bg-card">
+              <AccordionTrigger className="p-6 text-lg font-semibold">
+                {/* [NOVO] Adiciona o div e o Badge */}
+                <div className="flex items-center gap-2">
+                  <span>Já Assistido</span>
+                  <Badge className="bg-green-600">{counts.WATCHED}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="p-6 pt-0">
+                <PaginatedList key="watched" username={username} status="WATCHED" searchTerm={searchTerm} />
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {canViewDropped && (
+            <AccordionItem value="dropped" className="border-2 shadow-lg rounded-lg bg-card">
+              <AccordionTrigger className="p-6 text-lg font-semibold">
+                {/* [NOVO] Adiciona o div e o Badge */}
+                <div className="flex items-center gap-2">
+                  <span>Abandonados</span>
+                  <Badge className="bg-orange-600">{counts.DROPPED}</Badge>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="p-6 pt-0">
+                <PaginatedList key="dropped" username={username} status="DROPPED" searchTerm={searchTerm} />
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+        </Accordion>
+      ) : (
+        // Mensagem de fallback se TODAS as listas forem privadas
+        <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg">
+          <Lock className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-semibold">Listas Privadas</h3>
+          <p className="text-muted-foreground">O dono deste perfil tornou todas as suas listas privadas.</p>
+        </div>
       )}
-      {/* --- [FIM DA MUDANÇA 4] --- */}
+      {/* --- [FIM DA CORREÇÃO DO LAYOUT] --- */}
     </div>
   );
 }
