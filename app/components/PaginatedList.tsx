@@ -122,7 +122,7 @@ export default function PaginatedList({ username, status, searchTerm }: Paginate
       <div className="text-center p-12 text-muted-foreground">
         <Film className="h-12 w-12 mx-auto mb-4 opacity-30" />
         {searchTerm ? (
-          <p>Nenhum item encontrado para "{searchTerm}".</p>
+          <p>Nenhum item encontrado para &quot;{searchTerm}&quot;.</p>
         ) : (
           <p>Nenhum item encontrado nesta lista.</p>
         )}

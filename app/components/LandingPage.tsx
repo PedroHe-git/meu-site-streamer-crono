@@ -124,7 +124,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               <div>
                 <h3 className="text-xl font-bold mb-2">Organize em listas</h3>
                 <p className="text-muted-foreground">
-                  Use as listas Próximo Conteúdo, Essa Semana, Já Assistido e Abandonados para total controle.
+                  Use as listas Próximos Conteúdos, Essa Semana, Já Assistido e Abandonados para total controle.
                 </p>
               </div>
             </div>

@@ -235,7 +235,7 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                               <h3 className="text-lg font-semibold truncate" title={item.media.title}>
                                 {item.media.title}
                               </h3>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground">
                                 <div className="flex items-center gap-2">
                                   <Calendar className="h-4 w-4" />
                                   <span>{formatSimpleDate(new Date(item.scheduledAt))}</span>
@@ -254,8 +254,8 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                     </CarouselItem>
                   ))}
                 </CarouselContent>
-                <CarouselPrevious className="absolute left-[-20px] top-1/2 -translate-y-1/2" />
-                <CarouselNext className="absolute right-[-20px] top-1/2 -translate-y-1/2" />
+                <CarouselPrevious className="absolute left-[-20px] top-1/2 -translate-y-1/2 bg-background border-2 text-foreground/80 hover:text-foreground hover:bg-accent" />
+                <CarouselNext className="absolute right-[-20px] top-1/2 -translate-y-1/2 bg-background border-2 text-foreground/80 hover:text-foreground hover:bg-accent" />
               </Carousel>
             
             ) : (

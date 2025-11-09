@@ -37,9 +37,10 @@ import {
 type MediaType = "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
 type MediaItem = {
   id: string; 
+  userId: string;
   mediaId: string;
   title: string;
-  mediaType: MediaType; // Corrigido de 'type'
+  mediaType: MediaType; 
   posterPath: string; 
   status: string;
   isWeekly?: boolean;
@@ -49,13 +50,14 @@ type MediaItem = {
 
 type ScheduleItem = {
   id: string;
+  userId: string;
   mediaId: string;
-  scheduledAt: string; 
+  scheduledAt: Date; 
   horario: string | null; 
   isCompleted: boolean; 
-  season?: number | null;
-  episode?: number | null;
-  episodeEnd?: number | null;
+  seasonNumber: number | null; 
+  episodeNumber: number | null; 
+  episodeNumberEnd: number | null; 
   media: any; 
 };
 
@@ -67,6 +69,19 @@ type ScheduleManagerProps = {
   onCompleteSchedule: (id: string) => void;
 };
 
+// --- [INÍCIO DA MUDANÇA 1] ---
+// Função auxiliar para formatar a prioridade
+const formatHorario = (horario: string | null): string | null => {
+  if (horario === "1-Primeiro") return "Primeiro";
+  if (horario === "2-Segundo") return "Segundo";
+  if (horario === "3-Terceiro") return "Terceiro";
+  if (horario === "4-Quarto") return "Quarto";
+  if (horario === "5-Quinto") return "Quinto";
+  if (horario) return horario; // Mantém horários antigos (ex: "09:00")
+  return null; // Retorna nulo se for "Qualquer Hora"
+};
+// --- [FIM DA MUDANÇA 1] ---
+
 export default function ScheduleManager({
   mediaItems,
   scheduleItems,
@@ -76,7 +91,7 @@ export default function ScheduleManager({
 }: ScheduleManagerProps) {
   const [selectedMedia, setSelectedMedia] = useState(""); 
   const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
-  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleTime, setScheduleTime] = useState(""); // Este estado agora guarda "1-manha", "2-tarde", etc.
   const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
   const [error, setError] = useState("");
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -85,8 +100,8 @@ export default function ScheduleManager({
 
   const getMediaById = (id: string) => mediaItems.find((m) => m.mediaId === id);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("pt-BR", {
+  const formatDate = (date: Date) => { 
+    return date.toLocaleDateString("pt-BR", {
       weekday: "long",
       day: "2-digit",
       month: "long",
@@ -105,10 +120,18 @@ export default function ScheduleManager({
     setError("");
 
     try {
+      // --- [INÍCIO DA MUDANÇA 2] ---
+      // Define o horário como nulo se "qualquer" for selecionado
+      const horarioParaSalvar = (scheduleTime === "qualquer" || !scheduleTime) ? null : scheduleTime;
+      // --- [FIM DA MUDANÇA 2] ---
+
       const scheduleData = {
         mediaId: selectedMedia, 
         scheduledAt: scheduleDate.toISOString(),
-        horario: scheduleTime || null,
+        horario: horarioParaSalvar, // Usa o valor corrigido
+        seasonNumber: null,
+        episodeNumber: null,
+        episodeNumberEnd: null,
       };
 
       const res = await fetch("/api/schedule", {
@@ -121,12 +144,18 @@ export default function ScheduleManager({
         throw new Error("Falha ao agendar");
       }
       
-      const newScheduleItem = await res.json();
+      const newScheduleItemRaw = await res.json();
+      
+      const newScheduleItem: ScheduleItem = {
+        ...newScheduleItemRaw,
+        scheduledAt: new Date(newScheduleItemRaw.scheduledAt)
+      };
+      
       onAddSchedule(newScheduleItem); 
       
       setSelectedMedia("");
       setScheduleDate(undefined);
-      setScheduleTime("");
+      setScheduleTime(""); // Reseta o seletor
       
     } catch (err: any) {
       setError(err.message || "Ocorreu um erro ao agendar.");
@@ -136,6 +165,8 @@ export default function ScheduleManager({
   };
 
   const handleComplete = async (id: string) => {
+    // ... (sem alterações aqui) ...
+// ... (código existente) ...
     const key = `complete-${id}`;
     setLoadingStates(prev => ({ ...prev, [key]: true }));
     try {
@@ -160,6 +191,8 @@ export default function ScheduleManager({
   };
 
   const handleRemove = async (id: string) => {
+    // ... (sem alterações aqui) ...
+// ... (código existente) ...
     const key = `remove-${id}`;
     setLoadingStates(prev => ({ ...prev, [key]: true }));
     try {
@@ -183,11 +216,41 @@ export default function ScheduleManager({
 
     const upcoming = scheduleItems
       .filter(item => !item.isCompleted)
-      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+      .sort((a, b) => {
+        const dateA = new Date(a.scheduledAt).setHours(0, 0, 0, 0);
+        const dateB = new Date(b.scheduledAt).setHours(0, 0, 0, 0);
+        if (dateA !== dateB) {
+          return dateA - dateB; 
+        }
+        
+        if (a.horario && b.horario) {
+          return a.horario.localeCompare(b.horario); 
+        }
+        
+        if (a.horario) return -1; 
+        if (b.horario) return 1;  
+
+        return 0; 
+      });
       
     const completed = scheduleItems
       .filter(item => item.isCompleted)
-      .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
+      .sort((a, b) => {
+        const dateA = new Date(a.scheduledAt).setHours(0, 0, 0, 0);
+        const dateB = new Date(b.scheduledAt).setHours(0, 0, 0, 0);
+        if (dateA !== dateB) {
+          return dateB - dateA; 
+        }
+
+        if (a.horario && b.horario) {
+          return a.horario.localeCompare(b.horario); 
+        }
+        
+        if (a.horario) return -1; 
+        if (b.horario) return 1;  
+        
+        return 0;
+      });
 
     return { upcomingSchedules: upcoming, completedSchedules: completed };
   }, [scheduleItems]);
@@ -199,7 +262,7 @@ export default function ScheduleManager({
         <CardHeader>
           <CardTitle>Agendar Sessão</CardTitle>
           <CardDescription>
-            Escolha um item da sua lista "Essa Semana"
+            Escolha um item da sua lista &quot;Essa Semana&quot;
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -222,7 +285,7 @@ export default function ScheduleManager({
                     ))
                   ) : (
                     <div className="p-4 text-sm text-muted-foreground">
-                      Nenhum item em "Essa Semana"
+                      Nenhum item em &quot;Essa Semana&quot;
                     </div>
                   )}
                 </SelectContent>
@@ -230,7 +293,7 @@ export default function ScheduleManager({
             </div>
 
             <div className="space-y-4">
-              {/* Calendário - CORRIGIDO */}
+              {/* Calendário */}
               <div className="space-y-2">
                 <Label htmlFor="schedule-date">Data</Label>
                 <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
@@ -265,17 +328,28 @@ export default function ScheduleManager({
                 </Popover>
               </div>
 
-              {/* Horário */}
+              {/* --- [INÍCIO DA MUDANÇA 3] --- */}
+              {/* Substitui o Input de Hora por um Select de Prioridade */}
               <div className="space-y-2">
-                <Label htmlFor="schedule-time">Horário (Opcional)</Label>
-                <Input
-                  id="schedule-time"
-                  type="time"
+                <Label htmlFor="schedule-priority">Ordem de Visualização (Opcional)</Label>
+                <Select
                   value={scheduleTime}
-                  onChange={(e) => setScheduleTime(e.target.value)}
-                  className="w-full"
-                />
+                  onValueChange={setScheduleTime}
+                >
+                  <SelectTrigger id="schedule-priority">
+                    <SelectValue placeholder="Qualquer Hora (Sem ordem)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="qualquer">Qualquer Hora (Sem ordem)</SelectItem>
+                    <SelectItem value="1-Primeiro">Primeiro</SelectItem>
+                    <SelectItem value="2-Segundo">Segundo</SelectItem>
+                    <SelectItem value="3-Terceiro">Terceiro</SelectItem>
+                    <SelectItem value="4-Quarto">Quarto</SelectItem>
+                    <SelectItem value="5-Quinto">Quinto</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+              {/* --- [FIM DA MUDANÇA 3] --- */}
             </div>
             
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -301,7 +375,7 @@ export default function ScheduleManager({
             <Badge>{upcomingSchedules.length}</Badge>
           </CardTitle>
           <CardDescription>
-            Itens que você planejou assistir.
+            Itens que você planejou assistir (incluindo atrasados).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -313,10 +387,52 @@ export default function ScheduleManager({
             ) : (
               upcomingSchedules.map((schedule) => {
                 const media = getMediaById(schedule.mediaId); 
-                if (!media) return null;
-                
                 const isLoading = loadingStates[`complete-${schedule.id}`] || loadingStates[`remove-${schedule.id}`];
 
+                // Item "Órfão" - Mídia foi removida da lista
+                if (!media) {
+                  return (
+                    <div
+                      key={schedule.id}
+                      className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-destructive line-clamp-1">Mídia Removida ou Corrompida</h4>
+                        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                          <CalendarIconLucide className="h-4 w-4" />
+                          <span>{formatDate(schedule.scheduledAt)}</span> 
+                        </div>
+                        {/* --- [INÍCIO DA MUDANÇA 4] --- */}
+                        {/* Formata a prioridade para exibição */}
+                        {schedule.horario && (
+                          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                            <Clock className="h-4 w-4" />
+                            <span>{formatHorario(schedule.horario)}</span>
+                          </div>
+                        )}
+                        {/* --- [FIM DA MUDANÇA 4] --- */}
+                        <p className="text-xs text-destructive/80 mt-1">Este item agendado não está em nenhuma lista. Pode removê-lo.</p>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-muted-foreground hover:text-red-600"
+                          onClick={() => handleRemove(schedule.id)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={true}>
+                          <Check className="h-4 w-4" />
+                          <span className="ml-2 hidden sm:inline">Concluir</span>
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Item Normal
                 return (
                   <div
                     key={schedule.id}
@@ -335,12 +451,15 @@ export default function ScheduleManager({
                         <CalendarIconLucide className="h-4 w-4" />
                         <span>{formatDate(schedule.scheduledAt)}</span> 
                       </div>
+                      {/* --- [INÍCIO DA MUDANÇA 5] --- */}
+                      {/* Formata a prioridade para exibição */}
                       {schedule.horario && (
                         <div className="flex items-center gap-2 text-muted-foreground text-sm">
                           <Clock className="h-4 w-4" />
-                          <span>{schedule.horario}</span>
+                          <span>{formatHorario(schedule.horario)}</span>
                         </div>
                       )}
+                      {/* --- [FIM DA MUDANÇA 5] --- */}
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
                       <Button

@@ -1,22 +1,22 @@
-"use client"; // Obrigatório para hooks como useState e useRouter
+"use client"; 
 
 import { useState } from "react";
-import { useRouter } from "next/navigation"; // Importa o router
+import { useRouter } from "next/navigation";
 import { Film, Mail, Lock, User, AtSign, Check, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button"; // Caminho corrigido
-import { Input } from "@/components/ui/input"; // Caminho corrigido
-import { Label } from "@/components/ui/label"; // Caminho corrigido
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"; // Caminho corrigido
-import { Alert, AlertDescription } from "@/components/ui/alert"; // Caminho corrigido
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Removemos os props 'onSuccess' e 'onSwitchToLogin', 
-// pois vamos usar o router diretamente.
 export default function RegisterPage() {
-  const router = useRouter(); // Hook de navegação
+  const router = useRouter(); 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState(""); // <-- ADICIONADO
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState(""); // <-- ADICIONADO
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -27,24 +27,38 @@ export default function RegisterPage() {
     setSuccess("");
     setIsLoading(true);
 
-    // Validações (do seu ficheiro)
-    if (!name || !username || !email || !password) {
+    // --- [INÍCIO DAS NOVAS VALIDAÇÕES] ---
+    if (!name || !username || !email || !confirmEmail || !password || !confirmPassword) {
       setError("Todos os campos são obrigatórios.");
       setIsLoading(false);
       return;
     }
+    
+    if (email !== confirmEmail) {
+      setError("Os emails não coincidem.");
+      setIsLoading(false);
+      return;
+    }
+
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       setError("Username inválido (apenas letras, números e _).");
       setIsLoading(false);
       return;
     }
-    if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres.");
+    
+    if (password.length < 8) { // MUDADO DE 6 PARA 8
+      setError("A senha deve ter pelo menos 8 caracteres.");
       setIsLoading(false);
       return;
     }
 
-    // --- LÓGICA REAL (Substitui o setTimeout) ---
+    if (password !== confirmPassword) {
+      setError("As senhas não coincidem.");
+      setIsLoading(false);
+      return;
+    }
+    // --- [FIM DAS NOVAS VALIDAÇÕES] ---
+
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -62,27 +76,26 @@ export default function RegisterPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Falha ao criar conta.");
+        throw new Error(data.error || "Falha ao criar conta.");
       }
 
-      // Sucesso
-      setSuccess("Registro concluído! A redirecionar para o login...");
+      setSuccess("Conta criada! Por favor, verifique seu email para ativar a conta. A redirecionar para o login...");
       setName("");
       setUsername("");
       setEmail("");
+      setConfirmEmail(""); // <-- ADICIONADO
       setPassword("");
+      setConfirmPassword(""); // <-- ADICIONADO
       
-      // Redireciona para o login após 2 segundos
       setTimeout(() => {
         router.push('/auth/signin');
-      }, 2000);
+      }, 3000); 
 
     } catch (err: any) {
       setError(err.message || "Ocorreu um erro. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
-    // --- FIM DA LÓGICA REAL ---
   };
 
   const handleSwitchToLogin = () => {
@@ -90,12 +103,9 @@ export default function RegisterPage() {
   };
 
   return (
-    // O JSX do seu ficheiro RegisterPage.tsx vem aqui
-    // (Copie e cole todo o 'return (...)' do seu ficheiro)
-    <div className="flex items-center justify-center lg:grid lg:grid-cols-2 min-h-screen bg-background">
-      {/* Coluna da Esquerda - Formulário */}
-      <div className="flex items-center justify-center p-8 w-full">
-        <Card className="w-full max-w-md border-2 shadow-xl">
+    <div className="flex items-center justify-center min-h-screen p-4 bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
+      
+      <Card className="w-full max-w-md shadow-2xl border-none">
           <CardHeader className="text-center space-y-4">
             <div className="mx-auto p-4 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl w-fit">
               <Film className="h-10 w-10 text-white" />
@@ -171,6 +181,25 @@ export default function RegisterPage() {
                 />
               </div>
 
+              {/* --- [NOVO CAMPO: Confirmar Email] --- */}
+              <div className="space-y-2">
+                <Label htmlFor="confirm-email" className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Confirmar Email
+                </Label>
+                <Input
+                  id="confirm-email"
+                  type="email"
+                  value={confirmEmail}
+                  onChange={(e) => setConfirmEmail(e.target.value)}
+                  placeholder="Repita seu email"
+                  required
+                  disabled={isLoading}
+                  className="h-11"
+                />
+              </div>
+              {/* --- [FIM DO NOVO CAMPO] --- */}
+
               {/* Senha */}
               <div className="space-y-2">
                 <Label htmlFor="password" className="flex items-center gap-2">
@@ -188,9 +217,29 @@ export default function RegisterPage() {
                   className="h-11"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Mínimo 6 caracteres
+                  Mínimo 8 caracteres {/* <-- MUDADO DE 6 PARA 8 */}
                 </p>
               </div>
+
+              {/* --- [NOVO CAMPO: Confirmar Senha] --- */}
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password" className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Confirmar Senha
+                </Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repita sua senha"
+                  required
+                  disabled={isLoading}
+                  className="h-11"
+                />
+              </div>
+              {/* --- [FIM DO NOVO CAMPO] --- */}
+
 
               {/* Mensagens */}
               {success && (
@@ -233,54 +282,7 @@ export default function RegisterPage() {
             </div>
           </CardFooter>
         </Card>
-      </div>
-
-      {/* Coluna da Direita - Branding (do seu ficheiro) */}
-      <div className="hidden lg:flex flex-col items-center justify-center bg-gradient-to-br from-purple-600 via-pink-600 to-purple-700 p-10 relative overflow-hidden">
-        {/* ... (resto da sua coluna de branding) ... */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-10 left-10 w-72 h-72 bg-white rounded-full blur-3xl"></div>
-          <div className="absolute bottom-10 right-10 w-96 h-96 bg-white rounded-full blur-3xl"></div>
-        </div>
-        <div className="text-center max-w-md relative z-10 text-white">
-          <Film className="mx-auto h-20 w-20 mb-8" />
-          <h1 className="text-5xl font-bold mb-6">
-            MeuCronograma
-          </h1>
-          <p className="text-xl mb-8 text-purple-100">
-            Organize filmes, séries e animes em listas personalizadas
-          </p>
-          <div className="space-y-4 text-left">
-            <div className="flex items-start gap-3">
-              <div className="bg-white/20 p-2 rounded-lg flex-shrink-0">
-                <Check className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-semibold">Listas Personalizadas</p>
-                <p className="text-sm text-purple-100">Organize o que vai assistir</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="bg-white/20 p-2 rounded-lg flex-shrink-0">
-                <Check className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-semibold">Agendamento Fácil</p>
-                <p className="text-sm text-purple-100">Planeje suas sessões</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="bg-white/20 p-2 rounded-lg flex-shrink-0">
-                <Check className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-semibold">Perfil Público</p>
-                <p className="text-sm text-purple-100">Compartilhe seu cronograma</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      
     </div>
   );
 }

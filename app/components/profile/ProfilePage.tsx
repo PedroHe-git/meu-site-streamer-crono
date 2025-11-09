@@ -1,6 +1,6 @@
 "use client";
 
-import { User, Calendar, Film, Lock, Users, UserCheck, Heart } from "lucide-react";
+import { User, Calendar, Film, Lock, Users, UserCheck, Heart, Pen } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,6 +10,9 @@ import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
 import PublicScheduleView from "@/app/components/PublicScheduleView";
 import UserListsClient from "@/app/components/UserListsClient";
 import Image from "next/image"; 
+import Link from "next/link"; // Importa o Link
+import { buttonVariants } from "@/components/ui/button"; // Importa os variants
+import { cn } from "@/lib/utils"; // Importa o 'cn'
 
 // Tipos
 type ListCounts = {
@@ -118,13 +121,32 @@ export default function ProfilePage({
 
                 {/* Botão de Seguir/Editar (Movido para aqui) */}
                 <div className="flex-shrink-0 w-full md:w-auto">
-                  <FollowButton
-                    isOwner={isOwner}
-                    isFollowingInitial={isFollowing}
-                    userId={user.id}
-                    username={user.username}
-                    className="w-full md:w-36"
-                  />
+                  
+                  {/* --- [INÍCIO DA CORREÇÃO] --- */}
+                  {/* Renderiza condicionalmente o botão */}
+                  {isOwner ? (
+                    // Se for o dono, mostra "Editar Perfil"
+                    <Link 
+                      href="/dashboard" 
+                      className={cn(
+                        buttonVariants({ variant: "outline", size: "sm" }), 
+                        "w-full md:w-36 bg-white/20 text-white border-white/30 hover:bg-white/30"
+                      )}
+                    >
+                      <Pen className="h-4 w-4 mr-2" />
+                      Editar Perfil
+                    </Link>
+                  ) : (
+                    // Se for visitante, mostra "FollowButton"
+                    <FollowButton
+                      isFollowingInitial={isFollowing}
+                      username={user.username}
+                      className="w-full md:w-36"
+                      // As props 'isOwner' e 'userId' foram removidas
+                    />
+                  )}
+                  {/* --- [FIM DA CORREÇÃO] --- */}
+
                 </div>
               </div>
               {/* --- [FIM DA MUDANÇA] --- */}
@@ -149,27 +171,26 @@ export default function ProfilePage({
             </CardContent>
           </Card>
         ) : (
-          <Card className="shadow-lg border-2">
-            <Tabs defaultValue={activeTab}>
-              <div className="border-b bg-muted/30 px-6">
-                <TabsList className="bg-transparent h-auto p-0 space-x-8">
-                  <TabsTrigger
-                    value="cronograma"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-purple-600 rounded-none px-0 pb-4 pt-6"
-                  >
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Cronograma
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="listas"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-purple-600 rounded-none px-0 pb-4 pt-6"
-                  >
-                    <Film className="h-4 w-4 mr-2" />
-                    Listas
-                  </TabsTrigger>
-                </TabsList>
-              </div>
+          // --- [INÍCIO DA CORREÇÃO] ---
+          // 1. O <Tabs> agora envolve tudo
+          <Tabs defaultValue={activeTab} className="w-full">
+            
+            {/* 2. Adicionamos a TabsList centralizada, FORA do Card */}
+            <div className="flex justify-center mb-4">
+              <TabsList className="grid w-full grid-cols-2 max-w-md">
+                <TabsTrigger value="cronograma">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Cronograma
+                </TabsTrigger>
+                <TabsTrigger value="listas">
+                  <Film className="h-4 w-4 mr-2" />
+                  Listas
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
+            {/* 3. O Card agora contém APENAS o conteúdo das abas */}
+            <Card className="shadow-lg border-2">
               <CardContent className="p-6">
                 <TabsContent value="cronograma" className="mt-0">
                   <PublicScheduleView username={user.username} />
@@ -187,8 +208,9 @@ export default function ProfilePage({
                   />
                 </TabsContent>
               </CardContent>
-            </Tabs>
-          </Card>
+            </Card>
+          </Tabs>
+          // --- [FIM DA CORREÇÃO] ---
         )}
       </div>
 

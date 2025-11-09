@@ -56,25 +56,29 @@ type MediaStatusWithMedia = MediaStatus & { media: Media; };
 type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 
-// Este tipo é o que os componentes filhos (MyLists, etc.) esperam
-// --- [INÍCIO CORREÇÃO DE TIPO] ---
 // Mapeia os dados brutos da DB para um tipo consistente que o frontend espera
 type MappedMediaItem = {
   id: string; // ID do MediaStatus
-  mediaId: string; // ID da Mídia
+  userId: string; // ID do Utilizador
+  mediaId: string; // ID da Media
   title: string;
   mediaType: "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
-  posterPath: string; 
-  status: "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
+  posterPath: string;
+  status: StatusKey;
   isWeekly?: boolean;
   lastSeason?: number;
   lastEpisode?: number;
-  tmdbId: number; // Pode ser null se for manual/anime
-  malId: number; // Pode ser null se for manual/movie/series
+  tmdbId: number;
+  malId: number; // Adicionado para consistência
+  episodes?: number; // Adicionado para consistência
+  seasons?: number; // Adicionado para consistência
   media: Media; // Inclui o objeto 'media' original
 };
-type MappedScheduleItem = ScheduleItemWithMedia;
-// --- [FIM CORREÇÃO DE TIPO] ---
+
+// Este tipo agora é usado pelo ScheduleManager e pelo FullCalendar
+type MappedScheduleItem = ScheduleItemWithMedia & {
+  scheduledAt: Date; // Garantimos que a data é um objeto Date
+};
 
 
 // --- Passos do Tour (do seu ficheiro original) ---
@@ -85,7 +89,7 @@ const STEP_PERFIL: Step = {
 };
 const STEP_LISTAS: Step = {
   target: '#tour-step-2-listas-busca',
-  content: 'Este é o seu painel principal. Pesquise filmes, animes, séries ou adicione manualmente, e organize-as em listas: "Próximo Conteúdo", "Essa Semana".',
+  content: 'Este é o seu painel principal. Pesquise filmes, animes, séries ou adicione manualmente, e organize-as em listas: "Próximos Conteúdos", "Essa Semana".',
   placement: 'top',
 };
 const STEP_LISTAS_PARA_ASSISTIR: Step = { target: '#tour-step-lista-para-assistir', content: 'Essa lista é para os filmes que você pretende assistir, mas ainda não definiu uma data.', placement: 'top', } as Step;
@@ -123,11 +127,9 @@ function centerAspectCrop(
 export default function DashboardPage() {
   const { data: session, status, update: updateSession } = useSession();
 
-  // --- [INÍCIO DA LÓGICA DE DADOS - DO SEU FICHEIRO ORIGINAL] ---
-  // Estados das Listas (agora combinados)
-  const [mediaItems, setMediaItems] = useState<MappedMediaItem[]>([]);
-  const [scheduleItems, setScheduleItems] = useState<MappedScheduleItem[]>([]);
-  const [counts, setCounts] = useState<Record<StatusKey, number>>({ TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 });
+  // Estados dos Dados Brutos (vindos da API)
+  const [initialMediaItems, setInitialMediaItems] = useState<MediaStatusWithMedia[]>([]);
+  const [initialScheduleItems, setInitialScheduleItems] = useState<ScheduleItemWithMedia[]>([]);
   
   // Estados de UI e Paginação
   const [searchTerm, setSearchTerm] = useState("");
@@ -137,26 +139,18 @@ export default function DashboardPage() {
   const [calendarKey, setCalendarKey] = useState(0);
   
   // Estados de Definições de Perfil (do seu ficheiro Git)
-  // @ts-ignore
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
   
-  // @ts-ignore
   const [displayName, setDisplayName] = useState(session?.user?.name || "");
-  // @ts-ignore
   const [bio, setBio] = useState(session?.user?.bio || "");
-  // @ts-ignore
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
   
-  // @ts-ignore
   const [showToWatch, setShowToWatch] = useState(session?.user?.showToWatchList ?? true);
-  // @ts-ignore
   const [showWatching, setShowWatching] = useState(session?.user?.showWatchingList ?? true);
-  // @ts-ignore
   const [showWatched, setShowWatched] = useState(session?.user?.showWatchedList ?? true);
-  // @ts-ignore
   const [showDropped, setShowDropped] = useState(session?.user?.showDroppedList ?? true);
 
   // Estados do Cropper (do seu ficheiro Git)
@@ -227,7 +221,6 @@ export default function DashboardPage() {
   // Carrega dados da sessão para os estados (Atualizado)
   useEffect(() => {
     if (session?.user) {
-      // @ts-ignore
       setDisplayName(session.user.name || "");
       // @ts-ignore
       setBio(session.user.bio || "");
@@ -252,23 +245,6 @@ export default function DashboardPage() {
       setShowDropped(session.user.showDroppedList ?? true);
     }
   }, [session?.user, selectedFile, selectedBannerFile]);
-
-  // --- [INÍCIO CORREÇÃO DE TIPO] ---
-  // Função para mapear dados da API para o tipo MappedMediaItem
-  const mapDataToMediaItems = (dataItems: MediaStatusWithMedia[]): MappedMediaItem[] => {
-    return dataItems.map((item) => ({
-      ...item,
-      id: item.id, // Este é o ID do MediaStatus
-      mediaId: item.media.id, // Este é o ID da Media
-      title: item.media.title,
-      mediaType: item.media.mediaType,
-      posterPath: item.media.posterPath || "",
-      tmdbId: item.media.tmdbId || 0,
-      malId: item.media.malId || 0,
-      // 'media' já está incluído
-    }));
-  };
-  // --- [FIM CORREÇÃO DE TIPO] ---
   
   // --- Funções de Busca de Dados (Corrigidas) ---
   const fetchAllMediaAndSchedule = useCallback(async () => {
@@ -280,32 +256,26 @@ export default function DashboardPage() {
         statuses.map(s => fetch(`/api/mediastatus?status=${s}&page=1&pageSize=500&searchTerm=${searchTerm}`))
       );
 
-      let allMedia: MappedMediaItem[] = [];
-      const newCounts: Record<StatusKey, number> = { TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 };
+      const allMedia: MediaStatusWithMedia[] = [];
 
       for (let i = 0; i < responses.length; i++) {
         if (!responses[i].ok) throw new Error(`Falha ao buscar a lista ${statuses[i]}`);
         
         const data = await responses[i].json();
-        // --- [INÍCIO CORREÇÃO DE TIPO] ---
-        // Usa a função de mapeamento para garantir os tipos corretos
-        allMedia = allMedia.concat(mapDataToMediaItems(data.items));
-        // --- [FIM CORREÇÃO DE TIPO] ---
-        newCounts[statuses[i]] = data.totalCount;
+        allMedia.push(...data.items);
       }
-      setMediaItems(allMedia);
-      setCounts(newCounts);
+      setInitialMediaItems(allMedia);
 
       // 2. Buscar Agenda
       const resSchedule = await fetch(`/api/schedule?list=pending`);
       if (!resSchedule.ok) throw new Error('Falha ao buscar schedule');
-      const scheduleData: MappedScheduleItem[] = await resSchedule.json();
-      setScheduleItems(scheduleData);
+      const scheduleData = await resSchedule.json();
+      setInitialScheduleItems(scheduleData);
 
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
       setActionError("Falha ao carregar dados do dashboard.");
-      setScheduleItems([]); 
+      setInitialScheduleItems([]); 
     } finally {
       setIsUpdating(false);
       setIsLoading(false); 
@@ -326,49 +296,99 @@ export default function DashboardPage() {
     }
   }, [status, searchTerm, fetchAllMediaAndSchedule]); 
   
+  // --- Funções de Mapeamento (para corrigir tipos Date e adicionar campos em falta) ---
+  const mapDataToMediaItems = (dataItems: MediaStatusWithMedia[]): MappedMediaItem[] => {
+    return dataItems.map((item) => ({
+      ...item,
+      id: item.id, // ID do MediaStatus
+      userId: item.userId, // ID do Utilizador
+      mediaId: item.media.id, // ID da Media
+      title: item.media.title,
+      mediaType: item.media.mediaType,
+      posterPath: item.media.posterPath || "",
+      tmdbId: item.media.tmdbId || 0,
+      malId: item.media.malId || 0,
+      // @ts-ignore
+      episodes: item.media.episodes || 0, // Adiciona campos em falta
+      // @ts-ignore
+      seasons: item.media.seasons || 0, // Adiciona campos em falta
+      media: item.media, // Objeto media original
+    }));
+  };
+
+  const mapDataToScheduleItems = (dataItems: ScheduleItemWithMedia[]): MappedScheduleItem[] => {
+    return dataItems.map((item) => ({
+      ...item,
+      scheduledAt: new Date(item.scheduledAt), // Converte string para Date
+    }));
+  };
+
+  // Estados Mapeados (que os componentes filhos vão usar)
+  const mediaItems = useMemo(() => mapDataToMediaItems(initialMediaItems), [initialMediaItems]);
+  const scheduleItems = useMemo(() => mapDataToScheduleItems(initialScheduleItems), [initialScheduleItems]);
+  
+  // Contagens
+  const counts = useMemo(() => {
+    const newCounts: Record<StatusKey, number> = { TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 };
+    // Usamos 'initialMediaItems' para a contagem, pois 'mediaItems' é filtrado
+    initialMediaItems.forEach(item => {
+      if (item.media.title.toLowerCase().includes(searchTerm.toLowerCase())) {
+        newCounts[item.status]++;
+      }
+    });
+    return newCounts;
+  }, [initialMediaItems, searchTerm]);
+
+
   // --- Funções de Ação (Handlers) ---
   const handleDataChanged = useCallback(() => {
     setCalendarKey(prevKey => prevKey + 1); 
     fetchAllMediaAndSchedule(); 
   }, [fetchAllMediaAndSchedule]); 
 
-  const handleUpdateStatus = (id: string, newStatus: StatusKey) => {
-    setMediaItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-    );
-    handleDataChanged(); 
-  };
-
-  const handleRemoveItem = (id: string) => {
-    setMediaItems((prev) => prev.filter((item) => item.id !== id));
-    handleDataChanged();
-  };
-
-  const handleToggleWeekly = (id: string, isWeekly: boolean) => {
-    setMediaItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, isWeekly } : item))
-    );
-  };
-
   const handleAddSchedule = (newSchedule: MappedScheduleItem) => {
-    setScheduleItems((prev) => [...prev, newSchedule]);
+    setInitialScheduleItems((prev) => [...prev, newSchedule]);
     handleDataChanged();
   };
 
   const handleRemoveSchedule = (id: string) => {
-    setScheduleItems((prev) => prev.filter((item) => item.id !== id));
+    setInitialScheduleItems((prev) => prev.filter((item) => item.id !== id));
     handleDataChanged();
   };
 
   const handleCompleteSchedule = (id: string) => {
-    setScheduleItems((prev) =>
+    setInitialScheduleItems((prev) =>
       prev.map((item) =>
         item.id === id ? { ...item, isCompleted: true } : item
       )
     );
     handleDataChanged(); 
   };
-  // --- Fim das Funções de Ação ---
+
+  // --- [INÍCIO DA CORREÇÃO] ---
+  // Funções em falta que estavam a causar o erro de build
+  const handleUpdateStatus = (id: string, newStatus: StatusKey) => {
+    setInitialMediaItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+    );
+    // Nota: A API é chamada DENTRO do MyLists.tsx,
+    // aqui apenas atualizamos o estado local para a UI.
+    // Se a API falhar, o handleDataChanged() irá reverter.
+    handleDataChanged();
+  };
+
+  const handleRemoveItem = (id: string) => {
+    setInitialMediaItems((prev) => prev.filter((item) => item.id !== id));
+    handleDataChanged();
+  };
+
+  const handleToggleWeekly = (id: string, isWeekly: boolean) => {
+    setInitialMediaItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, isWeekly } : item))
+    );
+    handleDataChanged();
+  };
+  // --- [FIM DA CORREÇÃO] ---
 
 
   // --- (Lógica do Avatar/Cropper) ---
@@ -420,20 +440,18 @@ export default function DashboardPage() {
       }, 'image/png');
     });
   };
-  
-  // --- [INÍCIO DA CORREÇÃO 1] ---
   const handleAvatarUpload = async (): Promise<string> => {
     if (!selectedFile) { throw new Error("Nenhum ficheiro selecionado."); }
     setSettingsMessage("A fazer upload do avatar...");
     const formData = new FormData();
     formData.append("file", selectedFile); 
-    formData.append("type", "avatar"); // Informa a API que é um avatar
+    formData.append("type", "avatar");
     const res = await fetch('/api/profile/upload', { method: 'POST', body: formData });
     const { url: newImageUrl, error } = await res.json();
     if (!res.ok) { throw new Error(error || "Falha no upload"); }
     return newImageUrl; 
   };
-  // --- [FIM DA CORREÇÃO 1] ---
+  // --- [FIM] ---
 
 
   // --- (Lógica do Banner/Cropper) ---
@@ -487,20 +505,18 @@ export default function DashboardPage() {
       }, 'image/png');
     });
   };
-  
-  // --- [INÍCIO DA CORREÇÃO 2] ---
   const handleBannerUpload = async (): Promise<string> => {
     if (!selectedBannerFile) { throw new Error("Nenhum ficheiro de banner selecionado."); }
     setSettingsMessage("A fazer upload do banner...");
     const formData = new FormData();
     formData.append("file", selectedBannerFile); 
-    formData.append("type", "banner"); // Informa a API que é um banner
+    formData.append("type", "banner");
     const res = await fetch('/api/profile/upload', { method: 'POST', body: formData });
     const { url: newBannerUrl, error } = await res.json();
     if (!res.ok) { throw new Error(error || "Falha no upload do banner"); }
     return newBannerUrl; 
   };
-  // --- [FIM DA CORREÇÃO 2] ---
+  // --- [FIM] ---
 
   
    // --- handleSaveSettings (Atualizado para Banner) ---
@@ -632,7 +648,7 @@ export default function DashboardPage() {
         style={{ display: 'none', objectFit: 'contain' }}
       />
 
-      {/* --- [CORREÇÃO 1: Erro do 'aspect'>] --- */}
+      {/* --- Diálogo de Corte do Avatar --- */}
       <Dialog open={isCropperOpen} onOpenChange={setIsCropperOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -646,6 +662,7 @@ export default function DashboardPage() {
               aspect={avatarAspect}
               circularCrop 
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 ref={imgRef}
                 alt="Imagem para cortar"
@@ -663,8 +680,8 @@ export default function DashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* --- [FIM DA CORREÇÃO 1] --- */}
       
+      {/* --- Diálogo de Corte do Banner --- */}
       <Dialog open={isBannerCropperOpen} onOpenChange={setIsBannerCropperOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -677,6 +694,7 @@ export default function DashboardPage() {
               onComplete={(c) => setCompletedBannerCrop(c)}
               aspect={bannerAspect} 
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 ref={bannerImgRef}
                 alt="Banner para cortar"
@@ -835,13 +853,11 @@ export default function DashboardPage() {
                         {/* Status da Live (Twitch) */}
                         <div className="space-y-2 pt-2">
                           <Label className="text-sm font-medium text-foreground">Status da Live (Twitch)</Label>
-                          {/* @ts-ignore */}
                           {session?.user?.twitchUsername ? (
                             <div className="flex items-center justify-between gap-2 rounded-md border border-input bg-background p-3">
                               <div className="flex items-center gap-2 overflow-hidden">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6441a5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-twitch flex-shrink-0"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7"/></svg>
                                 <span className="text-sm font-medium text-foreground truncate" title={session.user.twitchUsername}>
-                                  {/* @ts-ignore */}
                                   {session.user.twitchUsername}
                                 </span>
                               </div>
@@ -900,7 +916,7 @@ export default function DashboardPage() {
                           <p className="text-xs text-muted-foreground">Escolha quais listas são visíveis na sua página pública.</p>
                           <div className="space-y-3 pt-2">
                             <div className="flex items-center justify-between rounded-md border p-3">
-                              <Label htmlFor="showToWatch" className="text-sm font-medium cursor-pointer">Próximo Conteúdo</Label>
+                              <Label htmlFor="showToWatch" className="text-sm font-medium cursor-pointer">Próximos Conteúdos</Label>
                               <Switch id="showToWatch" checked={showToWatch} onCheckedChange={setShowToWatch} disabled={isSavingSettings} />
                             </div>
                             <div className="flex items-center justify-between rounded-md border p-3">

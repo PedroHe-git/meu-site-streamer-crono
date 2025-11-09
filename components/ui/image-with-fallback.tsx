@@ -1,21 +1,30 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image, { ImageProps } from "next/image";
-import { Film } from "lucide-react"; // Usaremos um ícone como fallback
+// --- [INÍCIO DA CORREÇÃO 1] ---
+// 'StaticImport' não é um tipo exportado. O tipo correto é 'StaticImageData'
+import Image, { ImageProps, StaticImageData } from "next/image"; 
+// --- [FIM DA CORREÇÃO 1] ---
+import { Film } from "lucide-react"; 
 
-// Combina as props do Next/Image com as nossas
-interface ImageWithFallbackProps extends ImageProps {
+// --- [INÍCIO DA CORREÇÃO 2] ---
+// 1. Removemos o 'src' original das props do Next/Image
+type NextImageProps = Omit<ImageProps, 'src'>;
+
+// 2. Criamos a nossa interface que combina as props do Next/Image (sem o 'src')
+//    com a nossa nova 'src' que aceita null/undefined.
+interface ImageWithFallbackProps extends NextImageProps {
   fallback?: React.ReactNode;
-  src: string | null | undefined; // <-- A CORREÇÃO CRÍTICA: Aceita null | undefined
+  src: string | StaticImageData | null | undefined; // Tipo 'src' corrigido e alargado
 }
+// --- [FIM DA CORREÇÃO 2] ---
 
 export const ImageWithFallback = ({
   src,
   fallback,
   alt,
   className,
-  ...props
+  ...props // 'props' agora é do tipo NextImageProps
 }: ImageWithFallbackProps) => {
   const [error, setError] = useState(false);
 
@@ -45,7 +54,7 @@ export const ImageWithFallback = ({
   return (
     <Image
       alt={alt}
-      src={src} // 'src' aqui está garantido como sendo uma string
+      src={src} // 'src' aqui está garantido como sendo uma string ou StaticImageData
       onError={() => setError(true)} // Se der erro, muda o estado
       className={className}
       {...props}

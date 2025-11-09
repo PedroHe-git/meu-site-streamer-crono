@@ -39,13 +39,17 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError(result.error || "Email ou senha inválidos.");
+        // --- [CORREÇÃO DE MENSAGEM] ---
+        // Altera a mensagem de erro padrão do NextAuth
+        if (result.error === "CredentialsSignin") {
+            setError("Email ou senha inválidos.");
+        } else {
+            setError(result.error);
+        }
+        // --- [FIM DA CORREÇÃO] ---
         setIsLoading(false);
       } else if (result?.ok) {
-        // --- [CORREÇÃO] ---
-        // Redireciona para a Homepage, não para o Dashboard
         router.push('/');
-        // --- [FIM DA CORREÇÃO] ---
       }
     } catch (err) {
       setError("Ocorreu um erro inesperado. Tente novamente.");
@@ -56,18 +60,14 @@ export default function LoginPage() {
   const handleGoogleSignIn = () => {
     setIsLoading('google');
     signIn('google', {
-      // --- [CORREÇÃO] ---
       callbackUrl: '/', 
-      // --- [FIM DA CORREÇÃO] ---
     });
   };
 
   const handleTwitchSignIn = () => {
     setIsLoading('twitch');
     signIn('twitch', {
-      // --- [CORREÇÃO] ---
       callbackUrl: '/', 
-      // --- [FIM DA CORREÇÃO] ---
     });
   };
 
@@ -80,141 +80,140 @@ export default function LoginPage() {
   };
 
   return (
-    // ... (O resto do seu JSX continua igual)
-    <div className="flex items-center justify-center lg:grid lg:grid-cols-2 min-h-screen bg-background">
-      {/* Coluna da Esquerda - Formulário */}
-      <div className="flex items-center justify-center p-8 w-full">
-        <Card className="w-full max-w-md border-2 shadow-xl">
-          <CardHeader className="text-center space-y-4">
-            <div className="mx-auto p-4 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl w-fit">
-              <Film className="h-10 w-10 text-white" />
-            </div>
-            <div>
-              <CardTitle className="text-3xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Bem-vindo de volta!
-              </CardTitle>
-              <CardDescription className="text-base mt-2">
-                Acesse sua conta MeuCronograma
-              </CardDescription>
-            </div>
-          </CardHeader>
+    // --- [INÍCIO DA MUDANÇA VISUAL] ---
+    // Removemos o layout lg:grid-cols-2
+    // Adicionamos um gradiente subtil ao fundo
+    <div className="flex items-center justify-center min-h-screen p-4 bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
+      
+      {/* O Card agora está centrado e tem uma sombra mais pronunciada */}
+      <Card className="w-full max-w-md shadow-2xl border-none">
+        <CardHeader className="text-center space-y-4">
+          <div className="mx-auto p-4 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl w-fit">
+            <Film className="h-10 w-10 text-white" />
+          </div>
+          <div>
+            <CardTitle className="text-3xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              Bem-vindo de volta!
+            </CardTitle>
+            <CardDescription className="text-base mt-2">
+              Acesse sua conta MeuCronograma
+            </CardDescription>
+          </div>
+        </CardHeader>
 
-          <CardContent className="space-y-6">
-            {/* OAuth Buttons */}
-            <div className="space-y-3">
-              <Button
-                variant="outline"
-                className="w-full h-11 border-2"
-                onClick={handleGoogleSignIn}
+        <CardContent className="space-y-6">
+          {/* OAuth Buttons */}
+          <div className="space-y-3">
+            <Button
+              variant="outline"
+              className="w-full h-11 border-2"
+              onClick={handleGoogleSignIn}
+              disabled={!!isLoading}
+            >
+              <FcGoogle className="h-5 w-5 mr-2" />
+              {isLoading === 'google' ? "Aguarde..." : "Continuar com Google"}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full h-11 border-2 bg-[#9146FF] text-white hover:bg-[#772ce8] hover:text-white border-[#9146FF]"
+              onClick={handleTwitchSignIn}
+              disabled={!!isLoading}
+            >
+              <FaTwitch className="h-5 w-5 mr-2" />
+              {isLoading === 'twitch' ? "Aguarde..." : "Continuar com Twitch"}
+            </Button>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <Separator />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">
+                Ou continue com email
+              </span>
+            </div>
+          </div>
+
+          {/* Email/Password Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="joao@exemplo.com"
+                required
                 disabled={!!isLoading}
-              >
-                <FcGoogle className="h-5 w-5 mr-2" />
-                {isLoading === 'google' ? "Aguarde..." : "Continuar com Google"}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full h-11 border-2 bg-[#9146FF] text-white hover:bg-[#772ce8] hover:text-white border-[#9146FF]"
-                onClick={handleTwitchSignIn}
-                disabled={!!isLoading}
-              >
-                <FaTwitch className="h-5 w-5 mr-2" />
-                {isLoading === 'twitch' ? "Aguarde..." : "Continuar com Twitch"}
-              </Button>
+                className="h-11"
+              />
             </div>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <Separator />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">
-                  Ou continue com email
-                </span>
-              </div>
-            </div>
-
-            {/* Email/Password Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" />
-                  Email
+            <div className="space-y-2">
+              <div className="flex justify-between items-baseline">
+                <Label htmlFor="password" className="flex items-center gap-2">
+                  <Lock className="h-4 w-4" />
+                  Senha
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="joao@exemplo.com"
-                  required
-                  disabled={!!isLoading}
-                  className="h-11"
-                />
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-sm font-medium text-purple-600 hover:underline"
+                >
+                  Esqueceu a senha?
+                </button>
               </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between items-baseline">
-                  <Label htmlFor="password" className="flex items-center gap-2">
-                    <Lock className="h-4 w-4" />
-                    Senha
-                  </Label>
-                  <button
-                    type="button"
-                    onClick={handleForgotPassword}
-                    className="text-sm font-medium text-purple-600 hover:underline"
-                  >
-                    Esqueceu a senha?
-                  </button>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  disabled={!!isLoading}
-                  className="h-11"
-                />
-              </div>
-
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    {error}
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              <Button
-                type="submit"
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
                 disabled={!!isLoading}
-                className="w-full h-11 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-lg"
-              >
-                {isLoading === 'credentials' ? "Entrando..." : "Entrar"}
-              </Button>
-            </form>
-          </CardContent>
-
-          <CardFooter className="flex flex-col gap-4">
-            <div className="text-sm text-center text-muted-foreground">
-              Não tem uma conta?{" "}
-              <button
-                onClick={handleSwitchToRegister}
-                className="font-semibold text-purple-600 hover:underline"
-              >
-                Criar Conta
-              </button>
+                className="h-11"
+              />
             </div>
-          </CardFooter>
-        </Card>
-      </div>
 
-      {/* Coluna da Direita - Branding */}
-      <div className="hidden lg:flex flex-col items-center justify-center bg-gradient-to-br from-purple-600 via-pink-600 to-purple-700 p-10 relative overflow-hidden">
-        {/* ... (o seu código da coluna de branding) ... */}
-      </div>
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              type="submit"
+              disabled={!!isLoading}
+              className="w-full h-11 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-lg"
+            >
+              {isLoading === 'credentials' ? "Entrando..." : "Entrar"}
+            </Button>
+          </form>
+        </CardContent>
+
+        <CardFooter className="flex flex-col gap-4">
+          <div className="text-sm text-center text-muted-foreground">
+            Não tem uma conta?{" "}
+            <button
+              onClick={handleSwitchToRegister}
+              className="font-semibold text-purple-600 hover:underline"
+            >
+              Criar Conta
+            </button>
+          </div>
+        </CardFooter>
+      </Card>
+
+      {/* A Coluna da Direita (Branding) foi removida */}
+      {/* --- [FIM DA MUDANÇA VISUAL] --- */}
     </div>
   );
 }

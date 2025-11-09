@@ -203,7 +203,7 @@ export default function MyLists({
               onValueChange={(newStatus) => handleStatusChange(item.id, newStatus as MediaStatus)}
               disabled={isLoading}
             >
-              <SelectTrigger className="h-9 text-xs w-full sm:w-[150px]">
+              <SelectTrigger className="h-9 text-xs w-full sm:w-[170px]">
                 <SelectValue placeholder="Mover para..." />
               </SelectTrigger>
               <SelectContent>
@@ -229,7 +229,7 @@ export default function MyLists({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Isto irá remover "{item.title}" permanentemente das suas listas.
+                    Isto irá remover &quot;{item.title}&quot; permanentemente das suas listas.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

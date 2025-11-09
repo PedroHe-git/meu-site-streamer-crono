@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 
 interface Props {
   username: string;
+  className?: string;
 }
 
-export default function LiveStatusIndicator({ username }: Props) {
+export default function LiveStatusIndicator({ username, className }: Props) {
   const [isLive, setIsLive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -46,7 +48,10 @@ export default function LiveStatusIndicator({ username }: Props) {
   // Renderiza o indicador "LIVE"
   return (
     <div 
-      className="flex items-center gap-1.5 bg-red-600 text-white px-2 py-0.5 rounded-md"
+      className={cn(
+        "flex items-center gap-1.5 bg-red-600 text-white px-2 py-0.5 rounded-md",
+        className 
+      )}
       title="Este criador está ao vivo na Twitch!"
     >
       <span className="relative flex h-2 w-2">

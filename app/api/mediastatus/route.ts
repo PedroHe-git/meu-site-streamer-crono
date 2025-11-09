@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   // @ts-ignore
   if (!session || !session.user || !session.user.id) {
-    return new NextResponse("Não autorizado", { status: 401 });
+    return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
   // @ts-ignore
   const userId = session.user.id;
@@ -21,24 +21,20 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    // --- [INÍCIO DA CORREÇÃO 1] ---
-    // Lê os campos corretos enviados pelo MediaSearch.tsx
     const { 
       status, 
       title, 
-      tmdbId,     // Pode ser null
-      malId,      // Pode ser null
-      posterPath, // Corrigido de posterUrl
-      mediaType,  // Corrigido de type
+      tmdbId,
+      malId,
+      posterPath,
+      mediaType,
       isWeekly 
     } = body;
-    // --- [FIM DA CORREÇÃO 1] ---
 
     if (!title || !status || !mediaType) {
       return new NextResponse(JSON.stringify({ error: "Dados em falta (status, title, mediaType)" }), { status: 400 });
     }
     
-    // Validação de ID: Se não for 'OUTROS', precisa de um ID
     if (mediaType !== 'OUTROS' && !tmdbId && !malId) {
         return new NextResponse(JSON.stringify({ error: "ID (tmdbId ou malId) é obrigatório para este tipo" }), { status: 400 });
     }
@@ -46,8 +42,6 @@ export async function POST(request: Request) {
     // 1. Encontrar ou Criar a 'Media' principal
     let media;
     
-    // --- [INÍCIO DA CORREÇÃO 2] ---
-    // Lógica de busca correta baseada no tipo
     let whereClause: Prisma.MediaWhereInput = { mediaType: mediaType };
     
     // Define a condição de ID apenas se o ID for fornecido
@@ -56,17 +50,16 @@ export async function POST(request: Request) {
     } else if ((mediaType === 'MOVIE' || mediaType === 'SERIES') && tmdbId) {
         whereClause.tmdbId = Number(tmdbId);
     } else if (mediaType === 'OUTROS') {
-        // Itens manuais 'OUTROS' são únicos pelo título
+        // Itens manuais 'OUTROS' são únicos pelo título E user
         whereClause.title = title;
     }
 
-    // Procura a mídia se tiver uma condição de ID ou for 'OUTROS'
     if ((mediaType !== 'OUTROS' && (tmdbId || malId)) || mediaType === 'OUTROS') {
+       // Tenta encontrar a mídia existente
         media = await prisma.media.findFirst({
             where: whereClause,
         });
     }
-    // --- [FIM DA CORREÇÃO 2] ---
 
     if (!media) {
       media = await prisma.media.create({
@@ -115,18 +108,17 @@ export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   // @ts-ignore
   if (!session || !session.user || !session.user.id) {
-    return new NextResponse("Não autorizado", { status: 401 });
+    return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
   // @ts-ignore
   const userId = session.user.id;
 
   try {
     const body = await request.json();
-    // 'id' aqui é o ID do MediaStatus
-    const { id, status, isWeekly } = body; 
+    const { id, status, isWeekly } = body; // 'id' aqui é o ID do MediaStatus
 
     if (!id) {
-      return new NextResponse("ID do MediaStatus em falta", { status: 400 });
+      return new NextResponse(JSON.stringify({ error: "ID do MediaStatus em falta" }), { status: 400 });
     }
 
     const mediaStatusToUpdate = await prisma.mediaStatus.findUnique({
@@ -134,7 +126,7 @@ export async function PUT(request: Request) {
     });
 
     if (!mediaStatusToUpdate || mediaStatusToUpdate.userId !== userId) {
-      return new NextResponse("Não autorizado a atualizar este item", { status: 403 });
+      return new NextResponse(JSON.stringify({ error: "Não autorizado a atualizar este item" }), { status: 403 });
     }
 
     const updateData: any = {};
@@ -149,7 +141,7 @@ export async function PUT(request: Request) {
     return NextResponse.json(updatedMediaStatus);
   } catch (error) {
     console.error("[MEDIASTATUS_PUT]", error);
-    return new NextResponse("Erro Interno do Servidor", { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
   }
 }
 
@@ -158,7 +150,7 @@ export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
   // @ts-ignore
   if (!session || !session.user || !session.user.id) {
-    return new NextResponse("Não autorizado", { status: 401 });
+    return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
   // @ts-ignore
   const userId = session.user.id;
@@ -167,12 +159,11 @@ export async function DELETE(request: Request) {
   const id = searchParams.get("id"); // Espera o ID do MediaStatus na URL
 
   if (!id) {
-    return new NextResponse("ID do MediaStatus em falta na URL", { status: 400 });
+    return new NextResponse(JSON.stringify({ error: "ID do MediaStatus em falta na URL" }), { status: 400 });
   }
 
   try {
     
-    // --- [INÍCIO DA CORREÇÃO (Prevenção de Órfãos)] ---
     const mediaStatus = await prisma.mediaStatus.findUnique({
         where: { 
             id: id, 
@@ -191,21 +182,19 @@ export async function DELETE(request: Request) {
             }
         });
     }
-    // --- [FIM DA CORREÇÃO] ---
 
     // Agora apaga o MediaStatus
     await prisma.mediaStatus.delete({
-      where: { id: id, userId: userId }, // Garante que só apaga se for o dono
+      where: { id: id, userId: userId }, 
     });
 
     return new NextResponse(null, { status: 204 }); 
   } catch (error) {
-    // Trata caso o item já tenha sido apagado ou não exista
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         return new NextResponse(JSON.stringify({ error: "Item não encontrado" }), { status: 404 });
     }
     console.error("[MEDIASTATUS_DELETE]", error);
-    return new NextResponse("Erro Interno do Servidor", { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
   }
 }
 
@@ -214,7 +203,7 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   // @ts-ignore
   if (!session || !session.user || !session.user.id) {
-    return new NextResponse("Não autorizado", { status: 401 });
+    return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
   // @ts-ignore
   const userId = session.user.id;
@@ -226,44 +215,56 @@ export async function GET(request: Request) {
   const searchTerm = searchParams.get("searchTerm") || "";
 
   if (!status) {
-    return new NextResponse("Status não fornecido", { status: 400 });
+    return new NextResponse(JSON.stringify({ error: "Status não fornecido" }), { status: 400 });
   }
 
-  const whereClause: any = {
-    userId: userId,
-    status: status,
-    media: {
-      title: {
-        contains: searchTerm,
-        mode: "insensitive",
-      },
-    },
-  };
-
   try {
-    const totalCount = await prisma.mediaStatus.count({ where: whereClause });
-    const mediaStatus = await prisma.mediaStatus.findMany({
-      where: whereClause,
-      take: pageSize,
-      skip: (page - 1) * pageSize,
-      include: {
-        media: true, 
-      },
-      orderBy: {
-        media: {
-          title: 'asc'
-        }
-      },
+    // --- [INÍCIO DA CORREÇÃO] ---
+    // 1. Buscamos TODOS os status primeiro, sem filtro ou ordenação de 'media'
+    const allMediaStatus = await prisma.mediaStatus.findMany({
+        where: {
+            userId: userId,
+            status: status,
+        },
+        include: {
+            media: true, // Inclui a mídia
+        },
     });
 
+    // 2. Filtramos em JavaScript (muito mais seguro contra dados nulos/órfãos)
+    const filteredItems = allMediaStatus.filter(item => {
+        // Se 'media' for nulo (órfão) ou o título não bater, remove
+        if (!item.media || !item.media.title) {
+            console.warn(`[DATA_CLEANUP] Item órfão encontrado: MediaStatus ID ${item.id} (Media ID ${item.mediaId})`);
+            return false; // Remove órfãos
+        }
+        if (searchTerm) {
+            return item.media.title.toLowerCase().includes(searchTerm.toLowerCase());
+        }
+        return true; // Mantém se não houver searchTerm
+    });
+
+    // 3. Ordenamos em JavaScript (mais seguro)
+    filteredItems.sort((a, b) => {
+        // 'a.media.title' está seguro aqui por causa do filtro acima
+        return (a.media.title || "").localeCompare(b.media.title || "");
+    });
+
+    // 4. Paginação manual
+    const totalCount = filteredItems.length;
+    const skip = (page - 1) * pageSize;
+    const paginatedItems = filteredItems.slice(skip, skip + pageSize);
+    // --- [FIM DA CORREÇÃO] ---
+
     return NextResponse.json({
-      items: mediaStatus,
+      items: paginatedItems, // Retorna os itens paginados
       totalCount,
       page,
       pageSize,
     });
+    
   } catch (error) {
     console.error("[MEDIASTATUS_GET]", error);
-    return new NextResponse("Erro Interno do Servidor", { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
   }
 }

@@ -15,15 +15,21 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function SettingsTab() {
-  // O hook useSession gere a sessão e permite-nos atualizá-la
   const { data: session, status, update } = useSession();
 
+  // --- [INÍCIO DA CORREÇÃO] ---
   // Estados para o formulário
+  // Alinhamos os nomes das variáveis com o que existe na sessão
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [twitchUsername, setTwitchUsername] = useState("");
-  const [isProfilePublic, setIsProfilePublic] = useState(true);
-  const [isListPublic, setIsListPublic] = useState(true);
+  const [profileVisibility, setProfileVisibility] = useState<"PUBLIC" | "FOLLOWERS_ONLY">("PUBLIC");
+  const [showToWatchList, setShowToWatchList] = useState(true);
+  // (Adicione os outros 3 estados de lista se este ficheiro for realmente ser usado)
+  // const [showWatchingList, setShowWatchingList] = useState(true);
+  // const [showWatchedList, setShowWatchedList] = useState(true);
+  // const [showDroppedList, setShowDroppedList] = useState(true);
+  
   const [avatarUrl, setAvatarUrl] = useState("");
   
   const [message, setSettingsMessage] = useState<{type: "success" | "error", text: string} | null>(null);
@@ -34,10 +40,20 @@ export default function SettingsTab() {
   useEffect(() => {
     if (session) {
       setName(session.user.name || "");
+      // Usamos @ts-ignore para 'bio' e 'twitchUsername' caso não estejam no tipo User (embora devessem estar)
+      // @ts-ignore
       setBio(session.user.bio || "");
+      // @ts-ignore
       setTwitchUsername(session.user.twitchUsername || "");
-      setIsProfilePublic(session.user.isProfilePublic || false);
-      setIsListPublic(session.user.isListPublic || false);
+      
+      // Corrigido para usar os nomes de propriedade corretos
+      // @ts-ignore
+      setProfileVisibility(session.user.profileVisibility || "PUBLIC");
+      // @ts-ignore
+      setShowToWatchList(session.user.showToWatchList || false); 
+      // @ts-ignore
+      // setIsListPublic(session.user.isListPublic || false); // Linha antiga removida
+
       setAvatarUrl(session.user.image || "");
     }
   }, [session]);
@@ -48,7 +64,7 @@ export default function SettingsTab() {
     setIsSettingsLoading(true);
     setSettingsMessage(null);
 
-    // Chama a API que JÁ EXISTE no seu projeto
+    // Corrigido para enviar os nomes de propriedade corretos
     const res = await fetch('/api/profile/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -56,8 +72,9 @@ export default function SettingsTab() {
         name,
         bio,
         twitchUsername,
-        isProfilePublic,
-        isListPublic
+        profileVisibility: profileVisibility, // Nome corrigido
+        showToWatchList: showToWatchList, // Exemplo de nome corrigido
+        // isListPublic: isListPublic // Nome antigo removido
       })
     });
 
@@ -72,14 +89,15 @@ export default function SettingsTab() {
           name,
           bio,
           twitchUsername,
-          isProfilePublic,
-          isListPublic
+          profileVisibility,
+          showToWatchList
         }
       });
     } else {
       setSettingsMessage({ type: "error", text: "Falha ao atualizar o perfil." });
     }
   };
+  // --- [FIM DA CORREÇÃO] ---
 
   // Função para salvar o Avatar
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,8 +110,8 @@ export default function SettingsTab() {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("type", "avatar"); // Envia o tipo correto
 
-    // Chama a API de upload que JÁ EXISTE no seu projeto
     const res = await fetch('/api/profile/upload', {
       method: 'POST',
       body: formData
@@ -107,7 +125,6 @@ export default function SettingsTab() {
       setAvatarUrl(newImageUrl); // Atualiza o estado local
       setSettingsMessage({ type: "success", text: "Avatar atualizado!" });
       
-      // Atualiza a sessão (localmente) com o novo URL da imagem
       await update({
         ...session,
         user: {
@@ -195,24 +212,28 @@ export default function SettingsTab() {
                     Permite que outros encontrem seu perfil na busca.
                   </span>
                 </Label>
+                {/* --- [INÍCIO CORREÇÃO JSX] --- */}
                 <Switch
                   id="isProfilePublic"
-                  checked={isProfilePublic}
-                  onCheckedChange={setIsProfilePublic}
+                  checked={profileVisibility === "PUBLIC"}
+                  onCheckedChange={(checked) => setProfileVisibility(checked ? "PUBLIC" : "FOLLOWERS_ONLY")}
                 />
+                {/* --- [FIM CORREÇÃO JSX] --- */}
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="isListPublic" className="flex flex-col gap-1">
                   <span>Visibilidade da Lista</span>
                   <span className="font-normal text-sm text-muted-foreground">
-                    Permite que outros vejam suas listas de mídias.
+                    Permite que outros vejam suas listas de mídias. (Ex: Próximos Conteúdos)
                   </span>
                 </Label>
+                {/* --- [INÍCIO CORREÇÃO JSX] --- */}
                 <Switch
                   id="isListPublic"
-                  checked={isListPublic}
-                  onCheckedChange={setIsListPublic}
+                  checked={showToWatchList} // Apenas um exemplo, já que o ficheiro está obsoleto
+                  onCheckedChange={setShowToWatchList}
                 />
+                {/* --- [FIM CORREÇÃO JSX] --- */}
               </div>
             </div>
 

@@ -10,10 +10,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react"; 
 import { useRouter } from "next/navigation"; 
 
-// --- [NOVO] 1. Importar o UserRole ---
 import { UserRole } from "@prisma/client";
 
+// --- [INÍCIO DA MUDANÇA] ---
+// 1. Re-importamos a LandingPage
 import LandingPage from "@/app/components/LandingPage";
+// --- [FIM DA MUDANÇA] ---
 
 type CreatorSearchResult = {
   username: string;
@@ -25,10 +27,8 @@ export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter(); 
 
-  // --- [NOVO] 2. Verificar se é Criador ---
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
-  // --- [FIM DA MUDANÇA] ---
 
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState<CreatorSearchResult[]>([]);
@@ -65,6 +65,11 @@ export default function HomePage() {
 
   }, [searchTerm, status]); 
 
+  // --- [MUDANÇA] ---
+  // Removemos o useEffect que redirecionava
+  // --- [FIM DA MUDANÇA] ---
+
+
   // --- Lógica de Renderização ---
 
   // 1. Estado de Carregamento
@@ -78,10 +83,13 @@ export default function HomePage() {
 
   // 2. Estado Não Autenticado
   if (status === 'unauthenticated') {
+    // --- [INÍCIO DA MUDANÇA] ---
+    // 2. Mostramos a LandingPage em vez de redirecionar
     const handleGetStarted = () => {
       router.push('/auth/register');
     };
     return <LandingPage onGetStarted={handleGetStarted} />;
+    // --- [FIM DA MUDANÇA] ---
   }
 
   // 3. Estado Autenticado
@@ -94,7 +102,6 @@ export default function HomePage() {
             Olá, {session.user.name || session.user.username}!
           </h1>
           <p className="text-lg text-muted-foreground mb-8">
-            {/* [NOVO] 3. Mensagem diferente para Criador vs Visitante */}
             {isCreator 
               ? "Explore criadores ou vá para o seu painel."
               : "Explore e siga os seus criadores favoritos."
@@ -142,16 +149,13 @@ export default function HomePage() {
               </div>
             )}
           
-          {/* --- [NOVO] 4. Condicional para o Botão --- */}
           <div className="flex justify-center">
-              {/* Só mostra o botão do Dashboard se for Criador */}
               {isCreator && (
                   <Button asChild size="lg">
                       <Link href="/dashboard">Ir para o Dashboard</Link>
                   </Button>
               )}
           </div>
-          {/* --- [FIM DA CORREÇÃO] --- */}
 
         </div>
       </div>
