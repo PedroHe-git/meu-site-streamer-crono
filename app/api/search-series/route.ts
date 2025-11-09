@@ -6,8 +6,6 @@ export const revalidate = 0;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  
-  // 1. Corrigido: Ouve o parâmetro "q"
   const query = searchParams.get("q");
 
   if (!query) {
@@ -20,16 +18,14 @@ export async function GET(request: Request) {
     return new NextResponse(JSON.stringify({ error: "Chave API não configurada" }), { status: 500 });
   }
 
-  // 2. Corrigido: Usa api_key na URL
   const url = `https://api.themoviedb.org/3/search/tv?query=${encodeURIComponent(
     query
-  )}&language=pt-BR&include_adult=false&api_key=${tmdbApiKey}`; // <--- AUTENTICAÇÃO CORRETA
+  )}&language=pt-BR&include_adult=false&api_key=${tmdbApiKey}`; 
 
   const options = {
     method: "GET",
     headers: {
       accept: "application/json",
-      // Remove o Header "Authorization"
     },
   };
 
@@ -42,17 +38,19 @@ export async function GET(request: Request) {
     }
     const data = await res.json();
 
-    // 3. Formata os dados para o MediaSearch.tsx
-    // (TV shows usam "name" e "first_air_date")
+    // --- [INÍCIO DA CORREÇÃO] ---
+    // Garante o envio de 'tmdbId' e 'malId'
     const results = data.results.map((serie: any) => ({
-      source: "SERIES", // Define a fonte
-      sourceId: serie.id,
-      title: serie.name, // <--- Campo correto para TV
+      source: "SERIES",
+      tmdbId: serie.id, // Envia tmdbId
+      malId: null,       // Envia malId nulo
+      title: serie.name,
       posterPath: serie.poster_path ? `https://image.tmdb.org/t/p/w500${serie.poster_path}` : null,
-      releaseYear: serie.first_air_date ? parseInt(serie.first_air_date.split('-')[0]) : null, // <--- Campo correto para TV
+      releaseYear: serie.first_air_date ? parseInt(serie.first_air_date.split('-')[0]) : null,
     }));
+    // --- [FIM DA CORREÇÃO] ---
 
-    return NextResponse.json(results); // Retorna os dados formatados
+    return NextResponse.json(results);
 
   } catch (error: any) {
     console.error("Erro na API de busca de Séries:", error.message);

@@ -4,55 +4,84 @@ import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
 import { put, del } from "@vercel/blob"; 
 import { Prisma } from "@prisma/client";
+import crypto from "crypto"; // Importa o crypto
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
+  // @ts-ignore
   if (!session?.user?.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
+  // @ts-ignore
   const userId = session.user.id;
   
-  const oldImageUrl = session.user.image;
-
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File;
+    
+    // --- [INÍCIO DA CORREÇÃO 1] ---
+    // Lê o tipo que enviámos (avatar ou banner)
+    const type = formData.get("type") as "avatar" | "banner" | null;
 
     if (!file) {
       return new NextResponse(JSON.stringify({ error: "Nenhum ficheiro fornecido" }), { status: 400 });
     }
-
+    if (!type) {
+      return new NextResponse(JSON.stringify({ error: "Nenhum tipo (avatar/banner) fornecido" }), { status: 400 });
+    }
     if (file.size > 4 * 1024 * 1024) { // 4MB
        return new NextResponse(JSON.stringify({ error: "Ficheiro excede os 4MB." }), { status: 413 });
     }
     
-    // --- [MUDANÇA: Garantir extensão .png] ---
-    // O ficheiro que vem do canvas chama-se "avatar.png"
+    // Determina a pasta, o campo da DB e a URL antiga a apagar
+    let folder: string;
+    let dbField: "image" | "profileBannerUrl";
+    let oldImageUrl: string | null;
+    
+    if (type === 'avatar') {
+      folder = 'avatars';
+      dbField = 'image';
+      // @ts-ignore
+      oldImageUrl = session.user.image || null;
+    } else { // type === 'banner'
+      folder = 'banners';
+      dbField = 'profileBannerUrl';
+      // @ts-ignore
+      oldImageUrl = session.user.profileBannerUrl || null;
+    }
+
     const fileExtension = file.name.split('.').pop() || 'png';
-    const filename = `avatars/user_${userId}_avatar_${crypto.randomUUID()}.${fileExtension}`;
-    // --- [FIM DA MUDANÇA] ---
+    // Cria um nome de ficheiro único
+    const filename = `${folder}/user_${userId}_${type}_${crypto.randomUUID()}.${fileExtension}`;
+    // --- [FIM DA CORREÇÃO 1] ---
 
     const newBlob = await put(filename, file, {
       access: 'public',
-      addRandomSuffix: true, // Garante nome único
+      addRandomSuffix: false, // Já usamos UUID
     });
 
+    // --- [INÍCIO DA CORREÇÃO 2] ---
+    // Atualiza o campo correto (image OU profileBannerUrl)
     await prisma.user.update({
       where: { id: userId },
-      data: { image: newBlob.url },
+      data: { [dbField]: newBlob.url }, // Usa a variável dbField
     });
+    // --- [FIM DA CORREÇÃO 2] ---
 
+    // Apaga a imagem antiga (seja avatar ou banner)
     if (oldImageUrl) {
       try {
         await del(oldImageUrl);
       } catch (delError) {
-        console.error("Erro ao apagar avatar antigo:", delError);
+        console.error(`Erro ao apagar ${type} antigo:`, delError);
+        // Não falha a requisição inteira se a deleção falhar
       }
     }
 
-    return NextResponse.json({ url: newBlob.url, message: "Avatar atualizado" });
+    // Retorna o URL para o handleSaveSettings
+    return NextResponse.json({ url: newBlob.url, message: `${type} atualizado` });
 
   } catch (error: any) {
     console.error("Erro na API de upload:", error);
@@ -61,4 +90,3 @@ export async function POST(request: NextRequest) {
     return new NextResponse(JSON.stringify({ error: `Erro ao fazer upload: ${errorMessage}` }), { status: 500 });
   }
 }
-

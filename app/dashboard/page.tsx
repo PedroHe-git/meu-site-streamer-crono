@@ -57,22 +57,24 @@ type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 
 // Este tipo é o que os componentes filhos (MyLists, etc.) esperam
-type MediaItem = {
+// --- [INÍCIO CORREÇÃO DE TIPO] ---
+// Mapeia os dados brutos da DB para um tipo consistente que o frontend espera
+type MappedMediaItem = {
   id: string; // ID do MediaStatus
+  mediaId: string; // ID da Mídia
   title: string;
-  mediaType: "MOVIE" | "SERIES" | "ANIME" | "OUTROS"; // Corrigido de 'type'
-  posterPath: string; // Corrigido para posterPath
+  mediaType: "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
+  posterPath: string; 
   status: "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
   isWeekly?: boolean;
   lastSeason?: number;
   lastEpisode?: number;
-  tmdbId: number;
-  episodes?: number;
-  seasons?: number;
-  media: any; // Inclui o objeto 'media' original
+  tmdbId: number; // Pode ser null se for manual/anime
+  malId: number; // Pode ser null se for manual/movie/series
+  media: Media; // Inclui o objeto 'media' original
 };
-type ScheduleItem = ScheduleItemWithMedia;
-// --- Fim dos Tipos ---
+type MappedScheduleItem = ScheduleItemWithMedia;
+// --- [FIM CORREÇÃO DE TIPO] ---
 
 
 // --- Passos do Tour (do seu ficheiro original) ---
@@ -123,8 +125,8 @@ export default function DashboardPage() {
 
   // --- [INÍCIO DA LÓGICA DE DADOS - DO SEU FICHEIRO ORIGINAL] ---
   // Estados das Listas (agora combinados)
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
-  const [scheduleItems, setScheduleItems] = useState<ScheduleItemWithMedia[]>([]);
+  const [mediaItems, setMediaItems] = useState<MappedMediaItem[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<MappedScheduleItem[]>([]);
   const [counts, setCounts] = useState<Record<StatusKey, number>>({ TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 });
   
   // Estados de UI e Paginação
@@ -135,18 +137,26 @@ export default function DashboardPage() {
   const [calendarKey, setCalendarKey] = useState(0);
   
   // Estados de Definições de Perfil (do seu ficheiro Git)
+  // @ts-ignore
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
   
+  // @ts-ignore
   const [displayName, setDisplayName] = useState(session?.user?.name || "");
+  // @ts-ignore
   const [bio, setBio] = useState(session?.user?.bio || "");
+  // @ts-ignore
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
   
+  // @ts-ignore
   const [showToWatch, setShowToWatch] = useState(session?.user?.showToWatchList ?? true);
+  // @ts-ignore
   const [showWatching, setShowWatching] = useState(session?.user?.showWatchingList ?? true);
+  // @ts-ignore
   const [showWatched, setShowWatched] = useState(session?.user?.showWatchedList ?? true);
+  // @ts-ignore
   const [showDropped, setShowDropped] = useState(session?.user?.showDroppedList ?? true);
 
   // Estados do Cropper (do seu ficheiro Git)
@@ -217,8 +227,11 @@ export default function DashboardPage() {
   // Carrega dados da sessão para os estados (Atualizado)
   useEffect(() => {
     if (session?.user) {
+      // @ts-ignore
       setDisplayName(session.user.name || "");
+      // @ts-ignore
       setBio(session.user.bio || "");
+      // @ts-ignore
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
       
       if (!selectedFile) {
@@ -229,13 +242,33 @@ export default function DashboardPage() {
         // @ts-ignore
         setPreviewBanner(session.user.profileBannerUrl || null);
       }
-
+      // @ts-ignore
       setShowToWatch(session.user.showToWatchList ?? true);
+      // @ts-ignore
       setShowWatching(session.user.showWatchingList ?? true);
+      // @ts-ignore
       setShowWatched(session.user.showWatchedList ?? true);
+      // @ts-ignore
       setShowDropped(session.user.showDroppedList ?? true);
     }
   }, [session?.user, selectedFile, selectedBannerFile]);
+
+  // --- [INÍCIO CORREÇÃO DE TIPO] ---
+  // Função para mapear dados da API para o tipo MappedMediaItem
+  const mapDataToMediaItems = (dataItems: MediaStatusWithMedia[]): MappedMediaItem[] => {
+    return dataItems.map((item) => ({
+      ...item,
+      id: item.id, // Este é o ID do MediaStatus
+      mediaId: item.media.id, // Este é o ID da Media
+      title: item.media.title,
+      mediaType: item.media.mediaType,
+      posterPath: item.media.posterPath || "",
+      tmdbId: item.media.tmdbId || 0,
+      malId: item.media.malId || 0,
+      // 'media' já está incluído
+    }));
+  };
+  // --- [FIM CORREÇÃO DE TIPO] ---
   
   // --- Funções de Busca de Dados (Corrigidas) ---
   const fetchAllMediaAndSchedule = useCallback(async () => {
@@ -247,19 +280,17 @@ export default function DashboardPage() {
         statuses.map(s => fetch(`/api/mediastatus?status=${s}&page=1&pageSize=500&searchTerm=${searchTerm}`))
       );
 
-      const allMedia: MediaItem[] = [];
+      let allMedia: MappedMediaItem[] = [];
       const newCounts: Record<StatusKey, number> = { TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 };
 
       for (let i = 0; i < responses.length; i++) {
         if (!responses[i].ok) throw new Error(`Falha ao buscar a lista ${statuses[i]}`);
         
         const data = await responses[i].json();
-        const itemsComMedia = data.items.map((item: MediaStatusWithMedia) => ({
-          ...item.media, 
-          ...item,      
-        }));
-        
-        allMedia.push(...itemsComMedia);
+        // --- [INÍCIO CORREÇÃO DE TIPO] ---
+        // Usa a função de mapeamento para garantir os tipos corretos
+        allMedia = allMedia.concat(mapDataToMediaItems(data.items));
+        // --- [FIM CORREÇÃO DE TIPO] ---
         newCounts[statuses[i]] = data.totalCount;
       }
       setMediaItems(allMedia);
@@ -268,7 +299,7 @@ export default function DashboardPage() {
       // 2. Buscar Agenda
       const resSchedule = await fetch(`/api/schedule?list=pending`);
       if (!resSchedule.ok) throw new Error('Falha ao buscar schedule');
-      const scheduleData = await resSchedule.json();
+      const scheduleData: MappedScheduleItem[] = await resSchedule.json();
       setScheduleItems(scheduleData);
 
     } catch (error) {
@@ -319,7 +350,7 @@ export default function DashboardPage() {
     );
   };
 
-  const handleAddSchedule = (newSchedule: ScheduleItemWithMedia) => {
+  const handleAddSchedule = (newSchedule: MappedScheduleItem) => {
     setScheduleItems((prev) => [...prev, newSchedule]);
     handleDataChanged();
   };
@@ -389,17 +420,20 @@ export default function DashboardPage() {
       }, 'image/png');
     });
   };
+  
+  // --- [INÍCIO DA CORREÇÃO 1] ---
   const handleAvatarUpload = async (): Promise<string> => {
     if (!selectedFile) { throw new Error("Nenhum ficheiro selecionado."); }
     setSettingsMessage("A fazer upload do avatar...");
     const formData = new FormData();
     formData.append("file", selectedFile); 
+    formData.append("type", "avatar"); // Informa a API que é um avatar
     const res = await fetch('/api/profile/upload', { method: 'POST', body: formData });
     const { url: newImageUrl, error } = await res.json();
     if (!res.ok) { throw new Error(error || "Falha no upload"); }
     return newImageUrl; 
   };
-  // --- [FIM] ---
+  // --- [FIM DA CORREÇÃO 1] ---
 
 
   // --- (Lógica do Banner/Cropper) ---
@@ -453,17 +487,20 @@ export default function DashboardPage() {
       }, 'image/png');
     });
   };
+  
+  // --- [INÍCIO DA CORREÇÃO 2] ---
   const handleBannerUpload = async (): Promise<string> => {
     if (!selectedBannerFile) { throw new Error("Nenhum ficheiro de banner selecionado."); }
     setSettingsMessage("A fazer upload do banner...");
     const formData = new FormData();
     formData.append("file", selectedBannerFile); 
+    formData.append("type", "banner"); // Informa a API que é um banner
     const res = await fetch('/api/profile/upload', { method: 'POST', body: formData });
     const { url: newBannerUrl, error } = await res.json();
     if (!res.ok) { throw new Error(error || "Falha no upload do banner"); }
     return newBannerUrl; 
   };
-  // --- [FIM] ---
+  // --- [FIM DA CORREÇÃO 2] ---
 
   
    // --- handleSaveSettings (Atualizado para Banner) ---
@@ -605,7 +642,7 @@ export default function DashboardPage() {
             <ReactCrop
               crop={crop}
               onChange={(_, percentCrop) => setCrop(percentCrop)}
-              onComplete={(c) => setCompletedCrop(c)} // <-- '>' REMOVIDO DAQUI
+              onComplete={(c) => setCompletedCrop(c)}
               aspect={avatarAspect}
               circularCrop 
             >
@@ -798,11 +835,13 @@ export default function DashboardPage() {
                         {/* Status da Live (Twitch) */}
                         <div className="space-y-2 pt-2">
                           <Label className="text-sm font-medium text-foreground">Status da Live (Twitch)</Label>
+                          {/* @ts-ignore */}
                           {session?.user?.twitchUsername ? (
                             <div className="flex items-center justify-between gap-2 rounded-md border border-input bg-background p-3">
                               <div className="flex items-center gap-2 overflow-hidden">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6441a5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-twitch flex-shrink-0"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7"/></svg>
                                 <span className="text-sm font-medium text-foreground truncate" title={session.user.twitchUsername}>
+                                  {/* @ts-ignore */}
                                   {session.user.twitchUsername}
                                 </span>
                               </div>
@@ -851,9 +890,7 @@ export default function DashboardPage() {
                                 <span className="font-semibold text-foreground text-sm">Privado (Seguidores)</span>
                                 <span className="text-xs text-muted-foreground">Apenas utilizadores que o seguem podem ver.</span>
                               </div>
-                            {/* --- [CORREÇÃO 2: Erro do 'L</Label>'] --- */}
                             </Label>
-                            {/* --- [FIM DA CORREÇÃO 2] --- */}
                           </RadioGroup>
                         </div>
 
@@ -958,5 +995,4 @@ export default function DashboardPage() {
       </div>
     </>
   );
-  // --- [FIM DA MUDANÇA: NOVO LAYOUT DE ABAS] ---
 }

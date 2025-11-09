@@ -1,7 +1,7 @@
-"use client"; // Já deve estar "use client"
+"use client"; 
 
 import { useState } from "react";
-import { Search, Loader2, Plus, Film } from "lucide-react";
+import { Search, Loader2, Plus, Film, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,20 +15,24 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-// Corrigido o caminho de importação
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Tipos (do seu ficheiro MediaSearch.tsx)
+// Tipos
 type MediaType = "MOVIE" | "ANIME" | "SERIES" | "OUTROS";
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 
+// --- [INÍCIO DA CORREÇÃO 1] ---
+// O tipo agora espera 'tmdbId' e 'malId', que é o que as APIs enviam.
 type SearchResult = {
   source: MediaType;
-  sourceId: number;
+  tmdbId: number | null; 
+  malId: number | null;
   title: string;
   posterPath: string | null;
   releaseYear: number | null;
 };
+// --- [FIM DA CORREÇÃO 1] ---
 
 type MediaSearchProps = {
   onMediaAdded: () => void; // Esta prop é chamada para re-fetch
@@ -97,26 +101,50 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
     let mediaData: any;
     let key: string;
 
-    if ("sourceId" in media) {
+    if ("source" in media) {
       // Mídia da API
-      key = `${media.source}-${media.sourceId}-${status}`;
+      // --- [INÍCIO DA CORREÇÃO 2] ---
+      // Lemos o ID correto (tmdbId OU malId)
+      const idKey = media.tmdbId || media.malId; 
+
+      if (!idKey) {
+        setMessage("Este item não pode ser adicionado (ID em falta).");
+        return;
+      }
+
+      key = `${media.source}-${idKey}-${status}`;
+      
+      // "Traduzimos" para o formato que a API /api/mediastatus espera
       mediaData = {
         title: media.title,
-        type: media.source,
-        tmdbId: media.sourceId,
-        posterUrl: media.posterPath,
+        mediaType: media.source,  // Envia 'mediaType'
+        tmdbId: media.tmdbId,     // Envia 'tmdbId' (pode ser null)
+        malId: media.malId,       // Envia 'malId' (pode ser null)
+        posterPath: media.posterPath, // Envia 'posterPath'
         status: status,
       };
+      // --- [FIM DA CORREÇÃO 2] ---
+
     } else {
       // Mídia Manual
       key = `${media.type}-${media.title}-${status}`;
       mediaData = {
         title: media.title,
-        type: media.type,
-        tmdbId: null, // Alterado de 0 para null
-        posterUrl: media.posterUrl,
+        mediaType: media.type, 
+        tmdbId: null,
+        malId: null,
+        posterPath: media.posterUrl, 
         status: status,
       };
+
+      // --- [INÍCIO DA CORREÇÃO 3] ---
+      // Impede o erro 400 ao adicionar manualmente.
+      // Apenas 'OUTROS' pode ser adicionado sem ID.
+      if (media.type !== 'OUTROS') {
+        setMessage("Para adicionar manualmente Filmes, Séries ou Animes, use a busca ou selecione o tipo 'Outros'.");
+        return;
+      }
+      // --- [FIM DA CORREÇÃO 3] ---
     }
 
     setAddingState(key);
@@ -131,13 +159,12 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Falha ao adicionar");
+        throw new Error(data.error || "Falha ao adicionar");
       }
       
       onMediaAdded(); // Chama o handler do pai para re-fetch
       
-      // Limpa formulário manual se foi o caso
-      if (!("sourceId" in media)) {
+      if (!("source" in media)) {
         setManualTitle("");
         setManualPoster("");
         setShowManualForm(false);
@@ -293,19 +320,36 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
 
         {/* Mensagens de Erro/Aviso */}
         {message && (
-          <p className="text-center text-muted-foreground">{message}</p>
+          <Alert variant={message.includes("Nenhum") ? "default" : "destructive"} className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {message}
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Resultados da Busca */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {results.map((media) => {
-            const toWatchKey = `${media.source}-${media.sourceId}-TO_WATCH`;
-            const watchingKey = `${media.source}-${media.sourceId}-WATCHING`;
-            const watchedKey = `${media.source}-${media.sourceId}-WATCHED`;
+            
+            // --- [INÍCIO DA CORREÇÃO 4] ---
+            // Usamos 'tmdbId' ou 'malId' (o que existir) como a chave
+            const idKey = media.tmdbId || media.malId;
+            
+            // Filtra resultados "quebrados" que não têm ID (corrige o "MOVIE-undefined")
+            if (!idKey) {
+              return null; 
+            }
+            // --- [FIM DA CORREÇÃO 4] ---
+
+            const uniqueKey = `${media.source}-${idKey}`;
+            const toWatchKey = `${uniqueKey}-TO_WATCH`;
+            const watchingKey = `${uniqueKey}-WATCHING`;
+            const watchedKey = `${uniqueKey}-WATCHED`;
 
             return (
               <div
-                key={`${media.source}-${media.sourceId}`}
+                key={uniqueKey}
                 className="flex gap-3 p-3 bg-muted/50 rounded-lg shadow-sm"
               >
                 <ImageWithFallback
@@ -336,7 +380,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                       disabled={addingState !== null}
                       className="h-7 px-2 text-xs"
                     >
-                      {addingState === toWatchKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Próximos"}
+                      {addingState === toWatchKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Próximos Conteúdos"}
                     </Button>
                     {(media.source === "ANIME" || media.source === "SERIES") && (
                       <Button
@@ -346,7 +390,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                         disabled={addingState !== null}
                         className="h-7 px-2 text-xs"
                       >
-                        {addingState === watchingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Semana"}
+                        {addingState === watchingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Essa Semana"}
                       </Button>
                     )}
                     <Button
@@ -356,7 +400,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                       disabled={addingState !== null}
                       className="h-7 px-2 text-xs"
                     >
-                      {addingState === watchedKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Assistido"}
+                      {addingState === watchedKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Já Assistido"}
                     </Button>
                   </div>
                 </div>

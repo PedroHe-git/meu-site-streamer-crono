@@ -207,8 +207,8 @@ export default function MyLists({
                 <SelectValue placeholder="Mover para..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="TO_WATCH">Próximos</SelectItem>
-                <SelectItem value="WATCHING">Esta Semana</SelectItem>
+                <SelectItem value="TO_WATCH">Próximos Conteúdos</SelectItem>
+                <SelectItem value="WATCHING">Essa Semana</SelectItem>
                 <SelectItem value="WATCHED">Assistidos</SelectItem>
                 <SelectItem value="DROPPED">Abandonados</SelectItem>
               </SelectContent>
@@ -282,12 +282,12 @@ export default function MyLists({
           >
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto sm:h-10">
               <TabsTrigger value="TO_WATCH" className="relative">
-                <span className="hidden sm:inline">Próximos</span>
+                <span className="hidden sm:inline">Próximos Conteúdos</span>
                 <span className="sm:hidden">Ver</span>
                 <Badge className="ml-2 bg-purple-600">{counts.TO_WATCH}</Badge>
               </TabsTrigger>
               <TabsTrigger value="WATCHING" className="relative">
-                <span className="hidden sm:inline">Esta Semana</span>
+                <span className="hidden sm:inline">Essa Semana</span>
                 <span className="sm:hidden">Vendo</span>
                 <Badge className="ml-2 bg-blue-600">{counts.WATCHING}</Badge>
               </TabsTrigger>

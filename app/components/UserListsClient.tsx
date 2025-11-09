@@ -7,10 +7,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import PaginatedList from "./PaginatedList"; 
-import { Lock, Search } from "lucide-react"; 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"; 
-import { Input } from "@/components/ui/input"; 
+import PaginatedList from "./PaginatedList";
+import { Lock, Search, Bell } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge"; // <-- [NOVO] Importar Badge
 
 type ListCounts = {
@@ -26,7 +26,7 @@ type UserListsClientProps = {
   showWatchingList: boolean;
   showWatchedList: boolean;
   showDroppedList: boolean;
-  isOwner: boolean; 
+  isOwner: boolean;
   counts: ListCounts; // <-- [NOVO] Aceita o prop de contagens
 };
 
@@ -45,10 +45,10 @@ export default function UserListsClient({
   showWatchingList,
   showWatchedList,
   showDroppedList,
-  isOwner, 
+  isOwner,
   counts, // <-- [NOVO] Recebe as contagens
 }: UserListsClientProps) {
-  
+
   const [searchTerm, setSearchTerm] = useState("");
 
   const canViewToWatch = isOwner || showToWatchList;
@@ -59,12 +59,12 @@ export default function UserListsClient({
   const defaultOpenLists: string[] = [];
   if (canViewToWatch) defaultOpenLists.push("to-watch");
   if (canViewWatching) defaultOpenLists.push("watching");
-  
+
   const anyListVisible = canViewToWatch || canViewWatching || canViewWatched || canViewDropped;
 
   return (
     <div className="space-y-6">
-      
+
       {/* Barra de Pesquisa (Mantida) */}
       <Card className="shadow-lg border-2">
         <CardHeader>
@@ -76,7 +76,7 @@ export default function UserListsClient({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Buscar nas listas do criador..."
+              placeholder="Buscar itens..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -89,18 +89,21 @@ export default function UserListsClient({
       {/* Trocamos o div/Tabs por um Accordion */}
       {anyListVisible ? (
         <Accordion
-          type="multiple" 
-          defaultValue={defaultOpenLists} 
+          type="multiple"
+          defaultValue={defaultOpenLists}
           className="space-y-6"
         >
-          
+
           {canViewToWatch && (
-            <AccordionItem value="to-watch" className="border-2 shadow-lg rounded-lg bg-card">
-              <AccordionTrigger className="p-6 text-lg font-semibold">
-                {/* [NOVO] Adiciona o div e o Badge */}
-                <div className="flex items-center gap-2">
+            <AccordionItem value="to-watch" className="border-2 shadow-lg rounded-lg bg-card relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-600" />
+              <AccordionTrigger className="p-6 text-lg font-semibold relative">
+                <div className="flex items-center gap-3">
+                  <Bell className="h-6 w-6 text-purple-600" />
                   <span>Próximo Conteúdo</span>
-                  <Badge className="bg-purple-600">{counts.TO_WATCH}</Badge>
+                  <Badge className="bg-white text-purple-700 text-lg font-bold rounded-full px-5 py-0 shadow-lg border border-purple-300 ">
+                  {counts.TO_WATCH}
+                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-6 pt-0">
@@ -110,12 +113,15 @@ export default function UserListsClient({
           )}
 
           {canViewWatching && (
-            <AccordionItem value="watching" className="border-2 shadow-lg rounded-lg bg-card">
-              <AccordionTrigger className="p-6 text-lg font-semibold">
-                {/* [NOVO] Adiciona o div e o Badge */}
-                <div className="flex items-center gap-2">
+            <AccordionItem value="watching" className="border-2 shadow-lg rounded-lg bg-card relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600" />
+              <AccordionTrigger className="p-6 text-lg font-semibold relative">
+                <div className="flex items-center gap-3">
+                  <Bell className="h-6 w-6 text-blue-600" />
                   <span>Essa Semana</span>
-                  <Badge className="bg-blue-600">{counts.WATCHING}</Badge>
+                  <Badge className="bg-white text-blue-600 text-lg font-bold rounded-full px-5 py-0 shadow-lg border border-blue-300 ">
+                  {counts.WATCHING}
+                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-6 pt-0">
@@ -125,12 +131,15 @@ export default function UserListsClient({
           )}
 
           {canViewWatched && (
-            <AccordionItem value="watched" className="border-2 shadow-lg rounded-lg bg-card">
-              <AccordionTrigger className="p-6 text-lg font-semibold">
-                {/* [NOVO] Adiciona o div e o Badge */}
-                <div className="flex items-center gap-2">
-                  <span>Já Assistido</span>
-                  <Badge className="bg-green-600">{counts.WATCHED}</Badge>
+            <AccordionItem value="watched" className="border-2 shadow-lg rounded-lg bg-card relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-600" />
+              <AccordionTrigger className="p-6 text-lg font-semibold relative">
+                <div className="flex items-center gap-3">
+                  <Bell className="h-6 w-6 text-green-600" />
+                  <span>Já Assistidos</span>
+                  <Badge className="bg-white text-green-600 text-lg font-bold rounded-full px-5 py-0 shadow-lg border border-green-300 ">
+                  {counts.WATCHED}
+                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-6 pt-0">
@@ -140,12 +149,15 @@ export default function UserListsClient({
           )}
 
           {canViewDropped && (
-            <AccordionItem value="dropped" className="border-2 shadow-lg rounded-lg bg-card">
-              <AccordionTrigger className="p-6 text-lg font-semibold">
-                {/* [NOVO] Adiciona o div e o Badge */}
-                <div className="flex items-center gap-2">
+            <AccordionItem value="dropped" className="border-2 shadow-lg rounded-lg bg-card relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-600" />
+              <AccordionTrigger className="p-6 text-lg font-semibold relative">
+                <div className="flex items-center gap-3">
+                  <Bell className="h-6 w-6 text-orange-600" />
                   <span>Abandonados</span>
-                  <Badge className="bg-orange-600">{counts.DROPPED}</Badge>
+                  <Badge className="bg-white text-orange-600 text-lg font-bold rounded-full px-5 py-0 shadow-lg border border-orange-300 ">
+                  {counts.DROPPED}
+                  </Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="p-6 pt-0">
