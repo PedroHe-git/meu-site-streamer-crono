@@ -373,7 +373,7 @@ export default function ScheduleManager({
               <Badge>{mediaItems.length}</Badge>
             </CardTitle>
             <CardDescription>
-              Itens da sua lista "Essa Semana".
+              Itens da sua lista &quot;Essa Semana&quot;.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -382,7 +382,7 @@ export default function ScheduleManager({
                 <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground">
                   <ListVideo className="h-10 w-10 mb-2 opacity-50" />
                   <p>Nenhum item em &quot;Essa Semana&quot;.</p>
-                  <p className="text-xs">Adicione itens na aba "Minhas Listas".</p>
+                  <p className="text-xs">Adicione itens na aba &quot;Minhas Listas&quot;.</p>
                 </div>
               ) : (
                 mediaItems.map((item) => (
