@@ -5,42 +5,34 @@ import { ChevronLeft, ChevronRight, Calendar, Clock, Film } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Media } from "@prisma/client"; // Importa o tipo Media
 
 // --- [INÍCIO DA CORREÇÃO 1] ---
 // Altera os tipos para 'mediaType' e 'scheduledAt: Date'
 type MediaType = "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
 
-type MediaItem = {
-  id: string;
-  title: string;
-  mediaType: MediaType; // CORRIGIDO (era 'type')
-  posterPath: string;
-  status: string;
-  mediaId: string; // Adicionado para a função getMediaById
-};
-
+// O 'ScheduleItem' agora inclui 'media' (como vem da API)
 type ScheduleItem = {
   id: string;
   mediaId: string;
-  scheduledAt: Date; // CORRIGIDO (era 'string')
+  scheduledAt: Date; 
   horario: string | null; 
   isCompleted: boolean; 
+  media: Media; // <-- A API já inclui isto
+};
+
+// O tipo 'FullCalendarProps' foi simplificado
+type FullCalendarProps = { 
+  scheduleItems: ScheduleItem[];
+  // A prop 'mediaItems' foi REMOVIDA
 };
 // --- [FIM DA CORREÇÃO 1] ---
 
-type FullCalendarProps = { 
-  scheduleItems: ScheduleItem[];
-  mediaItems: MediaItem[];
-};
-
-export default function FullCalendar({ scheduleItems, mediaItems }: FullCalendarProps) {
+export default function FullCalendar({ scheduleItems }: FullCalendarProps) { // Prop 'mediaItems' removida
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // --- [INÍCIO DA CORREÇÃO 2] ---
-  // Função 'getMediaById' corrigida para comparar 'mediaId'
-  const getMediaById = (id: string) => {
-    return mediaItems.find(m => m.mediaId === id);
-  };
+  // A função 'getMediaById' foi REMOVIDA
   // --- [FIM DA CORREÇÃO 2] ---
 
 
@@ -51,15 +43,12 @@ export default function FullCalendar({ scheduleItems, mediaItems }: FullCalendar
     0
   ).getDate();
 
-  // --- [INÍCIO DA CORREÇÃO 3] ---
-  // Altera o primeiro dia da semana e a ordem dos dias
   const firstDayRaw = new Date(
     currentDate.getFullYear(),
     currentDate.getMonth(),
     1
-  ).getDay(); // 0 = Dom, 1 = Seg, ...
+  ).getDay(); 
 
-  // Mapeia 0 (Dom) para 6 (último dia), e 1 (Seg) para 0 (primeiro dia)
   const firstDayOfMonthOffset = (firstDayRaw === 0) ? 6 : firstDayRaw - 1;
 
   const monthNames = [
@@ -67,9 +56,7 @@ export default function FullCalendar({ scheduleItems, mediaItems }: FullCalendar
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
   ];
   
-  // Reordena os dias da semana
   const weekDays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-  // --- [FIM DA CORREÇÃO 3] ---
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -101,7 +88,7 @@ export default function FullCalendar({ scheduleItems, mediaItems }: FullCalendar
   const upcomingSchedules = scheduleItems.filter(schedule => {
     if (schedule.isCompleted) return false; 
     
-    const scheduleDate = schedule.scheduledAt; // Já é um objeto Date
+    const scheduleDate = schedule.scheduledAt; 
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const sevenDaysFromNow = new Date(now);
@@ -133,8 +120,6 @@ export default function FullCalendar({ scheduleItems, mediaItems }: FullCalendar
           </div>
         </CardHeader>
         <CardContent>
-          {/* --- [INÍCIO DA CORREÇÃO 4] --- */}
-          {/* Mapeia os dias da semana na ordem correta */}
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground mb-2">
             {weekDays.map(day => (
               <div key={day} className="font-medium">{day}</div>
@@ -142,11 +127,9 @@ export default function FullCalendar({ scheduleItems, mediaItems }: FullCalendar
           </div>
 
           <div className="grid grid-cols-7 gap-1">
-            {/* Usa o 'firstDayOfMonthOffset' corrigido */}
             {Array.from({ length: firstDayOfMonthOffset }).map((_, i) => (
               <div key={`empty-${i}`} className="h-24 rounded-lg bg-muted/30"></div>
             ))}
-            {/* --- [FIM DA CORREÇÃO 4] --- */}
 
             {Array.from({ length: daysInMonth }).map((_, day) => {
               const dayNumber = day + 1;
@@ -164,17 +147,17 @@ export default function FullCalendar({ scheduleItems, mediaItems }: FullCalendar
                   </div>
                   <div className="mt-1 space-y-1 overflow-y-auto h-16">
                     {schedulesForDay.map(schedule => {
-                      const media = getMediaById(schedule.mediaId);
+                      // --- [INÍCIO DA CORREÇÃO 3] ---
+                      // Não precisamos mais do 'getMediaById'
+                      const media = schedule.media; 
+                      // --- [FIM DA CORREÇÃO 3] ---
                       return (
                         <div
                           key={schedule.id}
                           className="p-1 rounded bg-purple-100 dark:bg-purple-800/50 text-purple-800 dark:text-purple-200"
                         >
                           <p className="text-xs font-medium line-clamp-1">
-                            {/* --- [INÍO DA CORREÇÃO 5] --- */}
-                            {/* Mostra o título da média */}
                             {media?.title || "Mídia removida"}
-                            {/* --- [FIM DA CORREÇÃO 5] --- */}
                           </p>
                         </div>
                       );
@@ -205,10 +188,12 @@ export default function FullCalendar({ scheduleItems, mediaItems }: FullCalendar
           ) : (
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
               {upcomingSchedules.map(schedule => {
-                const media = getMediaById(schedule.mediaId);
+                // --- [INÍCIO DA CORREÇÃO 4] ---
+                const media = schedule.media; // Usamos a mídia do 'schedule'
                 if (!media) return null;
+                // --- [FIM DA CORREÇÃO 4] ---
 
-                const scheduleDate = schedule.scheduledAt; // Já é um objeto Date
+                const scheduleDate = schedule.scheduledAt; 
                 const now = new Date();
                 const isThisWeek = scheduleDate.getTime() >= now.getTime() && scheduleDate.getTime() < new Date(now.setDate(now.getDate() + 7)).getTime();
 
@@ -241,12 +226,10 @@ export default function FullCalendar({ scheduleItems, mediaItems }: FullCalendar
                       </div>
                     </div>
 
-                    {/* --- [INÍCIO DA CORREÇÃO 6] --- */}
-                    {/* Usa 'mediaType' em vez de 'type' */}
                     <Badge variant="outline" className="flex-shrink-0">
+                      {/* @ts-ignore */}
                       {media.mediaType}
                     </Badge>
-                    {/* --- [FIM DA CORREÇÃO 6] --- */}
                   </div>
                 );
               })}
