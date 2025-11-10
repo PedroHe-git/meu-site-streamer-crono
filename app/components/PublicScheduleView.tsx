@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Media, ScheduleItem } from "@prisma/client";
-import { Loader2, CalendarOff, Clock, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+// --- [INÍCIO DA MUDANÇA 1] ---
+// Importamos ListOrdered para substituir o Clock
+import { Loader2, CalendarOff, Clock, Calendar, ChevronLeft, ChevronRight, ListOrdered } from "lucide-react";
+// --- [FIM DA MUDANÇA 1] ---
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
-// --- [MUDANÇA 1] ---
-// Importa 'eachDayOfInterval' para gerar os 7 dias da semana
 import { format, addDays, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
-// --- [FIM MUDANÇA 1] ---
 import {
   Carousel,
   CarouselContent,
@@ -27,21 +27,49 @@ type PublicScheduleViewProps = {
   username: string;
 };
 
-// Funções de Data (Corrigidas para UTC)
-function getUTCDate(dateString: string | Date) {
+// --- [INÍCIO DA CORREÇÃO 2] ---
+// Funções de Data (Corrigidas para forçar UTC)
+// Esta função extrai os componentes UTC de uma data (string ou objeto)
+function getUTCDate(dateString: string | Date): Date {
   const date = new Date(dateString);
-  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  // Cria uma *nova* data usando os componentes UTC, mas tratando-os como locais
+  return new Date(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    date.getUTCHours(),
+    date.getUTCMinutes(),
+    date.getUTCSeconds()
+  );
 }
+
 function formatDate(date: Date) {
+  // Passamos a data UTC para o format. O 'format' tratará como local, mas
+  // como os componentes já são UTC, o dia estará correto.
   return format(getUTCDate(date), "EEEE, dd 'de' MMMM", { locale: ptBR }); 
 }
 function formatSimpleDate(date: Date) {
   return format(getUTCDate(date), "PPP", { locale: ptBR }); 
 }
+
 // Converte "YYYY-MM-DD" para um objeto Date local sem bugs de fuso
+// Usamos T12:00:00 para evitar problemas de "um dia antes"
 function parseDateString(dateString: string) {
-    return new Date(dateString + 'T00:00:00');
+    return new Date(dateString + 'T12:00:00'); // Meio-dia local
 }
+
+// Função auxiliar para formatar a prioridade (copiada do ScheduleManager)
+const formatHorario = (horario: string | null): string | null => {
+  if (horario === "1-Primeiro") return "Primeiro";
+  if (horario === "2-Segundo") return "Segundo";
+  if (horario === "3-Terceiro") return "Terceiro";
+  if (horario === "4-Quarto") return "Quarto";
+  if (horario === "5-Quinto") return "Quinto";
+  if (horario && horario.match(/^\d{2}:\d{2}$/)) return horario; // Mantém horas
+  if (horario) return "Prioridade definida"; // Fallback
+  return null; // Retorna nulo se for "Qualquer Hora"
+};
+// --- [FIM DA CORREÇÃO 2] ---
 
 
 export default function PublicScheduleView({ username }: PublicScheduleViewProps) {
@@ -76,14 +104,17 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
     fetchSchedule();
   }, [username, weekOffset]); 
 
-  // --- [MUDANÇA 2] ---
   // Gera um MAPA dos agendamentos para consulta rápida
-  // A chave é a data (string), o valor são os itens daquele dia
   const scheduleMap = useMemo(() => {
     const groups = new Map<string, { date: Date; items: ScheduleItemWithMedia[] }>();
     scheduleItems.forEach((item) => {
       if (!item.media) return; 
+      
+      // --- [INÍCIO DA CORREÇÃO 3] ---
+      // Usamos getUTCDate para garantir que a data seja agrupada pelo dia UTC
       const dateKey = getUTCDate(item.scheduledAt).toDateString(); 
+      // --- [FIM DA CORREÇÃO 3] ---
+      
       if (!groups.has(dateKey)) {
         groups.set(dateKey, {
           date: new Date(item.scheduledAt),
@@ -109,10 +140,8 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
     const startDate = parseDateString(weekRange.start);
     const endDate = parseDateString(weekRange.end);
     
-    // Gera um array [Seg, Ter, Qua, Qui, Sex, Sab, Dom]
     return eachDayOfInterval({ start: startDate, end: endDate });
   }, [weekRange]);
-  // --- [FIM MUDANÇA 2] ---
 
   if (isLoading) {
     return (
@@ -189,20 +218,21 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
         </div>
       )}
 
-      {/* --- [MUDANÇA 3] --- */}
-      {/* Mapeia os 7 dias da semana (allDaysOfWeek) em vez de apenas os dias com itens */}
+      {/* Mapeia os 7 dias da semana */}
       {allDaysOfWeek.map((day) => {
-        const dayKey = day.toDateString();
-        // Procura os itens para este dia no Mapa
+        // --- [INÍCIO DA CORREÇÃO 4] ---
+        // A chave de busca (dayKey) deve ser gerada da mesma forma que no scheduleMap
+        const dayKey = day.toDateString(); // O parseDateString já garante o dia local
+        // --- [FIM DA CORREÇÃO 4] ---
+        
         const dayGroup = scheduleMap.get(dayKey); 
 
         return (
           <div key={dayKey}>
             <h2 className="text-2xl font-bold mb-4 capitalize">
-              {formatDate(day)}
+              {format(day, "EEEE, dd 'de' MMMM", { locale: ptBR })}
             </h2>
 
-            {/* Se houver itens (dayGroup existe), renderiza o Carrossel */}
             {dayGroup ? (
               <Carousel
                 opts={{ align: "start", loop: false }}
@@ -240,12 +270,15 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                                   <Calendar className="h-4 w-4" />
                                   <span>{formatSimpleDate(new Date(item.scheduledAt))}</span>
                                 </div>
+                                {/* --- [INÍCIO DA CORREÇÃO 5] --- */}
+                                {/* Mostra a prioridade formatada */}
                                 {item.horario && (
                                   <div className="flex items-center gap-2">
-                                    <Clock className="h-4 w-4" />
-                                    <span>{item.horario}</span>
+                                    <ListOrdered className="h-4 w-4" />
+                                    <span>{formatHorario(item.horario)}</span>
                                   </div>
                                 )}
+                                {/* --- [FIM DA CORREÇÃO 5] --- */}
                               </div>
                             </div>
                           </CardContent>
@@ -259,7 +292,7 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
               </Carousel>
             
             ) : (
-              // Se NÃO houver itens (dayGroup não existe), renderiza um placeholder
+              // Se NÃO houver itens, renderiza um placeholder
               <Card className="shadow-sm border-dashed">
                 <CardContent className="p-6 text-center text-muted-foreground">
                   <p>Nenhum item agendado para este dia.</p>
@@ -269,7 +302,6 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
           </div>
         );
       })}
-      {/* --- [FIM MUDANÇA 3] --- */}
 
     </div>
   );
