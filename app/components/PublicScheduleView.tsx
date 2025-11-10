@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Media, ScheduleItem } from "@prisma/client";
 // --- [INÍCIO DA MUDANÇA 1] ---
-// Importamos ListOrdered para substituir o Clock
-import { Loader2, CalendarOff, Clock, Calendar, ChevronLeft, ChevronRight, ListOrdered } from "lucide-react";
+// Adicionamos o ícone de Tv
+import { Loader2, CalendarOff, Clock, Calendar, ChevronLeft, ChevronRight, ListOrdered, Tv } from "lucide-react";
 // --- [FIM DA MUDANÇA 1] ---
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import { cn } from "@/lib/utils"; // Importamos o 'cn'
 
 // Tipos
 type ScheduleItemWithMedia = ScheduleItem & { media: Media };
@@ -27,12 +28,9 @@ type PublicScheduleViewProps = {
   username: string;
 };
 
-// --- [INÍCIO DA CORREÇÃO 2] ---
-// Funções de Data (Corrigidas para forçar UTC)
-// Esta função extrai os componentes UTC de uma data (string ou objeto)
+// Funções de Data (Corrigidas para UTC)
 function getUTCDate(dateString: string | Date): Date {
   const date = new Date(dateString);
-  // Cria uma *nova* data usando os componentes UTC, mas tratando-os como locais
   return new Date(
     date.getUTCFullYear(),
     date.getUTCMonth(),
@@ -44,32 +42,27 @@ function getUTCDate(dateString: string | Date): Date {
 }
 
 function formatDate(date: Date) {
-  // Passamos a data UTC para o format. O 'format' tratará como local, mas
-  // como os componentes já são UTC, o dia estará correto.
   return format(getUTCDate(date), "EEEE, dd 'de' MMMM", { locale: ptBR }); 
 }
 function formatSimpleDate(date: Date) {
   return format(getUTCDate(date), "PPP", { locale: ptBR }); 
 }
 
-// Converte "YYYY-MM-DD" para um objeto Date local sem bugs de fuso
-// Usamos T12:00:00 para evitar problemas de "um dia antes"
 function parseDateString(dateString: string) {
     return new Date(dateString + 'T12:00:00'); // Meio-dia local
 }
 
-// Função auxiliar para formatar a prioridade (copiada do ScheduleManager)
+// Função auxiliar para formatar a prioridade
 const formatHorario = (horario: string | null): string | null => {
   if (horario === "1-Primeiro") return "Primeiro";
   if (horario === "2-Segundo") return "Segundo";
   if (horario === "3-Terceiro") return "Terceiro";
   if (horario === "4-Quarto") return "Quarto";
   if (horario === "5-Quinto") return "Quinto";
-  if (horario && horario.match(/^\d{2}:\d{2}$/)) return horario; // Mantém horas
-  if (horario) return "Prioridade definida"; // Fallback
-  return null; // Retorna nulo se for "Qualquer Hora"
+  if (horario && horario.match(/^\d{2}:\d{2}$/)) return horario; 
+  if (horario) return "Prioridade definida"; 
+  return null; 
 };
-// --- [FIM DA CORREÇÃO 2] ---
 
 
 export default function PublicScheduleView({ username }: PublicScheduleViewProps) {
@@ -110,10 +103,7 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
     scheduleItems.forEach((item) => {
       if (!item.media) return; 
       
-      // --- [INÍCIO DA CORREÇÃO 3] ---
-      // Usamos getUTCDate para garantir que a data seja agrupada pelo dia UTC
       const dateKey = getUTCDate(item.scheduledAt).toDateString(); 
-      // --- [FIM DA CORREÇÃO 3] ---
       
       if (!groups.has(dateKey)) {
         groups.set(dateKey, {
@@ -121,7 +111,6 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
           items: [],
         });
       }
-      // Ordena os itens por horário (nulls por último)
       const dayItems = groups.get(dateKey)!.items;
       dayItems.push(item);
       dayItems.sort((a, b) => {
@@ -220,11 +209,7 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
 
       {/* Mapeia os 7 dias da semana */}
       {allDaysOfWeek.map((day) => {
-        // --- [INÍCIO DA CORREÇÃO 4] ---
-        // A chave de busca (dayKey) deve ser gerada da mesma forma que no scheduleMap
-        const dayKey = day.toDateString(); // O parseDateString já garante o dia local
-        // --- [FIM DA CORREÇÃO 4] ---
-        
+        const dayKey = day.toDateString(); 
         const dayGroup = scheduleMap.get(dayKey); 
 
         return (
@@ -240,7 +225,16 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
               >
                 <CarouselContent className="-ml-4">
                   {dayGroup.items.map((item) => (
-                    <CarouselItem key={item.id} className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5">
+                    // --- [INÍCIO DA MUDANÇA 2] ---
+                    // Aplicamos 'opacity-60' e 'grayscale' se o item estiver concluído
+                    <CarouselItem 
+                      key={item.id} 
+                      className={cn(
+                        "pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5 transition-all",
+                        item.isCompleted && "opacity-60 grayscale"
+                      )}
+                    >
+                    {/* --- [FIM DA MUDANÇA 2] --- */}
                       <div className="p-1">
                         <Card className="shadow-md">
                           <CardContent className="flex flex-col p-0">
@@ -258,9 +252,14 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                                    item.media.mediaType === "SERIES" ? "Série" :
                                    item.media.mediaType === "ANIME" ? "Anime" : "Outro"}
                                 </Badge>
-                                {item.isCompleted && (
+                                
+                                {/* --- [INÍCIO DA MUDANÇA 3] --- */}
+                                {/* Removemos o badge "Concluído" */}
+                                {/* {item.isCompleted && (
                                   <Badge className="bg-green-600">Concluído</Badge>
                                 )}
+                                */}
+                                {/* --- [FIM DA MUDANÇA 3] --- */}
                               </div>
                               <h3 className="text-lg font-semibold truncate" title={item.media.title}>
                                 {item.media.title}
@@ -270,15 +269,24 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                                   <Calendar className="h-4 w-4" />
                                   <span>{formatSimpleDate(new Date(item.scheduledAt))}</span>
                                 </div>
-                                {/* --- [INÍCIO DA CORREÇÃO 5] --- */}
-                                {/* Mostra a prioridade formatada */}
                                 {item.horario && (
                                   <div className="flex items-center gap-2">
                                     <ListOrdered className="h-4 w-4" />
                                     <span>{formatHorario(item.horario)}</span>
                                   </div>
                                 )}
-                                {/* --- [FIM DA CORREÇÃO 5] --- */}
+                                {/* --- [INÍCIO DA MUDANÇA 4] --- */}
+                                {/* Adicionamos a informação de S/E */}
+                                {(item.seasonNumber || item.episodeNumber) && (
+                                  <div className="flex items-center gap-2">
+                                    <Tv className="h-4 w-4" />
+                                    <span>
+                                      {item.seasonNumber && `S${String(item.seasonNumber).padStart(2, '0')}`}
+                                      {item.episodeNumber && ` E${String(item.episodeNumber).padStart(2, '0')}`}
+                                    </span>
+                                  </div>
+                                )}
+                                {/* --- [FIM DA MUDANÇA 4] --- */}
                               </div>
                             </div>
                           </CardContent>

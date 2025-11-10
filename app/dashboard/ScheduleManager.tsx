@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react"; 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Clock, Check, Plus, Trash2, Loader2, Calendar as CalendarIconLucide, ListVideo } from "lucide-react"; // Adicionado ListVideo
+import { Calendar as CalendarIcon, Clock, Check, Plus, Trash2, Loader2, Calendar as CalendarIconLucide, ListVideo, Tv } from "lucide-react"; 
 import { Calendar as ShadCalendar } from "@/components/ui/calendar";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -30,7 +30,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // Removido 'AlertDialogTrigger' não usado
+} from "@/components/ui/alert-dialog"; 
 
 // Tipos
 type MediaType = "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
@@ -68,7 +68,7 @@ type ScheduleManagerProps = {
   onCompleteSchedule: (id: string) => void;
 };
 
-// Função auxiliar para formatar a prioridade
+// Função formatHorario
 const formatHorario = (horario: string | null): string | null => {
   if (horario === "1-Primeiro") return "Primeiro";
   if (horario === "2-Segundo") return "Segundo";
@@ -89,6 +89,10 @@ export default function ScheduleManager({
   const [selectedMedia, setSelectedMedia] = useState(""); 
   const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
   const [scheduleTime, setScheduleTime] = useState(""); 
+  
+  const [season, setSeason] = useState("");
+  const [episode, setEpisode] = useState("");
+
   const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
   const [error, setError] = useState("");
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -105,27 +109,61 @@ export default function ScheduleManager({
     });
   };
 
+  const selectedMediaInfo = useMemo(() => {
+    if (!selectedMedia) return null;
+    return mediaItems.find(m => m.mediaId === selectedMedia);
+  }, [selectedMedia, mediaItems]);
+
+  const showEpisodeFields = selectedMediaInfo && (selectedMediaInfo.mediaType === 'SERIES' || selectedMediaInfo.mediaType === 'ANIME');
+
+  useEffect(() => {
+    if (selectedMediaInfo && showEpisodeFields) {
+      const nextSeason = selectedMediaInfo.lastSeason || 1;
+      const nextEpisode = (selectedMediaInfo.lastEpisode || 0) + 1;
+      
+      setSeason(String(nextSeason));
+      setEpisode(String(nextEpisode));
+    } else {
+      setSeason("");
+      setEpisode("");
+    }
+  }, [selectedMediaInfo, showEpisodeFields]); 
+
+
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(""); 
+    
     if (!selectedMedia || !scheduleDate) {
       setError("Selecione uma mídia e uma data.");
       return;
     }
     
+    // --- [INÍCIO DA CORREÇÃO] ---
+    // Removemos a validação que obrigava o preenchimento de S/E
+    /*
+    if (showEpisodeFields && (!season || !episode)) {
+      setError("Para Séries/Animes, Temporada e Episódio são obrigatórios.");
+      return;
+    }
+    */
+    // --- [FIM DA CORREÇÃO] ---
+    
     const key = `add-${selectedMedia}`;
     setLoadingStates(prev => ({ ...prev, [key]: true }));
-    setError("");
 
     try {
       const horarioParaSalvar = (scheduleTime === "qualquer" || !scheduleTime) ? null : scheduleTime;
 
+      // O código aqui já trata 'season' ou 'episode' vazios como 'null',
+      // o que é perfeito para campos opcionais.
       const scheduleData = {
         mediaId: selectedMedia, 
         scheduledAt: scheduleDate.toISOString(),
         horario: horarioParaSalvar, 
-        seasonNumber: null,
-        episodeNumber: null,
-        episodeNumberEnd: null,
+        seasonNumber: season ? parseInt(season) : null, 
+        episodeNumber: episode ? parseInt(episode) : null,
+        episodeNumberEnd: null, 
       };
 
       const res = await fetch("/api/schedule", {
@@ -149,7 +187,9 @@ export default function ScheduleManager({
       
       setSelectedMedia("");
       setScheduleDate(undefined);
-      setScheduleTime(""); 
+      setScheduleTime("");
+      setSeason("");
+      setEpisode("");
       
     } catch (err: any) {
       setError(err.message || "Ocorreu um erro ao agendar.");
@@ -247,15 +287,12 @@ export default function ScheduleManager({
 
 
   return (
-    // --- [INÍCIO DA MUDANÇA 1] ---
-    // Alteramos o layout de 'md:grid-cols-3' para 'lg:grid-cols-3'
-    // para dar mais espaço
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       
       {/* Coluna 1: Stack Vertical para o Formulário e a Nova Lista */}
       <div className="lg:col-span-1 space-y-6">
         
-        {/* Card 1: Formulário de Agendamento (Sem alterações) */}
+        {/* Card 1: Formulário de Agendamento */}
         <Card className="shadow-lg border-2">
           <CardHeader>
             <CardTitle>Agendar Sessão</CardTitle>
@@ -325,6 +362,36 @@ export default function ScheduleManager({
                     </PopoverContent>
                   </Popover>
                 </div>
+                
+                {/* Inputs de S/E (visíveis condicionalmente) */}
+                {showEpisodeFields && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="season-number">Temporada (Opc.)</Label>
+                      <Input
+                        id="season-number"
+                        type="number"
+                        placeholder="S"
+                        value={season}
+                        onChange={(e) => setSeason(e.target.value)}
+                        min="1"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="episode-number">Episódio (Opc.)</Label>
+                      <Input
+                        id="episode-number"
+                        type="number"
+                        placeholder="Ep"
+                        value={episode}
+                        onChange={(e) => setEpisode(e.target.value)}
+                        min="1"
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Select de Prioridade */}
                 <div className="space-y-2">
@@ -333,7 +400,7 @@ export default function ScheduleManager({
                     value={scheduleTime}
                     onValueChange={setScheduleTime}
                   >
-                    <SelectTrigger id="schedule-priority">
+                    <SelectTrigger id="schedule-priority" className="h-9">
                       <SelectValue placeholder="Qualquer Hora (Sem ordem)" />
                     </SelectTrigger>
                     <SelectContent>
@@ -364,8 +431,7 @@ export default function ScheduleManager({
           </CardContent>
         </Card>
 
-        {/* --- [INÍCIO DA MUDANÇA 2] --- */}
-        {/* Card 2: Nova Lista de Itens Disponíveis */}
+        {/* Card 2: Lista de Itens Disponíveis */}
         <Card className="shadow-lg border-2">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -373,7 +439,7 @@ export default function ScheduleManager({
               <Badge>{mediaItems.length}</Badge>
             </CardTitle>
             <CardDescription>
-              Itens da sua lista &quot;Essa Semana&quot;.
+              Itens da sua lista "Essa Semana".
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -382,7 +448,7 @@ export default function ScheduleManager({
                 <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground">
                   <ListVideo className="h-10 w-10 mb-2 opacity-50" />
                   <p>Nenhum item em &quot;Essa Semana&quot;.</p>
-                  <p className="text-xs">Adicione itens na aba &quot;Minhas Listas&quot;.</p>
+                  <p className="text-xs">Adicione itens na aba "Minhas Listas".</p>
                 </div>
               ) : (
                 mediaItems.map((item) => (
@@ -409,14 +475,12 @@ export default function ScheduleManager({
             </div>
           </CardContent>
         </Card>
-        {/* --- [FIM DA MUDANÇA 2] --- */}
-
       </div>
       {/* --- Fim da Coluna 1 --- */}
 
 
-      {/* Coluna 2: Próximos Agendamentos (Sem alterações, mas col-span atualizado) */}
-      <Card className="lg:col-span-2 shadow-lg border-2"> {/* Alterado para lg:col-span-2 */}
+      {/* Coluna 2: Próximos Agendamentos */}
+      <Card className="lg:col-span-2 shadow-lg border-2">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Próximos Agendamentos</span>
@@ -500,6 +564,15 @@ export default function ScheduleManager({
                           <span>{formatHorario(schedule.horario)}</span>
                         </div>
                       )}
+                      {(schedule.seasonNumber || schedule.episodeNumber) && (
+                        <div className="flex items-center gap-2 text-muted-foreground text-sm mt-1">
+                          <Tv className="h-4 w-4" />
+                          <span>
+                            {schedule.seasonNumber && `S${String(schedule.seasonNumber).padStart(2, '0')}`}
+                            {schedule.episodeNumber && ` E${String(schedule.episodeNumber).padStart(2, '0')}`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
                       <Button
@@ -536,9 +609,9 @@ export default function ScheduleManager({
       {/* Fim da Coluna 2 */}
 
       
-      {/* Coluna 3: Concluídos Recentemente (Sem alterações, mas col-span atualizado) */}
+      {/* Coluna 3: Concluídos Recentemente */}
       {completedSchedules.length > 0 && (
-         <Card className="lg:col-span-3 shadow-lg border-2"> {/* Alterado para lg:col-span-3 */}
+         <Card className="lg:col-span-3 shadow-lg border-2"> 
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Concluídos Recentemente</span>
@@ -579,8 +652,6 @@ export default function ScheduleManager({
           </CardContent>
         </Card>
       )}
-      {/* Fim da Coluna 3 */}
-
     </div>
   );
 }
