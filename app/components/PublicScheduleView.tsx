@@ -2,10 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Media, ScheduleItem } from "@prisma/client";
-// --- [INÍCIO DA MUDANÇA 1] ---
-// Adicionamos o ícone de Tv
 import { Loader2, CalendarOff, Clock, Calendar, ChevronLeft, ChevronRight, ListOrdered, Tv } from "lucide-react";
-// --- [FIM DA MUDANÇA 1] ---
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +16,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { cn } from "@/lib/utils"; // Importamos o 'cn'
+import { cn } from "@/lib/utils"; 
 
 // Tipos
 type ScheduleItemWithMedia = ScheduleItem & { media: Media };
@@ -225,8 +222,6 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
               >
                 <CarouselContent className="-ml-4">
                   {dayGroup.items.map((item) => (
-                    // --- [INÍCIO DA MUDANÇA 2] ---
-                    // Aplicamos 'opacity-60' e 'grayscale' se o item estiver concluído
                     <CarouselItem 
                       key={item.id} 
                       className={cn(
@@ -234,7 +229,6 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                         item.isCompleted && "opacity-60 grayscale"
                       )}
                     >
-                    {/* --- [FIM DA MUDANÇA 2] --- */}
                       <div className="p-1">
                         <Card className="shadow-md">
                           <CardContent className="flex flex-col p-0">
@@ -246,24 +240,33 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                               className="w-full h-60 object-cover rounded-t-lg"
                             />
                             <div className="p-4 space-y-2">
-                              <div className="flex items-center justify-between">
+                              
+                              {/* --- [INÍCIO DA MUDANÇA] --- */}
+                              <div className="flex items-center justify-between gap-1">
                                 <Badge variant="outline">
                                   {item.media.mediaType === "MOVIE" ? "Filme" :
                                    item.media.mediaType === "SERIES" ? "Série" :
                                    item.media.mediaType === "ANIME" ? "Anime" : "Outro"}
                                 </Badge>
                                 
-                                {/* --- [INÍCIO DA MUDANÇA 3] --- */}
-                                {/* Removemos o badge "Concluído" */}
-                                {/* {item.isCompleted && (
-                                  <Badge className="bg-green-600">Concluído</Badge>
+                                {/* Badge de S/E movido para aqui */}
+                                {(item.seasonNumber || item.episodeNumber) && (
+                                  <Badge variant="outline" 
+                                    className="flex items-center gap-1 flex-shrink-0 border-purple-500 text-purple-500 dark:border-purple-400 dark:text-purple-400">
+                                    <Tv className="h-3 w-3" />
+                                    <span>
+                                      {item.seasonNumber && `S${String(item.seasonNumber).padStart(2, '0')}`}
+                                      {item.episodeNumber && ` E${String(item.episodeNumber).padStart(2, '0')}`}
+                                    </span>
+                                  </Badge>
                                 )}
-                                */}
-                                {/* --- [FIM DA MUDANÇA 3] --- */}
                               </div>
+                              {/* --- [FIM DA MUDANÇA] --- */}
+
                               <h3 className="text-lg font-semibold truncate" title={item.media.title}>
                                 {item.media.title}
                               </h3>
+                              
                               <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground">
                                 <div className="flex items-center gap-2">
                                   <Calendar className="h-4 w-4" />
@@ -275,18 +278,7 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                                     <span>{formatHorario(item.horario)}</span>
                                   </div>
                                 )}
-                                {/* --- [INÍCIO DA MUDANÇA 4] --- */}
-                                {/* Adicionamos a informação de S/E */}
-                                {(item.seasonNumber || item.episodeNumber) && (
-                                  <div className="flex items-center gap-2">
-                                    <Tv className="h-4 w-4" />
-                                    <span>
-                                      {item.seasonNumber && `S${String(item.seasonNumber).padStart(2, '0')}`}
-                                      {item.episodeNumber && ` E${String(item.episodeNumber).padStart(2, '0')}`}
-                                    </span>
-                                  </div>
-                                )}
-                                {/* --- [FIM DA MUDANÇA 4] --- */}
+                                {/* A informação de S/E foi removida daqui */}
                               </div>
                             </div>
                           </CardContent>
