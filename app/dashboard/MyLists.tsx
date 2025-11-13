@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Trash2, Film, List as ListIcon, Search } from "lucide-react";
+// --- [MUDANÇA 1] Importar ícones de paginação ---
+import { Loader2, Trash2, Film, List as ListIcon, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import { Media, MediaStatus } from "@prisma/client";
 import { Input } from "@/components/ui/input";
@@ -38,7 +39,6 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
   const [mediaItems, setMediaItems] = useState<MediaStatusWithMedia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Estado para as contagens de cada lista
   const [counts, setCounts] = useState<Record<StatusKey, number>>({ 
     TO_WATCH: 0, 
     WATCHING: 0, 
@@ -46,10 +46,13 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     DROPPED: 0 
   });
   
-  // Paginação e Busca
+  // --- [MUDANÇA 2] Ajuste nos estados de paginação ---
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const pageSize = 10;
+  const [totalCount, setTotalCount] = useState(0); // <-- Adicionado para calcular o total de páginas
+  const pageSize = 12;
+  // const [hasMore, setHasMore] = useState(false); // <-- Removido
+  // --- [FIM MUDANÇA 2] ---
+
   const [searchTerm, setSearchTerm] = useState("");
 
   // Estados do Modal de Edição
@@ -64,30 +67,25 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // --- Função para buscar as contagens de todas as listas ---
+  // Função para buscar as contagens de todas as listas
   const fetchCounts = useCallback(async () => {
     try {
-      // Fazemos 4 requests rápidos (limit=1) apenas para pegar o 'totalCount' de cada status
       const statuses: StatusKey[] = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];
-      
       const promises = statuses.map(status => 
         fetch(`/api/mediastatus?status=${status}&pageSize=1&page=1`).then(res => res.json())
       );
-
       const results = await Promise.all(promises);
-      
       const newCounts: any = {};
       results.forEach((data, index) => {
         newCounts[statuses[index]] = data.totalCount;
       });
-
       setCounts(newCounts);
     } catch (error) {
       console.error("Erro ao buscar contagens", error);
     }
   }, []);
 
-  // --- Função para buscar a lista atual ---
+  // --- [MUDANÇA 3] Lógica de 'fetchListData' simplificada ---
   const fetchListData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -103,27 +101,33 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
       
       const data = await res.json();
       
-      if (page === 1) {
-        setMediaItems(data.items);
-      } else {
-        setMediaItems(prev => [...prev, ...data.items]);
-      }
-      
-      setHasMore(data.totalCount > page * pageSize);
+      // Sempre substitui os itens, em vez de anexar
+      setMediaItems(data.items); 
+      // Armazena o total de itens para calcular as páginas
+      setTotalCount(data.totalCount);
 
     } catch (error) {
       console.error(error);
     } finally {
       setIsLoading(false);
     }
-  }, [activeList, page, searchTerm]);
+  }, [activeList, page, searchTerm]); // Depende da página
+  // --- [FIM MUDANÇA 3] ---
 
-  // --- Efeito Principal: Reage à versão dos dados ---
+  // Efeito Principal: Reage à versão dos dados E à mudança de página/aba/busca
   useEffect(() => {
-    setPage(1); 
     fetchListData();
-    fetchCounts(); // Atualiza também os contadores quando algo muda
-  }, [fetchListData, fetchCounts, dataVersionKey]); 
+  }, [fetchListData, dataVersionKey]); // <-- 'page' já está em fetchListData
+
+  // Efeito para contagens: Roda na carga e quando a versão muda
+  useEffect(() => {
+    fetchCounts();
+  }, [fetchCounts, dataVersionKey]);
+
+  // Efeito para resetar a página quando a aba ou busca muda
+  useEffect(() => {
+    setPage(1);
+  }, [activeList, searchTerm]);
 
 
   // --- Handlers de Edição ---
@@ -147,13 +151,10 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
           isWeekly: isWeekly
         })
       });
-
       if (!res.ok) throw new Error("Falha ao atualizar");
-
       setIsEditOpen(false);
       setEditingItem(null);
       onDataChanged(); 
-
     } catch (error) {
       console.error(error);
     } finally {
@@ -161,7 +162,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   };
 
-  // --- Handlers de Exclusão (Atualizados para AlertDialog) ---
+  // --- Handlers de Exclusão (com AlertDialog) ---
   const handleDeleteClick = (id: string) => {
     setItemToDelete(id);
     setIsDeleteOpen(true);
@@ -173,7 +174,6 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     try {
       const res = await fetch(`/api/mediastatus?id=${itemToDelete}`, { method: 'DELETE' });
       if (!res.ok) throw new Error("Falha ao remover");
-      
       onDataChanged(); 
     } catch (error) {
       console.error(error);
@@ -183,6 +183,10 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
       setItemToDelete(null);
     }
   };
+
+  // --- [MUDANÇA 4] Cálculo do total de páginas ---
+  const totalPages = Math.ceil(totalCount / pageSize);
+  // --- [FIM MUDANÇA 4] ---
 
   return (
     <>
@@ -198,14 +202,14 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
               <Input
                 placeholder="Filtrar nesta lista..."
                 value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
                 className="pl-8"
               />
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeList} onValueChange={(v) => { setActiveList(v as StatusKey); setPage(1); }} className="w-full">
+          <Tabs value={activeList} onValueChange={(v) => setActiveList(v as StatusKey)} className="w-full">
             
             {/* Lista de Abas com Badges de Contagem */}
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-6">
@@ -216,22 +220,27 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                 Essa Semana <Badge variant="outline" className="border-blue-600 text-blue-600 ml-2">{counts.WATCHING}</Badge>
               </TabsTrigger>
               <TabsTrigger value="WATCHED" className="flex gap-2">
-                Já Assisti <Badge variant="outline" className="border-green-600 text-green-600 ml-2">{counts.WATCHED}</Badge>
+                Já Assistidos <Badge variant="outline" className="border-green-600 text-green-600 ml-2">{counts.WATCHED}</Badge>
               </TabsTrigger>
               <TabsTrigger value="DROPPED" className="flex gap-2">
-                Abandonado <Badge variant="outline" className="border-orange-600 text-orange-600 ml-2">{counts.DROPPED}</Badge>
+                Abandonados <Badge variant="outline" className="border-orange-600 text-orange-600 ml-2">{counts.DROPPED}</Badge>
               </TabsTrigger>
             </TabsList>
 
             <div className="min-h-[300px]">
-              {isLoading && page === 1 ? (
+              {isLoading ? ( // <-- Removido 'page === 1' para mostrar o loading em toda mudança de página
                 <div className="flex justify-center items-center h-40">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               ) : mediaItems.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
                   <ListIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>Nenhum item encontrado nesta lista.</p>
+                  <p>
+                    {searchTerm 
+                      ? `Nenhum item encontrado para "${searchTerm}".`
+                      : "Nenhum item nesta lista."
+                    }
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -255,7 +264,6 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                           <Button size="sm" variant="secondary" onClick={() => handleEditClick(item)}>
                             Mover / Editar
                           </Button>
-                          {/* Botão de Exclusão atualizado */}
                           <Button size="icon" variant="destructive" onClick={() => handleDeleteClick(item.id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -280,14 +288,32 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                 </div>
               )}
               
-              {hasMore && (
-                <div className="mt-6 text-center">
-                  <Button variant="outline" onClick={() => setPage(p => p + 1)} disabled={isLoading}>
-                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Carregar Mais
+              {/* --- [MUDANÇA 5] Substituído 'hasMore' pelo bloco de paginação --- */}
+              {totalPages > 1 && !isLoading && (
+                <div className="flex justify-between items-center pt-6 mt-6 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1 || isLoading}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Página {page} de {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages || isLoading}
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
               )}
+              {/* --- [FIM MUDANÇA 5] --- */}
+
             </div>
           </Tabs>
         </CardContent>
@@ -309,7 +335,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="TO_WATCH">Próximos Conteudos (Futuro)</SelectItem>
+                  <SelectItem value="TO_WATCH">Próximos Conteúdos (Futuro)</SelectItem>
                   <SelectItem value="WATCHING">Essa Semana (Para Agendar)</SelectItem>
                   <SelectItem value="WATCHED">Já Assistidos (Concluído)</SelectItem>
                   <SelectItem value="DROPPED">Abandonados</SelectItem>
@@ -336,7 +362,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
         </DialogContent>
       </Dialog>
 
-      {/* Novo Modal de Exclusão (AlertDialog) */}
+      {/* Modal de Exclusão (AlertDialog) */}
       <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
