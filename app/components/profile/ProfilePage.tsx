@@ -1,6 +1,6 @@
 "use client";
 
-import { User, Calendar, Film, Lock, Users, UserCheck, Heart, Pen } from "lucide-react";
+import { User, Calendar, Film, Lock, Pen, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,11 +10,14 @@ import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
 import PublicScheduleView from "@/app/components/PublicScheduleView";
 import UserListsClient from "@/app/components/UserListsClient";
 import Image from "next/image"; 
-import Link from "next/link"; // Importa o Link
-import { buttonVariants } from "@/components/ui/button"; // Importa os variants
-import { cn } from "@/lib/utils"; // Importa o 'cn'
+import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Media, MediaStatus, ScheduleItem, ProfileVisibility, User as PrismaUser } from "@prisma/client";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
-// Tipos
+// --- Tipos Atualizados ---
+
 type ListCounts = {
   TO_WATCH: number;
   WATCHING: number;
@@ -22,33 +25,25 @@ type ListCounts = {
   DROPPED: number;
 };
 
-type ProfileUser = {
-  id: string; 
-  username: string;
-  name: string | null; 
-  image: string | null;
-  bio: string | null;
-  profileBannerUrl: string | null; 
-  role: "CREATOR" | "VISITOR";
-  twitchUsername: string | null;
+type ProfileUser = PrismaUser & {
   followersCount: number;
   followingCount: number;
-  isPrivate: boolean; 
-  profileVisibility: "PUBLIC" | "FOLLOWERS_ONLY";
-  showToWatchList: boolean;
-  showWatchingList: boolean;
-  showWatchedList: boolean;
-  showDroppedList: boolean;
-  listCounts: ListCounts; 
 };
+
+type ScheduleItemWithMedia = ScheduleItem & { media: Media };
 
 type ProfilePageProps = {
   user: ProfileUser;
   isOwner: boolean;
   isFollowing: boolean;
   canViewProfile: boolean;
-  activeTab?: "cronograma" | "listas";
+  activeTab?: "cronograma" | "conteudos";
+  listCounts: ListCounts;
+  initialSchedule: ScheduleItemWithMedia[] | null;
+  initialWeekRange: { start: string, end: string } | null;
 };
+// --- Fim dos Tipos ---
+
 
 export default function ProfilePage({
   user,
@@ -56,13 +51,48 @@ export default function ProfilePage({
   isFollowing,
   canViewProfile,
   activeTab = "cronograma",
+  listCounts,
+  initialSchedule,
+  initialWeekRange
 }: ProfilePageProps) {
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const handleTabChange = (value: string) => {
+    // Cria uma cópia dos parâmetros atuais
+    const params = new URLSearchParams(searchParams.toString());
+
+    params.set("tab", value);
+
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  if (!user) {
+    return (
+      <div className="container mx-auto max-w-5xl py-8">
+        <Card className="shadow-lg border-2">
+          <CardContent className="p-12 text-center">
+            <Loader2 className="mx-auto h-12 w-12 text-muted-foreground mb-4 animate-spin" />
+            <h2 className="text-2xl font-bold">A Carregar Perfil...</h2>
+            <p className="text-muted-foreground mt-2">
+              A buscar os dados deste utilizador.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  // --- A CHAVE "}" EXTRA FOI REMOVIDA DAQUI ---
+
+  // Esta linha agora é segura, pois o 'if' acima já foi executado.
   const fallbackLetter = (user.name || user.username).charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen bg-background">
       
-      {/* Secção Hero */}
+      {/* Secção Hero (Renderiza sempre) */}
       <div className="p-8 pt-28 md:pt-32 relative overflow-hidden">
         {user.profileBannerUrl ? (
           <Image
@@ -78,7 +108,6 @@ export default function ProfilePage({
         )}
         <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-sm"></div>
         
-        {/* Conteúdo do Hero (agora com z-20) */}
         <div className="container mx-auto max-w-5xl relative z-20">
           <div className="flex flex-col md:flex-row items-center gap-8">
             {/* Avatar */}
@@ -103,8 +132,6 @@ export default function ProfilePage({
                 {user.bio || "Este utilizador ainda não adicionou uma bio."}
               </p>
               
-              {/* --- [INÍCIO DA MUDANÇA] --- */}
-              {/* Agrupamos os Stats e o Botão */}
               <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-6 mt-4">
                 
                 {/* Stats de Seguidores */}
@@ -119,13 +146,9 @@ export default function ProfilePage({
                   </div>
                 </div>
 
-                {/* Botão de Seguir/Editar (Movido para aqui) */}
+                {/* Botão de Seguir/Editar */}
                 <div className="flex-shrink-0 w-full md:w-auto">
-                  
-                  {/* --- [INÍCIO DA CORREÇÃO] --- */}
-                  {/* Renderiza condicionalmente o botão */}
                   {isOwner ? (
-                    // Se for o dono, mostra "Editar Perfil"
                     <Link 
                       href="/dashboard" 
                       className={cn(
@@ -137,22 +160,15 @@ export default function ProfilePage({
                       Editar Perfil
                     </Link>
                   ) : (
-                    // Se for visitante, mostra "FollowButton"
                     <FollowButton
                       isFollowingInitial={isFollowing}
                       username={user.username}
                       className="w-full md:w-36"
-                      // As props 'isOwner' e 'userId' foram removidas
                     />
                   )}
-                  {/* --- [FIM DA CORREÇÃO] --- */}
-
                 </div>
               </div>
-              {/* --- [FIM DA MUDANÇA] --- */}
             </div>
-
-            {/* O Botão de Seguir/Editar foi removido daqui */}
           </div>
         </div>
       </div>
@@ -160,22 +176,26 @@ export default function ProfilePage({
 
       {/* Conteúdo Principal (Abas) */}
       <div className="container mx-auto max-w-5xl py-8">
+        
+        {/* Verifica a flag 'canViewProfile' antes de renderizar as abas */}
         {!canViewProfile ? (
+          // Mensagem de Perfil Privado
           <Card className="shadow-lg border-2">
             <CardContent className="p-12 text-center">
               <Lock className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h2 className="text-2xl font-bold">Este perfil é privado</h2>
               <p className="text-muted-foreground mt-2">
-                Siga este utilizador para ver o seu cronograma e listas.
+                Siga este utilizador para ver o seu cronograma e conteúdos.
               </p>
             </CardContent>
           </Card>
         ) : (
-          // --- [INÍCIO DA CORREÇÃO] ---
-          // 1. O <Tabs> agora envolve tudo
-          <Tabs defaultValue={activeTab} className="w-full">
-            
-            {/* 2. Adicionamos a TabsList centralizada, FORA do Card */}
+          // Conteúdo das Abas (se o perfil for visível)
+          <Tabs 
+            value={activeTab} // Use 'value' (controlado) em vez de 'defaultValue'
+            onValueChange={handleTabChange} // Chama a função ao mudar
+            className="w-full"
+          >
             <div className="flex justify-center mb-4">
               <TabsList className="grid w-full grid-cols-2 max-w-md">
                 <TabsTrigger value="cronograma">
@@ -184,18 +204,25 @@ export default function ProfilePage({
                 </TabsTrigger>
                 <TabsTrigger value="listas">
                   <Film className="h-4 w-4 mr-2" />
-                  Listas
+                  Conteúdos
                 </TabsTrigger>
               </TabsList>
             </div>
 
-            {/* 3. O Card agora contém APENAS o conteúdo das abas */}
             <Card className="shadow-lg border-2">
               <CardContent className="p-6">
+                
+                {/* --- ABA CRONOGRAMA --- */}
                 <TabsContent value="cronograma" className="mt-0">
-                  <PublicScheduleView username={user.username} />
+                  <PublicScheduleView 
+                    username={user.username}
+                    // Passa os dados iniciais!
+                    initialSchedule={initialSchedule}
+                    initialWeekRange={initialWeekRange}
+                  />
                 </TabsContent>
 
+                {/* --- ABA LISTAS --- */}
                 <TabsContent value="listas" className="mt-0">
                   <UserListsClient
                     username={user.username}
@@ -204,13 +231,12 @@ export default function ProfilePage({
                     showWatchedList={user.showWatchedList}
                     showDroppedList={user.showDroppedList}
                     isOwner={isOwner} 
-                    counts={user.listCounts} 
+                    counts={listCounts} // Passa as contagens recebidas
                   />
                 </TabsContent>
               </CardContent>
             </Card>
           </Tabs>
-          // --- [FIM DA CORREÇÃO] ---
         )}
       </div>
 

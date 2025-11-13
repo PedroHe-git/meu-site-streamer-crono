@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Media, ScheduleItem } from "@prisma/client";
 import { Loader2, CalendarOff, Clock, Calendar, ChevronLeft, ChevronRight, ListOrdered, Tv } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,9 +21,14 @@ import { cn } from "@/lib/utils";
 // Tipos
 type ScheduleItemWithMedia = ScheduleItem & { media: Media };
 
+// --- Props Atualizadas ---
 type PublicScheduleViewProps = {
   username: string;
+  // Recebe os dados iniciais da semana 0 (do Server Component)
+  initialSchedule: ScheduleItemWithMedia[] | null;
+  initialWeekRange: { start: string, end: string } | null;
 };
+// --- Fim das Props ---
 
 // Funções de Data (Corrigidas para UTC)
 function getUTCDate(dateString: string | Date): Date {
@@ -49,7 +54,6 @@ function parseDateString(dateString: string) {
     return new Date(dateString + 'T12:00:00'); // Meio-dia local
 }
 
-// Função auxiliar para formatar a prioridade
 const formatHorario = (horario: string | null): string | null => {
   if (horario === "1-Primeiro") return "Primeiro";
   if (horario === "2-Segundo") return "Segundo";
@@ -62,46 +66,70 @@ const formatHorario = (horario: string | null): string | null => {
 };
 
 
-export default function PublicScheduleView({ username }: PublicScheduleViewProps) {
-  const [scheduleItems, setScheduleItems] = useState<ScheduleItemWithMedia[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function PublicScheduleView({ 
+  username, 
+  initialSchedule, 
+  initialWeekRange 
+}: PublicScheduleViewProps) {
+  
+  // --- Estados Atualizados ---
+  // Inicia os estados com os dados recebidos do servidor
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItemWithMedia[]>(initialSchedule || []);
+  const [isLoading, setIsLoading] = useState(false); // Começa como 'false'
+  const [error, setError] = useState<string | null>(initialSchedule ? null : "Perfil privado ou sem dados.");
 
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [weekRange, setWeekRange] = useState({ start: "", end: "" });
+  const [weekOffset, setWeekOffset] = useState(0); // Sempre começa na semana 0
+  const [weekRange, setWeekRange] = useState(initialWeekRange || { start: "", end: "" });
+  // --- Fim dos Estados ---
 
-  useEffect(() => {
-    const fetchSchedule = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/users/${username}/schedule?weekOffset=${weekOffset}`);
-        if (!res.ok) {
-          throw new Error("Não foi possível carregar o cronograma.");
-        }
-        
-        const data = await res.json();
-        setScheduleItems(data.items);
-        setWeekRange({ start: data.weekStart, end: data.weekEnd });
-        
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setIsLoading(false);
+
+  // --- Lógica de Fetch (Agora em useCallback) ---
+  const fetchSchedule = useCallback(async (offset: number) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/users/${username}/schedule?weekOffset=${offset}`);
+      if (!res.ok) {
+        throw new Error("Não foi possível carregar o cronograma.");
       }
-    };
+      
+      const data = await res.json();
+      setScheduleItems(data.items);
+      setWeekRange({ start: data.weekStart, end: data.weekEnd });
+      
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [username]); // Depende apenas do username
 
-    fetchSchedule();
-  }, [username, weekOffset]); 
+  // --- useEffect Atualizado ---
+  useEffect(() => {
+    // Se for a semana 0, os dados já foram carregados (initialSchedule).
+    // Não faz nada.
+    if (weekOffset === 0) {
+      // Garante que os dados iniciais sejam carregados se o usuário navegar de volta
+      setScheduleItems(initialSchedule || []);
+      setWeekRange(initialWeekRange || { start: "", end: "" });
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+    
+    // Se for qualquer outra semana, busca os dados da API
+    fetchSchedule(weekOffset);
 
-  // Gera um MAPA dos agendamentos para consulta rápida
+  }, [weekOffset, fetchSchedule, initialSchedule, initialWeekRange]); 
+  // --- Fim do useEffect ---
+
+
+  // Gera um MAPA dos agendamentos (Sem alteração)
   const scheduleMap = useMemo(() => {
     const groups = new Map<string, { date: Date; items: ScheduleItemWithMedia[] }>();
     scheduleItems.forEach((item) => {
       if (!item.media) return; 
-      
       const dateKey = getUTCDate(item.scheduledAt).toDateString(); 
-      
       if (!groups.has(dateKey)) {
         groups.set(dateKey, {
           date: new Date(item.scheduledAt),
@@ -118,7 +146,7 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
     return groups;
   }, [scheduleItems]); 
 
-  // Gera um ARRAY com todos os 7 dias da semana atual
+  // Gera um ARRAY com todos os 7 dias da semana (Sem alteração)
   const allDaysOfWeek = useMemo(() => {
     if (!weekRange.start || !weekRange.end) {
       return [];
@@ -129,39 +157,32 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
     return eachDayOfInterval({ start: startDate, end: endDate });
   }, [weekRange]);
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-[200px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center p-8 text-red-600">
-        <p>{error}</p>
-      </div>
-    );
-  }
-
-  // Formatação do título da semana (função interna)
+  // Formatação do título da semana (Sem alteração)
   const formatWeekRange = (start: string, end: string) => {
     if (!start || !end) return "Carregando...";
-    
     const startDate = parseDateString(start); 
     const endDate = parseDateString(end);
-
     const startDay = format(startDate, "dd");
     const startMonth = format(startDate, "MMM", { locale: ptBR });
     const endDay = format(endDate, "dd");
     const endMonth = format(endDate, "MMM", { locale: ptBR });
-
     if (startMonth === endMonth) {
       return `Semana de ${startDay} a ${endDay} de ${startMonth}`;
     }
     return `Semana de ${startDay} ${startMonth} a ${endDay} ${endMonth}`;
   };
+  
+  // --- [LÓGICA DE RENDERIZAÇÃO ATUALIZADA] ---
+  // Se 'initialSchedule' for nulo, significa que o perfil é privado.
+  if (initialSchedule === null) {
+    // Não precisa mais do 'Lock' aqui, pois o ProfilePage já trata isso.
+    // Mas é uma boa garantia.
+    return (
+      <div className="text-center p-8 text-muted-foreground">
+        <p>O cronograma deste utilizador é privado.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -180,7 +201,7 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
         
         <div className="text-center">
           <h2 className="text-lg font-semibold capitalize">
-            {formatWeekRange(weekRange.start, weekRange.end)}
+            {isLoading ? "A carregar..." : formatWeekRange(weekRange.start, weekRange.end)}
           </h2>
         </div>
 
@@ -195,8 +216,15 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
         </Button>
       </div>
 
-      {/* Mensagem de Vazio (se a API não retornar nada) */}
-      {scheduleItems.length === 0 && !isLoading && (
+      {/* Estado de Erro */}
+      {error && !isLoading && (
+        <div className="text-center p-8 text-red-600">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {/* Estado Vazio (se a API retornar vazio) */}
+      {scheduleItems.length === 0 && !isLoading && !error && (
         <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg">
           <CalendarOff className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-xl font-semibold">Cronograma Vazio</h3>
@@ -204,8 +232,15 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
         </div>
       )}
 
-      {/* Mapeia os 7 dias da semana */}
-      {allDaysOfWeek.map((day) => {
+      {/* Spinner de carregamento (para as semanas > 0) */}
+      {isLoading && (
+         <div className="flex justify-center items-center min-h-[200px]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Renderização dos dias (apenas se não estiver carregando) */}
+      {!isLoading && allDaysOfWeek.map((day) => {
         const dayKey = day.toDateString(); 
         const dayGroup = scheduleMap.get(dayKey); 
 
@@ -241,7 +276,6 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                             />
                             <div className="p-4 space-y-2">
                               
-                              {/* --- [INÍCIO DA MUDANÇA] --- */}
                               <div className="flex items-center justify-between gap-1">
                                 <Badge variant="outline">
                                   {item.media.mediaType === "MOVIE" ? "Filme" :
@@ -249,7 +283,6 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                                    item.media.mediaType === "ANIME" ? "Anime" : "Outro"}
                                 </Badge>
                                 
-                                {/* Badge de S/E movido para aqui */}
                                 {(item.seasonNumber || item.episodeNumber) && (
                                   <Badge variant="outline" 
                                     className="flex items-center gap-1 flex-shrink-0 border-purple-500 text-purple-500 dark:border-purple-400 dark:text-purple-400">
@@ -261,7 +294,6 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                                   </Badge>
                                 )}
                               </div>
-                              {/* --- [FIM DA MUDANÇA] --- */}
 
                               <h3 className="text-lg font-semibold truncate" title={item.media.title}>
                                 {item.media.title}
@@ -278,7 +310,6 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
                                     <span>{formatHorario(item.horario)}</span>
                                   </div>
                                 )}
-                                {/* A informação de S/E foi removida daqui */}
                               </div>
                             </div>
                           </CardContent>
@@ -292,7 +323,7 @@ export default function PublicScheduleView({ username }: PublicScheduleViewProps
               </Carousel>
             
             ) : (
-              // Se NÃO houver itens, renderiza um placeholder
+              // Placeholder de dia vazio
               <Card className="shadow-sm border-dashed">
                 <CardContent className="p-6 text-center text-muted-foreground">
                   <p>Nenhum item agendado para este dia.</p>
