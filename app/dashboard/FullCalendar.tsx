@@ -227,7 +227,7 @@ export default function FullCalendar({ scheduleItems }: FullCalendarProps) { // 
                     </div>
 
                     <Badge variant="outline" className="flex-shrink-0">
-                      {/* @ts-ignore */}
+                      
                       {media.mediaType}
                     </Badge>
                   </div>

@@ -5,20 +5,13 @@ import prisma from "@/lib/prisma";
 import { Resend } from "resend";
 import crypto from "crypto";
 
-// --- [REMOVIDO] ---
-// import { render } from '@react-email/render';
-// import { ResetPasswordEmail } from "@/app/components/emails/ResetPasswordEmail";
-// --- [FIM DA REMOÇÃO] ---
-
-// Configura o runtime e a região
 export const runtime = 'nodejs';
-
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
-// --- [NOVO] Função manual de HTML ---
 function createResetEmailHtml(username: string, resetLink: string): string {
+  // ... (Seus estilos CSS mantêm-se iguais)
   const containerStyle = "font-family: Arial, sans-serif; line-height: 1.6; background-color: #f9f9f9; padding: 30px; border-radius: 8px;";
   const headingStyle = "font-size: 24px; color: #222;";
   const pStyle = "font-size: 16px; color: #555; margin-bottom: 20px;";
@@ -47,7 +40,6 @@ function createResetEmailHtml(username: string, resetLink: string): string {
     </div>
   `;
 }
-// --- [FIM DA FUNÇÃO] ---
 
 export async function POST(request: Request) {
   try {
@@ -58,25 +50,23 @@ export async function POST(request: Request) {
       return new NextResponse(JSON.stringify({ error: "Email é obrigatório" }), { status: 400 });
     }
 
-    // 1. Encontra o usuário
     const user = await prisma.user.findUnique({
       where: { email },
     });
 
     if (!user || !user.hashedPassword) {
-      // Segurança: não informa se o email existe ou se é OAuth
-      console.log(`[RESET] Pedido de reset para email não-registrado ou OAuth: ${email}`);
+      // Resposta genérica para evitar enumeração de usuários
       return NextResponse.json({ message: "Se este email estiver registado, um link de recuperação será enviado." }, { status: 200 });
     }
 
-    // 2. Gera o token
-    const token = crypto.randomUUID();
+    // [SEGURANÇA] Token Criptograficamente Forte (Hex de 32 bytes = 64 caracteres)
+    const token = crypto.randomBytes(32).toString('hex'); 
     const expires = new Date(new Date().getTime() + 3600 * 1000); // 1 hora
 
-    // 3. Deleta tokens antigos e cria o novo
     await prisma.passwordResetToken.deleteMany({
       where: { email: email },
     });
+    
     await prisma.passwordResetToken.create({
       data: {
         email: email,
@@ -85,13 +75,11 @@ export async function POST(request: Request) {
       },
     });
 
-    // 4. Cria o link
     const resetLink = `${baseUrl}/auth/reset-password?token=${token}`;
 
-    // 5. Gera o HTML manualmente
-    const emailHtml = createResetEmailHtml(user.name || user.username, resetLink);
+    // [SEGURANÇA] Passamos o username seguro
+    const emailHtml = createResetEmailHtml(user.username, resetLink);
 
-    // 6. Envia o email
     const { data, error } = await resend.emails.send({
       from: 'MeuCronograma <nao-responda@meucronograma.live>',
       to: [email],
@@ -100,7 +88,6 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      // Este erro não deve mais acontecer
       console.error("Erro ao enviar email de reset:", error);
       throw new Error("Falha ao enviar email.");
     }

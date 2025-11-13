@@ -11,11 +11,11 @@ export const revalidate = 0;
 // --- FUNÇÃO POST (Adicionar Item) ---
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
+  
   if (!session || !session.user || !session.user.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
-  // @ts-ignore
+  
   const userId = session.user.id;
 
   try {
@@ -108,11 +108,11 @@ export async function POST(request: Request) {
 // --- FUNÇÃO PUT (Mover Item / Atualizar) ---
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
+  
   if (!session || !session.user || !session.user.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
-  // @ts-ignore
+  
   const userId = session.user.id;
 
   try {
@@ -156,11 +156,11 @@ export async function PUT(request: Request) {
 // --- FUNÇÃO DELETE (Remover Item) ---
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
+  
   if (!session || !session.user || !session.user.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
-  // @ts-ignore
+  
   const userId = session.user.id;
 
   const { searchParams } = new URL(request.url);
@@ -209,11 +209,11 @@ export async function DELETE(request: Request) {
 // --- FUNÇÃO GET (Listar Itens) ---
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
+  
   if (!session || !session.user || !session.user.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
-  // @ts-ignore
+  
   const userId = session.user.id;
 
   const { searchParams } = new URL(request.url);

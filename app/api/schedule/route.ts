@@ -11,11 +11,11 @@ export const revalidate = 0;
 // --- FUNÇÃO GET (Listar Agenda) ---
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
+  
   if (!session?.user?.id) {
     return new NextResponse("Não autorizado", { status: 401 });
   }
-  // @ts-ignore
+  
   const userId = session.user.id;
   const { searchParams } = new URL(request.url);
   const list = searchParams.get("list");
@@ -62,11 +62,11 @@ export async function GET(request: Request) {
 // --- FUNÇÃO POST (Adicionar na Agenda) ---
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
+  
   if (!session?.user?.id) {
     return new NextResponse("Não autorizado", { status: 401 });
   }
-  // @ts-ignore
+  
   const userId = session.user.id;
 
   try {
@@ -127,11 +127,11 @@ export async function POST(request: Request) {
 // --- FUNÇÃO DELETE (Remover da Agenda) ---
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
+  
   if (!session?.user?.id) {
     return new NextResponse("Não autorizado", { status: 401 });
   }
-  // @ts-ignore
+  
   const userId = session.user.id;
 
   const { searchParams } = new URL(request.url);

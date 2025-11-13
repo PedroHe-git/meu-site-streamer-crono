@@ -18,13 +18,13 @@ export async function GET(request: Request) {
   try {
     // 1. OBTER O UTILIZADOR LOGADO (O SEGUIDOR)
     const session = await getServerSession(authOptions);
-    // @ts-ignore
+    
     if (!session || !session.user?.id) {
       // Se não estiver logado, retorna uma lista vazia em vez de um erro 401
       // pois a homepage pode chamar isto mesmo se o utilizador não estiver logado.
       return NextResponse.json([], { status: 200 });
     }
-    // @ts-ignore
+    
     const visitorId = session.user.id;
 
     // 2. BUSCAR OS 'FOLLOWS'

@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       return new NextResponse(JSON.stringify({ error: "Token e nova senha são obrigatórios" }), { status: 400 });
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return new NextResponse(JSON.stringify({ error: "A senha deve ter pelo menos 6 caracteres" }), { status: 400 });
     }
 

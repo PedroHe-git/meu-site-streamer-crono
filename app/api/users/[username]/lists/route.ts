@@ -15,7 +15,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    // @ts-ignore
+    
     const loggedInUserId = session?.user?.id;
     const { username } = params;
 

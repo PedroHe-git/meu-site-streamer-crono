@@ -9,11 +9,11 @@ export const revalidate = 0; // Não fazer cache, sempre buscar dados frescos
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
+  
   if (!session?.user?.id) {
     return new NextResponse("Não autorizado", { status: 401 });
   }
-  // @ts-ignore
+  
   const userId = session.user.id;
 
   try {

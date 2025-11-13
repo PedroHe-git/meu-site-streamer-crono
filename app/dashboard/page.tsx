@@ -6,7 +6,7 @@ import {
   useState, useEffect, useCallback, useMemo, useRef, 
   ChangeEvent, SyntheticEvent 
 } from "react";
-// @ts-ignore
+
 import { Step, STATUS, CallBackProps, Props } from 'react-joyride'; 
 import { useSession, signIn } from "next-auth/react";
 import { redirect } from "next/navigation";
@@ -108,24 +108,24 @@ export default function DashboardPage() {
   const [dataVersionKey, setDataVersionKey] = useState(0);
 
   // Estados de Perfil
-  // @ts-ignore
+  
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
-  // @ts-ignore
+  
   const [displayName, setDisplayName] = useState(session?.user?.name || "");
-  // @ts-ignore
+  
   const [bio, setBio] = useState(session?.user?.bio || "");
-  // @ts-ignore
+  
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
-  // @ts-ignore
+  
   const [showToWatch, setShowToWatch] = useState(session?.user?.showToWatchList ?? true);
-  // @ts-ignore
+  
   const [showWatching, setShowWatching] = useState(session?.user?.showWatchingList ?? true);
-  // @ts-ignore
+  
   const [showWatched, setShowWatched] = useState(session?.user?.showWatchedList ?? true);
-  // @ts-ignore
+  
   const [showDropped, setShowDropped] = useState(session?.user?.showDroppedList ?? true);
 
   // Estados do Cropper (Avatar)
@@ -184,20 +184,20 @@ export default function DashboardPage() {
   useEffect(() => {
     if (session?.user) {
       setDisplayName(session.user.name || "");
-      // @ts-ignore
+      
       setBio(session.user.bio || "");
-      // @ts-ignore
+      
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
       if (!selectedFile) setPreviewImage(session.user.image || null);
-      // @ts-ignore
+      
       if (!selectedBannerFile) setPreviewBanner(session.user.profileBannerUrl || null);
-      // @ts-ignore
+      
       setShowToWatch(session.user.showToWatchList ?? true);
-      // @ts-ignore
+      
       setShowWatching(session.user.showWatchingList ?? true);
-      // @ts-ignore
+      
       setShowWatched(session.user.showWatchedList ?? true);
-      // @ts-ignore
+      
       setShowDropped(session.user.showDroppedList ?? true);
     }
   }, [session?.user, selectedFile, selectedBannerFile]);
@@ -269,7 +269,7 @@ export default function DashboardPage() {
   }, [fetchSharedData]); 
 
   const handleAddSchedule = (newSchedule: MappedScheduleItem) => {
-    // @ts-ignore
+    
     setInitialScheduleItems((prev) => [...prev, newSchedule]);
     handleDataChanged();
   };
@@ -300,9 +300,9 @@ export default function DashboardPage() {
    const handleSaveSettings = async () => {
      if (!isCreator) return;
      setIsSavingSettings(true); setSettingsMessage("A guardar..."); setActionError(null);
-     // @ts-ignore
+     
      let newImageUrl = session?.user?.image || null;
-     // @ts-ignore
+     
      let newBannerUrl = session?.user?.profileBannerUrl || null;
      try {
        if (selectedFile) { setSettingsMessage("A fazer upload do avatar..."); newImageUrl = await handleAvatarUpload(); setSettingsMessage("Upload concluído..."); }
@@ -313,12 +313,12 @@ export default function DashboardPage() {
        const newSettings = await res.json(); 
        if (updateSession) { await updateSession({ ...session, user: { ...session?.user, name: newSettings.name, image: newSettings.image, bio: newSettings.bio, profileVisibility: newSettings.profileVisibility, showToWatchList: newSettings.showToWatchList, showWatchingList: newSettings.showWatchingList, showWatchedList: newSettings.showWatchedList, showDroppedList: newSettings.showDroppedList, profileBannerUrl: newSettings.profileBannerUrl, } }); }
        setSettingsMessage("Guardado!"); setSelectedFile(null); setSelectedBannerFile(null);
-     } catch (error: any) { console.error("Erro ao guardar definições:", error); setSettingsMessage(""); setActionError(`Erro: ${error.message}`); if (selectedFile) { setPreviewImage(session?.user?.image || null); } if (selectedBannerFile) { /* @ts-ignore */ setPreviewBanner(session?.user?.profileBannerUrl || null); }
+     } catch (error: any) { console.error("Erro ao guardar definições:", error); setSettingsMessage(""); setActionError(`Erro: ${error.message}`); if (selectedFile) { setPreviewImage(session?.user?.image || null); } if (selectedBannerFile) { setPreviewBanner(session?.user?.profileBannerUrl || null); }
      } finally { setIsSavingSettings(false); if (fileInputRef.current) fileInputRef.current.value = ""; if (bannerFileInputRef.current) bannerFileInputRef.current.value = ""; }
    };
 
   // --- Renderização ---
-  // @ts-ignore
+  
   const firstName = (displayName || session?.user?.name)?.split(' ')[0] || session?.user?.username || "";
   const fallbackLetter = (session?.user?.name || session?.user?.username || "U").charAt(0).toUpperCase();
 
@@ -428,7 +428,7 @@ export default function DashboardPage() {
                               <div className="flex items-center gap-2 overflow-hidden">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6441a5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-twitch flex-shrink-0"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7"/></svg>
                                 <span className="text-sm font-medium text-foreground truncate" title={session.user.twitchUsername}>
-                                  {/* @ts-ignore */}
+                                  
                                   {session.user.twitchUsername}
                                 </span>
                               </div>
