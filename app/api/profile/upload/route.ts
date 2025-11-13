@@ -10,11 +10,11 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
+  
   if (!session?.user?.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
-  // @ts-ignore
+  
   const userId = session.user.id;
   
   try {
@@ -43,12 +43,12 @@ export async function POST(request: NextRequest) {
     if (type === 'avatar') {
       folder = 'avatars';
       dbField = 'image';
-      // @ts-ignore
+      
       oldImageUrl = session.user.image || null;
     } else { // type === 'banner'
       folder = 'banners';
       dbField = 'profileBannerUrl';
-      // @ts-ignore
+      
       oldImageUrl = session.user.profileBannerUrl || null;
     }
 

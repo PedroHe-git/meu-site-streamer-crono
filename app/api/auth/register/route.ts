@@ -4,25 +4,51 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import prisma from "@/lib/prisma";
 import { v4 as uuidv4 } from "uuid";
-// [IMPORTANTE] Importa a função que você criou
 import { sendVerificationEmail } from "@/lib/email"; 
+import { z } from "zod"; // [NOVO] Importar Zod
+
+// [NOVO] Esquema de Validação
+const registerSchema = z.object({
+  name: z.string().min(1, "O nome é obrigatório."),
+  email: z.string().email("Formato de email inválido."),
+  username: z.string()
+    .min(3, "O utilizador deve ter no mínimo 3 caracteres.")
+    .regex(/^[a-z0-9_]+$/, "O utilizador deve conter apenas letras minúsculas, números ou underline."),
+  password: z.string().min(8, "A senha deve ter no mínimo 8 caracteres."), // Defina sua política de senha
+});
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    // O 'name' vem do formulário (que corrigimos antes)
-    const { name, email, username, password } = body; 
+    
+    // [NOVO] Validar os dados antes de processar
+    const validation = registerSchema.safeParse(body);
 
-    if (!name || !email || !username || !password) {
-      return new NextResponse(JSON.stringify({ error: "Campos em falta" }), { status: 400 });
+    if (!validation.success) {
+      const formattedErrors = validation.error.format();
+      // Exemplo: se o erro for no email, retorna o erro do email, senão o primeiro erro geral
+      const errorMessage = formattedErrors.email?._errors[0] 
+                        || formattedErrors.username?._errors[0]
+                        || formattedErrors.password?._errors[0]
+                        || "Dados inválidos";
+                        
+      return new NextResponse(
+        JSON.stringify({ error: errorMessage }), 
+        { status: 400 }
+      );
     }
+
+    // Se passou na validação, usamos os dados validados
+    const { name, email, username, password } = validation.data;
 
     const lowerCaseUsername = username.toLowerCase();
 
+    // ... (Restante da lógica de verificação de email/username existente mantém-se igual) ...
     const existingUserByEmail = await prisma.user.findUnique({
       where: { email: email },
     });
     if (existingUserByEmail) {
+      // Por segurança, idealmente responderia algo genérico, mas para este projeto pode manter:
       return new NextResponse(JSON.stringify({ error: "Email já está em uso" }), { status: 409 });
     }
 
@@ -35,17 +61,15 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // --- [INÍCIO DA LÓGICA CORRIGIDA] ---
-
     // 1. Cria o usuário
     const user = await prisma.user.create({
       data: {
-        name, // <-- Salva o nome
+        name,
         email,
         username: lowerCaseUsername,
         hashedPassword,
-        emailVerified: null, // <-- Fica nulo até ser verificado
-        role: 'VISITOR', // <-- Força o role VISITOR
+        emailVerified: null,
+        role: 'VISITOR',
         profileVisibility: 'PUBLIC',
         showToWatchList: true,
         showWatchingList: true,
@@ -54,11 +78,10 @@ export async function POST(request: Request) {
       },
     });
 
-    // 2. Gera o token de verificação
+    // 2. Gera Token e 3. Salva Token (código original mantido)
     const verificationToken = uuidv4();
-    const expires = new Date(new Date().getTime() + 3600 * 1000); // 1 hora
+    const expires = new Date(new Date().getTime() + 3600 * 1000);
 
-    // 3. Salva o token na tabela VerificationToken (o seu app/api/auth/verify/route.ts já usa esta tabela)
     await prisma.verificationToken.create({
       data: {
         identifier: email,
@@ -67,16 +90,13 @@ export async function POST(request: Request) {
       },
     });
     
-    // 4. Envia o email de verificação
+    // 4. Envia Email
     await sendVerificationEmail(email, user.name || user.username, verificationToken);
-
-    // --- [FIM DA LÓGICA CORRIGIDA] ---
 
     return NextResponse.json({ message: "Utilizador registado. Por favor, verifique o seu email." }, { status: 201 });
 
   } catch (error) {
     console.error("[REGISTER_POST]", error);
-    // Retorna o erro específico do envio de email, se houver
     if (error instanceof Error && error.message.includes("Falha ao enviar")) {
         return new NextResponse(JSON.stringify({ error: error.message }), { status: 500 });
     }
