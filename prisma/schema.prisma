@@ -105,6 +105,8 @@ model MediaStatus {
   lastEpisodeWatchedEnd Int?
   isWeekly            Boolean         @default(false)
   @@unique([userId, mediaId])
+  rating              Int?     // (Bônus: Se você implementar a funcionalidade de nota)
+  watchedAt           DateTime? // <-- O CAMPO-CHAVE PARA OS GRÁFICOS
 }
 
 model ScheduleItem {

@@ -84,12 +84,14 @@ export async function POST(request: Request) {
       update: {
         status: status,
         isWeekly: isWeekly || false,
+        watchedAt: status === 'WATCHED' ? new Date() : null,
       },
       create: {
         userId: userId,
         mediaId: media.id,
         status: status,
         isWeekly: isWeekly || false,
+        watchedAt: status === 'WATCHED' ? new Date() : null,
       },
       include: {
         media: true,
@@ -130,7 +132,13 @@ export async function PUT(request: Request) {
     }
 
     const updateData: any = {};
-    if (status) updateData.status = status;
+    if (status) {updateData.status = status;
+      if (status === 'WATCHED') {
+        updateData.watchedAt = new Date();
+      } else {
+        updateData.watchedAt = null; // Remove o timestamp se mover para "Abandonado"
+      }
+    }
     if (isWeekly !== undefined) updateData.isWeekly = isWeekly;
 
     const updatedMediaStatus = await prisma.mediaStatus.update({

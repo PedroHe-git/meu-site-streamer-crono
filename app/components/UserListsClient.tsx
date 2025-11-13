@@ -98,7 +98,7 @@ export default function UserListsClient({
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto sm:h-10">
             {canViewToWatch && (
               <TabsTrigger value="to-watch" className="relative">
-                <span className="hidden sm:inline">Próximos</span>
+                <span className="hidden sm:inline">Próximos Conteúdos</span>
                 <span className="sm:hidden">Ver</span>
                 <Badge 
                   variant="outline"

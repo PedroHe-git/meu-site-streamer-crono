@@ -8,6 +8,8 @@ import ProfilePage from "@/app/components/profile/ProfilePage";
 import { ProfileVisibility, Prisma, MovieStatusType, Media, ScheduleItem, User } from "@prisma/client";
 import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "date-fns";
 
+export const revalidate = 120;
+
 // --- Tipos para os dados ---
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 

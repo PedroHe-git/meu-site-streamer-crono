@@ -1,16 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Film, Tv, Play, Check, X, Trash2, RefreshCw, ChevronLeft, ChevronRight, Search, Loader2 } from "lucide-react"; 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Trash2, Film, List as ListIcon, Search } from "lucide-react";
+import Image from "next/image";
+import { Media, MediaStatus } from "@prisma/client";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { ImageWithFallback } from "@/components/ui/image-with-fallback";
-import {
+import { Switch } from "@/components/ui/switch";
+import { 
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -19,402 +22,341 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Media, MediaStatus } from "@prisma/client"; // Importa os tipos
 
-// --- [INÍCIO DA MUDANÇA 1] ---
-// Tipos
-type MediaType = "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
-type MediaStatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
+// --- Tipos ---
 type MediaStatusWithMedia = MediaStatus & { media: Media };
+type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 
-// O tipo das props mudou. Já não recebe 'items' ou 'counts'.
-type MediaListsProps = {
-  // Recebe 'onDataChanged' para notificar o 'page.tsx'
-  onDataChanged: () => void; 
-};
+interface MyListsProps {
+  onDataChanged: () => void;
+  dataVersionKey: number;
+}
 
-// Definimos o tamanho da página aqui
-const PAGE_SIZE = 10;
-// --- [FIM DA MUDANÇA 1] ---
-
-
-export default function MyLists({
-  onDataChanged,
-}: MediaListsProps) {
+export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps) {
+  const [activeList, setActiveList] = useState<StatusKey>("TO_WATCH");
+  const [mediaItems, setMediaItems] = useState<MediaStatusWithMedia[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
-  // --- [INÍCIO DA MUDANÇA 2] ---
-  // Este componente agora gere o seu próprio estado
-  const [activeList, setActiveList] = useState<MediaStatusKey>("TO_WATCH");
-  const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [items, setItems] = useState<MediaStatusWithMedia[]>([]);
-  const [counts, setCounts] = useState({
-    TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0
+  // Estado para as contagens de cada lista
+  const [counts, setCounts] = useState<Record<StatusKey, number>>({ 
+    TO_WATCH: 0, 
+    WATCHING: 0, 
+    WATCHED: 0, 
+    DROPPED: 0 
   });
   
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
-  // --- [FIM DA MUDANÇA 2] ---
+  // Paginação e Busca
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const pageSize = 10;
+  const [searchTerm, setSearchTerm] = useState("");
 
+  // Estados do Modal de Edição
+  const [editingItem, setEditingItem] = useState<MediaStatusWithMedia | null>(null);
+  const [newStatus, setNewStatus] = useState<StatusKey>("TO_WATCH");
+  const [isWeekly, setIsWeekly] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // --- [INÍCIO DA MUDANÇA 3] ---
-  // Função de busca de dados refatorada
-  const fetchListData = useCallback(async (listStatus: MediaStatusKey, newPage: number, term: string) => {
-    setIsLoading(true);
+  // Estados do Modal de Exclusão (AlertDialog)
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // --- Função para buscar as contagens de todas as listas ---
+  const fetchCounts = useCallback(async () => {
     try {
-      const params = new URLSearchParams({
-        status: listStatus,
-        page: newPage.toString(),
-        pageSize: PAGE_SIZE.toString(),
-        searchTerm: term,
+      // Fazemos 4 requests rápidos (limit=1) apenas para pegar o 'totalCount' de cada status
+      const statuses: StatusKey[] = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];
+      
+      const promises = statuses.map(status => 
+        fetch(`/api/mediastatus?status=${status}&pageSize=1&page=1`).then(res => res.json())
+      );
+
+      const results = await Promise.all(promises);
+      
+      const newCounts: any = {};
+      results.forEach((data, index) => {
+        newCounts[statuses[index]] = data.totalCount;
       });
 
-      const res = await fetch(`/api/mediastatus?${params.toString()}`);
+      setCounts(newCounts);
+    } catch (error) {
+      console.error("Erro ao buscar contagens", error);
+    }
+  }, []);
+
+  // --- Função para buscar a lista atual ---
+  const fetchListData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const query = new URLSearchParams({
+        status: activeList,
+        page: page.toString(),
+        pageSize: pageSize.toString(),
+        searchTerm: searchTerm,
+      });
+
+      const res = await fetch(`/api/mediastatus?${query.toString()}`);
       if (!res.ok) throw new Error("Falha ao carregar lista");
       
       const data = await res.json();
-      setItems(data.items);
-      setTotalCount(data.totalCount);
-      setPage(newPage);
+      
+      if (page === 1) {
+        setMediaItems(data.items);
+      } else {
+        setMediaItems(prev => [...prev, ...data.items]);
+      }
+      
+      setHasMore(data.totalCount > page * pageSize);
 
     } catch (error) {
       console.error(error);
     } finally {
       setIsLoading(false);
     }
-  }, []); // Sem dependências, é estável
+  }, [activeList, page, searchTerm]);
 
-  // Busca as contagens (apenas uma vez, ou quando a busca muda)
-  const fetchCounts = useCallback(async (term: string) => {
-    try {
-      const statuses: MediaStatusKey[] = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];
-      const countPromises = statuses.map(s => 
-        fetch(`/api/mediastatus?status=${s}&page=1&pageSize=1&searchTerm=${term}`)
-          .then(res => res.json())
-          .then(data => ({ [s]: data.totalCount || 0 }))
-      );
-      
-      const results = await Promise.all(countPromises);
-      const newCounts = Object.assign({}, ...results) as typeof counts;
-      setCounts(newCounts);
-
-    } catch (error) {
-      console.error("Falha ao buscar contagens", error);
-    }
-  }, []);
-
-  // Efeito que reage à mudança de Aba ou Página
+  // --- Efeito Principal: Reage à versão dos dados ---
   useEffect(() => {
-    fetchListData(activeList, page, searchTerm);
-  }, [activeList, page, fetchListData, searchTerm]);
-
-  // Efeito que reage à mudança do Termo de Busca
-  useEffect(() => {
-    // Quando o termo de busca muda, reseta a página para 1
     setPage(1); 
-    // E atualiza as contagens
-    fetchCounts(searchTerm);
-    // O useEffect acima irá disparar e buscar os dados da lista
-  }, [searchTerm, fetchCounts]);
-  // --- [FIM DA MUDANÇA 3] ---
+    fetchListData();
+    fetchCounts(); // Atualiza também os contadores quando algo muda
+  }, [fetchListData, fetchCounts, dataVersionKey]); 
 
 
-  const getTypeIcon = (type: MediaType) => {
-    switch (type) {
-      case "MOVIE": return <Film className="h-5 w-5" />;
-      case "SERIES": return <Tv className="h-5 w-5" />;
-      case "ANIME": return <Play className="h-5 w-5" />;
-      default: return <Film className="h-5 w-5" />;
-    }
+  // --- Handlers de Edição ---
+  const handleEditClick = (item: MediaStatusWithMedia) => {
+    setEditingItem(item);
+    setNewStatus(item.status);
+    setIsWeekly(item.isWeekly);
+    setIsEditOpen(true);
   };
 
-  // Funções de API (Corrigidas)
-  const handleStatusChange = async (id: string, newStatus: MediaStatusKey) => {
-    const key = `${id}-status`;
-    setLoadingStates(prev => ({ ...prev, [key]: true }));
+  const handleSaveChanges = async () => {
+    if (!editingItem) return;
+    setIsSaving(true);
     try {
-      const res = await fetch(`/api/mediastatus`, {
+      const res = await fetch('/api/mediastatus', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: id, status: newStatus }), // 'id' é o MediaStatus ID
+        body: JSON.stringify({
+          id: editingItem.id,
+          status: newStatus,
+          isWeekly: isWeekly
+        })
       });
-      if (!res.ok) throw new Error('Falha ao atualizar');
-      
-      // Sucesso
-      onDataChanged(); // Notifica o 'page.tsx' (para SchedManager/Calendar)
-      fetchListData(activeList, page, searchTerm); // Re-busca a lista atual
-      fetchCounts(searchTerm); // Re-busca contagens
+
+      if (!res.ok) throw new Error("Falha ao atualizar");
+
+      setIsEditOpen(false);
+      setEditingItem(null);
+      onDataChanged(); 
 
     } catch (error) {
       console.error(error);
     } finally {
-      setLoadingStates(prev => ({ ...prev, [key]: false }));
+      setIsSaving(false);
     }
   };
 
-  const handleRemove = async (id: string) => {
-    const key = `${id}-remove`;
-    setLoadingStates(prev => ({ ...prev, [key]: true }));
+  // --- Handlers de Exclusão (Atualizados para AlertDialog) ---
+  const handleDeleteClick = (id: string) => {
+    setItemToDelete(id);
+    setIsDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
     try {
-      const res = await fetch(`/api/mediastatus?id=${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) throw new Error('Falha ao remover');
+      const res = await fetch(`/api/mediastatus?id=${itemToDelete}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error("Falha ao remover");
       
-      // Sucesso
-      onDataChanged(); // Notifica o 'page.tsx'
-      fetchListData(activeList, page, searchTerm); // Re-busca a lista atual
-      fetchCounts(searchTerm); // Re-busca contagens
-
+      onDataChanged(); 
     } catch (error) {
       console.error(error);
     } finally {
-      setLoadingStates(prev => ({ ...prev, [key]: false }));
+      setIsDeleting(false);
+      setIsDeleteOpen(false);
+      setItemToDelete(null);
     }
-  };
-  
-  const handleToggleWeekly = async (id: string, isWeekly: boolean) => {
-    const key = `${id}-weekly`;
-    setLoadingStates(prev => ({ ...prev, [key]: true }));
-    try {
-       const res = await fetch(`/api/mediastatus`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: id, isWeekly: isWeekly }), // 'id' é o MediaStatus ID
-      });
-      if (!res.ok) throw new Error('Falha ao atualizar');
-      
-      // Sucesso
-      onDataChanged(); // Notifica o 'page.tsx'
-      fetchListData(activeList, page, searchTerm); // Re-busca a lista atual
-
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoadingStates(prev => ({ ...prev, [key]: false }));
-    }
-  };
-  // Fim das Funções de API
-
-  // --- [INÍCIO DA MUDANÇA 4] ---
-  // Lógica de Paginação
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  // --- [FIM DA MUDANÇA 4] ---
-
-  const renderMediaCard = (item: MediaStatusWithMedia) => {
-    const isLoadingOp = Object.values(loadingStates).some(val => val === true);
-    
-    return (
-      <Card key={item.id} className="flex flex-col sm:flex-row gap-4 p-4 shadow-sm">
-        <ImageWithFallback
-          src={item.media.posterPath} 
-          alt={item.media.title}
-          width={100}
-          height={150}
-          className="rounded-md object-cover mx-auto sm:mx-0"
-        />
-        <div className="flex-1 flex flex-col justify-between">
-          <div>
-            <span className="inline-flex items-center gap-2 text-muted-foreground mb-1">
-              {getTypeIcon(item.media.mediaType)}
-              <span className="text-xs uppercase">{item.media.mediaType}</span>
-            </span>
-            <h3 className="text-lg font-bold line-clamp-2">{item.media.title}</h3>
-          </div>
-
-          {item.status === "WATCHING" && item.media.mediaType !== "MOVIE" && (
-            <div className="flex items-center gap-4 my-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id={`weekly-${item.id}`}
-                  checked={item.isWeekly}
-                  onCheckedChange={(checked) => handleToggleWeekly(item.id, !!checked)}
-                  disabled={loadingStates[`${item.id}-weekly`] || isLoadingOp}
-                />
-                <Label htmlFor={`weekly-${item.id}`} className="text-sm cursor-pointer">
-                  Ep. Semanal
-                </Label>
-              </div>
-            </div>
-          )}
-
-
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <Select
-              value={item.status}
-              onValueChange={(newStatus) => handleStatusChange(item.id, newStatus as MediaStatusKey)}
-              disabled={isLoadingOp}
-            >
-              <SelectTrigger className="h-9 text-xs w-full sm:w-[170px]">
-                <SelectValue placeholder="Mover para..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TO_WATCH">Próximos Conteúdos</SelectItem>
-                <SelectItem value="WATCHING">Essa Semana</SelectItem>
-                <SelectItem value="WATCHED">Assistidos</SelectItem>
-                <SelectItem value="DROPPED">Abandonados</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="text-muted-foreground hover:text-red-600"
-                  disabled={isLoadingOp}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Isto irá remover &quot;{item.media.title}&quot; permanentemente das suas listas.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => handleRemove(item.id)}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    Remover
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            
-            {loadingStates[`${item.id}-status`] || loadingStates[`${item.id}-remove`] || loadingStates[`${item.id}-weekly`] ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : null}
-          </div>
-        </div>
-      </Card>
-    );
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="shadow-lg border-2">
+    <>
+      <Card className="shadow-md border-t-4 border-t-primary">
         <CardHeader>
-          <CardTitle>Filtrar Minhas Listas</CardTitle>
-          <CardDescription>
-            Encontre rapidamente um item em todas as suas listas
-          </CardDescription>
-          <div className="relative pt-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Buscar nas suas listas..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle>As Minhas Listas</CardTitle>
+              <CardDescription>Gerencie o que você está assistindo.</CardDescription>
+            </div>
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Filtrar nesta lista..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }} 
+                className="pl-8"
+              />
+            </div>
           </div>
         </CardHeader>
-      </Card>
-
-      <Card className="shadow-lg border-2">
-        <CardContent className="p-4 sm:p-6">
-          <Tabs
-            value={activeList}
-            onValueChange={(value) => {
-              setActiveList(value as MediaStatusKey);
-              setPage(1); // Reseta a página ao mudar de aba
-            }}
-          >
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto sm:h-10">
-              <TabsTrigger value="TO_WATCH" className="relative">
-                <span className="hidden sm:inline">Próximos Conteúdos</span>
-                <span className="sm:hidden">Ver</span>
-                <Badge className="ml-2 bg-purple-600">{counts.TO_WATCH}</Badge>
+        <CardContent>
+          <Tabs value={activeList} onValueChange={(v) => { setActiveList(v as StatusKey); setPage(1); }} className="w-full">
+            
+            {/* Lista de Abas com Badges de Contagem */}
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-6">
+              <TabsTrigger value="TO_WATCH" className="flex gap-2">
+                Próximos Conteúdos <Badge variant="outline" className="border-purple-600 text-purple-600 ml-2">{counts.TO_WATCH}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="WATCHING" className="relative">
-                <span className="hidden sm:inline">Essa Semana</span>
-                <span className="sm:hidden">Vendo</span>
-                <Badge className="ml-2 bg-blue-600">{counts.WATCHING}</Badge>
+              <TabsTrigger value="WATCHING" className="flex gap-2">
+                Essa Semana <Badge variant="outline" className="border-blue-600 text-blue-600 ml-2">{counts.WATCHING}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="WATCHED" className="relative">
-                <span className="hidden sm:inline">Já Assistidos</span>
-                <span className="sm:hidden">Vistos</span>
-                <Badge className="ml-2 bg-green-600">{counts.WATCHED}</Badge>
+              <TabsTrigger value="WATCHED" className="flex gap-2">
+                Já Assisti <Badge variant="outline" className="border-green-600 text-green-600 ml-2">{counts.WATCHED}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="DROPPED" className="relative">
-                Abandonados
-                <Badge className="ml-2 bg-orange-600">{counts.DROPPED}</Badge>
+              <TabsTrigger value="DROPPED" className="flex gap-2">
+                Abandonado <Badge variant="outline" className="border-orange-600 text-orange-600 ml-2">{counts.DROPPED}</Badge>
               </TabsTrigger>
             </TabsList>
 
-            {/* --- [INÍCIO DA MUDANÇA 5] --- */}
-            {/* O conteúdo agora é dinâmico e mostra o estado de loading */}
-            <div className="space-y-4 pt-6">
-              {isLoading ? (
-                <div className="flex justify-center items-center min-h-[200px]">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="min-h-[300px]">
+              {isLoading && page === 1 ? (
+                <div className="flex justify-center items-center h-40">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : items.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <div className="mb-4 text-6xl opacity-30">
-                    {getTypeIcon(
-                      activeList === "WATCHING" ? "SERIES" : "MOVIE"
-                    )}
-                  </div>
-                  <p className="font-semibold">Nenhum item nesta lista</p>
-                  {searchTerm ? (
-                    <p className="text-sm mt-2">Nenhum resultado para &quot;{searchTerm}&quot;</p>
-                  ) : (
-                    <p className="text-sm mt-2">Adicione mídias usando a busca</p>
-                  )}
+              ) : mediaItems.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
+                  <ListIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>Nenhum item encontrado nesta lista.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {items.map(renderMediaCard)}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {mediaItems.map((item) => (
+                    <Card key={item.id} className="overflow-hidden group hover:shadow-lg transition-all duration-300">
+                      <div className="relative aspect-[2/3] w-full overflow-hidden">
+                        {item.media.posterPath ? (
+                          <Image
+                            src={item.media.posterPath}
+                            alt={item.media.title}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-500"
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-muted flex items-center justify-center">
+                            <Film className="h-12 w-12 text-muted-foreground opacity-50" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2 p-4">
+                          <Button size="sm" variant="secondary" onClick={() => handleEditClick(item)}>
+                            Mover / Editar
+                          </Button>
+                          {/* Botão de Exclusão atualizado */}
+                          <Button size="icon" variant="destructive" onClick={() => handleDeleteClick(item.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="absolute top-2 right-2">
+                          <Badge variant="secondary" className="shadow-sm backdrop-blur-md bg-black/50 text-white border-0">
+                            {item.media.mediaType === 'MOVIE' ? 'Filme' : 
+                             item.media.mediaType === 'SERIES' ? 'Série' : 
+                             item.media.mediaType === 'ANIME' ? 'Anime' : 'Outro'}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 space-y-1">
+                        <h3 className="font-semibold truncate" title={item.media.title}>{item.media.title}</h3>
+                        {item.isWeekly && (
+                          <Badge variant="outline" className="text-xs border-blue-500 text-blue-500">Semanal</Badge>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
                 </div>
               )}
               
-              {/* Controles de Paginação */}
-              {totalPages > 1 && (
-                <div className="flex justify-between items-center pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1 || isLoading}
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Anterior
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Página {page} de {totalPages} (Total: {totalCount})
-                  </span>
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages || isLoading}
-                  >
-                    Próxima
-                    <ChevronRight className="h-4 w-4 ml-1" />
+              {hasMore && (
+                <div className="mt-6 text-center">
+                  <Button variant="outline" onClick={() => setPage(p => p + 1)} disabled={isLoading}>
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Carregar Mais
                   </Button>
                 </div>
               )}
             </div>
-            {/* --- [FIM DA MUDANÇA 5] --- */}
-            
           </Tabs>
         </CardContent>
       </Card>
-    </div>
+
+      {/* Modal de Edição */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Item</DialogTitle>
+            <CardDescription>{editingItem?.media.title}</CardDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Mover para a lista:</Label>
+              <Select value={newStatus} onValueChange={(v) => setNewStatus(v as StatusKey)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TO_WATCH">Próximos Conteudos (Futuro)</SelectItem>
+                  <SelectItem value="WATCHING">Essa Semana (Para Agendar)</SelectItem>
+                  <SelectItem value="WATCHED">Já Assistidos (Concluído)</SelectItem>
+                  <SelectItem value="DROPPED">Abandonados</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-2 border p-3 rounded-md">
+              <Switch id="weekly-mode" checked={isWeekly} onCheckedChange={setIsWeekly} />
+              <div className="flex-1">
+                <Label htmlFor="weekly-mode" className="cursor-pointer font-medium">Modo Semanal</Label>
+                <p className="text-xs text-muted-foreground">Ative se este item sai um episódio por semana.</p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveChanges} disabled={isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Novo Modal de Exclusão (AlertDialog) */}
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Isso excluirá permanentemente este item da sua lista e removerá quaisquer agendamentos pendentes associados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDelete} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "A remover..." : "Sim, remover item"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

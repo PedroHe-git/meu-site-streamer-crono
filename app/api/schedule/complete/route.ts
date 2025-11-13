@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       } else {
          // Se NÃO for semanal, muda para WATCHED
          mediaStatusUpdateData.status = "WATCHED";
+         mediaStatusUpdateData.watchedAt = new Date();
       }
 
       // 4. Atualiza o MediaStatus
