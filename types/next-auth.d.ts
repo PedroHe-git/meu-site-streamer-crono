@@ -1,7 +1,7 @@
 // types/next-auth.d.ts (Atualizado)
 
 import NextAuth, { DefaultSession, DefaultUser } from "next-auth";
-import { JWT, DefaultJWT } from "next-auth/jwt"; // Importar JWT e DefaultJWT
+import { JWT, DefaultJWT } from "next-auth/jwt"; 
 import { UserRole, ProfileVisibility } from "@prisma/client";
 
 // Estende o tipo 'User' base do NextAuth
@@ -11,7 +11,7 @@ declare module "next-auth" {
    * Nós estendemo-lo para incluir os nossos campos do Prisma.
    */
   interface User extends DefaultUser {
-    id: string; // Garantir que o ID está no User
+    id: string; 
     role: UserRole;
     username: string;
     bio: string | null;
@@ -21,11 +21,11 @@ declare module "next-auth" {
     showWatchingList: boolean;
     showWatchedList: boolean;
     showDroppedList: boolean;
+    profileBannerUrl: string | null; // <-- ADICIONADO AQUI
   }
 
   /**
-   * A 'Session' agora usa a nossa interface 'User' personalizada,
-   * que já contém 'name' e 'image' do DefaultUser.
+   * A 'Session' agora usa a nossa interface 'User' personalizada.
    */
   interface Session extends DefaultSession {
     user: User;
@@ -49,5 +49,6 @@ declare module "next-auth/jwt" {
     showWatchingList: boolean;
     showWatchedList: boolean;
     showDroppedList: boolean;
+    profileBannerUrl: string | null; // <-- ADICIONADO AQUI
   }
 }
