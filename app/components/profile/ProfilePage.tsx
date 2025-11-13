@@ -37,7 +37,7 @@ type ProfilePageProps = {
   isOwner: boolean;
   isFollowing: boolean;
   canViewProfile: boolean;
-  activeTab?: "cronograma" | "conteudos";
+  activeTab?: "cronograma" | "listas";
   listCounts: ListCounts;
   initialSchedule: ScheduleItemWithMedia[] | null;
   initialWeekRange: { start: string, end: string } | null;
