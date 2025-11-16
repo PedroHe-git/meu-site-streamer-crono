@@ -20,11 +20,10 @@ const cspValue = [
   "font-src 'self' fonts.gstatic.com;",
 
   // ✅ Permite conexões (incluindo Vercel Blob)
-  "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms https://i.clarity.ms vitals.vercel-insights.com *.public.blob.vercel-storage.com;",
+  "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms https://i.clarity.ms https://n.clarity.ms vitals.vercel-insights.com *.public.blob.vercel-storage.com;",
 
   "frame-src 'self';",
 ].join(' ');
-
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
