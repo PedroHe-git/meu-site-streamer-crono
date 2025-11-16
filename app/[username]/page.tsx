@@ -8,6 +8,7 @@ import ProfilePage from "@/app/components/profile/ProfilePage";
 import { ProfileVisibility, Prisma, MovieStatusType, Media, ScheduleItem, User } from "@prisma/client";
 import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "date-fns";
 import { generateScheduleSummary } from "@/lib/ai"; // <--- IMPORTAR IA
+import { unstable_cache as cache } from "next/cache";
 
 // Cache de 10 minutos
 export const revalidate = 86400;
@@ -131,10 +132,20 @@ async function getUserProfileData(username: string, sessionUserId: string | unde
       end: format(endDate, 'yyyy-MM-dd'),
     };
     
-    // --- [NOVO] Gerar o resumo da IA ---
-    // (A função da IA já tem try/catch, por isso é seguro)
-    aiSummary = await generateScheduleSummary(user.username, scheduleItems);
-    // --- [FIM DA NOVIDADE] ---
+    const cacheKey = `ai-summary-${user.id}-${JSON.stringify(scheduleItems)}`;
+
+    aiSummary = await cache(
+      async () => {
+        // Este console.log SÓ VAI APARECER a cada 12h (ou se o cronograma mudar)
+        console.log(`GERANDO NOVO RESUMO DE IA (CACHE) para: ${user.username}`);
+        return generateScheduleSummary(user.username, scheduleItems);
+      },
+      [cacheKey], // Chave de cache única
+      {
+        
+        revalidate: 86400 
+      }
+    )();
 
   } 
   
