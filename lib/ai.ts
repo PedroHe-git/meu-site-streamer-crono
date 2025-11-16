@@ -15,6 +15,9 @@ function getModel() {
     // Usamos o modelo que funcionou para si
     return genAI.getGenerativeModel({
         model: "gemini-2.0-flash",
+        generationConfig: {
+      temperature: 0.3, 
+    },
     });
 }
 

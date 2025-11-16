@@ -10,7 +10,7 @@ import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "d
 import { generateScheduleSummary } from "@/lib/ai"; // <--- IMPORTAR IA
 
 // Cache de 10 minutos
-export const revalidate = 600;
+export const revalidate = 86400;
 
 // --- Tipos (Mantidos) ---
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
