@@ -1,4 +1,4 @@
-// app/[username]/page.tsx (Corrigido para sempre retornar o mesmo 'user' shape)
+// app/[username]/page.tsx
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
@@ -7,13 +7,14 @@ import { notFound } from "next/navigation";
 import ProfilePage from "@/app/components/profile/ProfilePage";
 import { ProfileVisibility, Prisma, MovieStatusType, Media, ScheduleItem, User } from "@prisma/client";
 import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "date-fns";
+import { generateScheduleSummary } from "@/lib/ai"; // <--- IMPORTAR IA
 
-export const revalidate = 120;
+// Cache de 10 minutos
+export const revalidate = 600;
 
-// --- Tipos para os dados ---
+// --- Tipos (Mantidos) ---
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 
-// O tipo que o ProfilePage.tsx espera: User + contagens planas
 type ProfileUser = User & {
   followersCount: number;
   followingCount: number;
@@ -34,7 +35,7 @@ type ListCounts = {
  */
 async function getUserProfileData(username: string, sessionUserId: string | undefined) {
   
-  // 1. Buscar o Usuário e suas contagens de seguidores
+  // 1. Buscar o Usuário (Mantido)
   const user = await prisma.user.findFirst({
     where: {
       username: {
@@ -53,10 +54,10 @@ async function getUserProfileData(username: string, sessionUserId: string | unde
   });
 
   if (!user || user.role !== "CREATOR") {
-    notFound(); // Usuário não existe ou não é criador
+    notFound(); 
   }
 
-  // 2. Verificar permissões (isOwner, isFollowing)
+  // 2. Verificar permissões (Mantido)
   let isFollowing = false;
   const isOwner = user.id === sessionUserId;
 
@@ -72,28 +73,25 @@ async function getUserProfileData(username: string, sessionUserId: string | unde
     isFollowing = !!followRelation;
   }
 
-  // 3. Checar visibilidade
+  // 3. Checar visibilidade (Mantido)
   const canViewProfile =
     user.profileVisibility === ProfileVisibility.PUBLIC ||
     isOwner ||
     (user.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY && isFollowing);
 
-  // --- [CORREÇÃO CRÍTICA] ---
-  // Formata o usuário ANTES de checar a visibilidade.
-  // Desta forma, o componente ProfilePage SEMPRE recebe um objeto 'user' válido.
   const profileUserData: ProfileUser = {
     ...user,
     followersCount: user._count.followers,
     followingCount: user._count.following,
   };
-  // --- [FIM DA CORREÇÃO] ---
 
   // Valores padrão
   let initialSchedule: ScheduleItemWithMedia[] | null = null;
   let weekRange: { start: string, end: string } | null = null;
   let listCounts: ListCounts = { TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 };
+  let aiSummary: string | null = null; // <-- [NOVO] Adiciona a variável da IA
 
-  // 4. Se puder ver, busca os dados das listas e cronograma
+  // 4. Se puder ver, busca os dados
   if (canViewProfile) {
     const listCountsQuery = prisma.mediaStatus.groupBy({
       by: ['status'],
@@ -114,13 +112,13 @@ async function getUserProfileData(username: string, sessionUserId: string | unde
       orderBy: [{ scheduledAt: "asc" }, { horario: "asc" }],
     });
 
-    // Roda as queries em paralelo para performance
+    // Roda as queries em paralelo
     const [listCountsRaw, scheduleItems] = await Promise.all([
       listCountsQuery,
       scheduleQuery
     ]);
 
-    // Formata as contagens
+    // Formata as contagens (Mantido)
     listCountsRaw.forEach(item => {
       if (item.status in listCounts) {
         listCounts[item.status as StatusKey] = item._count.status;
@@ -132,17 +130,24 @@ async function getUserProfileData(username: string, sessionUserId: string | unde
       start: format(startDate, 'yyyy-MM-dd'),
       end: format(endDate, 'yyyy-MM-dd'),
     };
+    
+    // --- [NOVO] Gerar o resumo da IA ---
+    // (A função da IA já tem try/catch, por isso é seguro)
+    aiSummary = await generateScheduleSummary(user.username, scheduleItems);
+    // --- [FIM DA NOVIDADE] ---
+
   } 
   
   // 5. Retorna o payload completo
   return {
-    user: profileUserData, // Sempre retorna o usuário formatado
+    user: profileUserData, 
     isOwner,
     isFollowing,
-    canViewProfile, // A flag que diz ao cliente se ele pode ver o conteúdo
+    canViewProfile, 
     listCounts,
     initialSchedule,
     weekRange,
+    aiSummary, // <-- [NOVO] Retorna o resumo
   };
 }
 
@@ -160,7 +165,6 @@ export default async function UserProfilePage({ params, searchParams }: {
 
   const data = await getUserProfileData(username, sessionUserId);
   
-  // O 'data' nunca será nulo por causa do notFound() dentro da função
   const { 
     user, 
     isOwner, 
@@ -168,12 +172,10 @@ export default async function UserProfilePage({ params, searchParams }: {
     canViewProfile,
     listCounts,
     initialSchedule,
-    weekRange
+    weekRange,
+    aiSummary // <-- [NOVO] Obtém o resumo
   } = data;
 
-  // --- [CORREÇÃO AQUI] ---
-  // As props passadas para <ProfilePage> agora correspondem
-  // exatamente ao que o componente espera.
   return (
     <ProfilePage
       user={user} 
@@ -184,6 +186,7 @@ export default async function UserProfilePage({ params, searchParams }: {
       listCounts={listCounts}
       initialSchedule={initialSchedule}
       initialWeekRange={weekRange}
+      aiSummary={aiSummary} // <-- [NOVO] Passa o resumo para o ProfilePage
     />
   );
 }

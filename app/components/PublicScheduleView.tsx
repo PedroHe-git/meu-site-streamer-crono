@@ -1,3 +1,4 @@
+// app/components/PublicScheduleView.tsx
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -18,19 +19,26 @@ import {
 } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils"; 
 
+// --- [NOVO] 1. Importações para a IA ---
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Sparkles } from "lucide-react";
+// --- Fim das Novas Importações ---
+
 // Tipos
 type ScheduleItemWithMedia = ScheduleItem & { media: Media };
 
 // --- Props Atualizadas ---
 type PublicScheduleViewProps = {
   username: string;
-  // Recebe os dados iniciais da semana 0 (do Server Component)
   initialSchedule: ScheduleItemWithMedia[] | null;
   initialWeekRange: { start: string, end: string } | null;
+  
+  // [NOVO] 2. Recebe o resumo da IA
+  initialAiSummary: string | null; 
 };
 // --- Fim das Props ---
 
-// Funções de Data (Corrigidas para UTC)
+// --- Funções de Data (Mantidas) ---
 function getUTCDate(dateString: string | Date): Date {
   const date = new Date(dateString);
   return new Date(
@@ -42,18 +50,15 @@ function getUTCDate(dateString: string | Date): Date {
     date.getUTCSeconds()
   );
 }
-
 function formatDate(date: Date) {
   return format(getUTCDate(date), "EEEE, dd 'de' MMMM", { locale: ptBR }); 
 }
 function formatSimpleDate(date: Date) {
   return format(getUTCDate(date), "PPP", { locale: ptBR }); 
 }
-
 function parseDateString(dateString: string) {
     return new Date(dateString + 'T12:00:00'); // Meio-dia local
 }
-
 const formatHorario = (horario: string | null): string | null => {
   if (horario === "1-Primeiro") return "Primeiro";
   if (horario === "2-Segundo") return "Segundo";
@@ -64,26 +69,25 @@ const formatHorario = (horario: string | null): string | null => {
   if (horario) return "Prioridade definida"; 
   return null; 
 };
+// --- Fim das Funções de Data ---
 
 
 export default function PublicScheduleView({ 
   username, 
   initialSchedule, 
-  initialWeekRange 
+  initialWeekRange,
+  initialAiSummary // <-- [NOVO] 3. Recebe a prop da IA
 }: PublicScheduleViewProps) {
   
-  // --- Estados Atualizados ---
-  // Inicia os estados com os dados recebidos do servidor
+  // --- Estados (Mantidos) ---
   const [scheduleItems, setScheduleItems] = useState<ScheduleItemWithMedia[]>(initialSchedule || []);
-  const [isLoading, setIsLoading] = useState(false); // Começa como 'false'
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialSchedule ? null : "Perfil privado ou sem dados.");
-
-  const [weekOffset, setWeekOffset] = useState(0); // Sempre começa na semana 0
+  const [weekOffset, setWeekOffset] = useState(0);
   const [weekRange, setWeekRange] = useState(initialWeekRange || { start: "", end: "" });
   // --- Fim dos Estados ---
 
-
-  // --- Lógica de Fetch (Agora em useCallback) ---
+  // --- Lógica de Fetch (Mantida) ---
   const fetchSchedule = useCallback(async (offset: number) => {
     setIsLoading(true);
     setError(null);
@@ -92,39 +96,30 @@ export default function PublicScheduleView({
       if (!res.ok) {
         throw new Error("Não foi possível carregar o cronograma.");
       }
-      
       const data = await res.json();
       setScheduleItems(data.items);
       setWeekRange({ start: data.weekStart, end: data.weekEnd });
-      
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
-  }, [username]); // Depende apenas do username
+  }, [username]);
 
-  // --- useEffect Atualizado ---
+  // --- useEffect (Mantido) ---
   useEffect(() => {
-    // Se for a semana 0, os dados já foram carregados (initialSchedule).
-    // Não faz nada.
     if (weekOffset === 0) {
-      // Garante que os dados iniciais sejam carregados se o usuário navegar de volta
       setScheduleItems(initialSchedule || []);
       setWeekRange(initialWeekRange || { start: "", end: "" });
       setIsLoading(false);
       setError(null);
       return;
     }
-    
-    // Se for qualquer outra semana, busca os dados da API
     fetchSchedule(weekOffset);
-
   }, [weekOffset, fetchSchedule, initialSchedule, initialWeekRange]); 
   // --- Fim do useEffect ---
 
-
-  // Gera um MAPA dos agendamentos (Sem alteração)
+  // --- Mapeamento e Formatação (Mantidos) ---
   const scheduleMap = useMemo(() => {
     const groups = new Map<string, { date: Date; items: ScheduleItemWithMedia[] }>();
     scheduleItems.forEach((item) => {
@@ -146,18 +141,15 @@ export default function PublicScheduleView({
     return groups;
   }, [scheduleItems]); 
 
-  // Gera um ARRAY com todos os 7 dias da semana (Sem alteração)
   const allDaysOfWeek = useMemo(() => {
     if (!weekRange.start || !weekRange.end) {
       return [];
     }
     const startDate = parseDateString(weekRange.start);
     const endDate = parseDateString(weekRange.end);
-    
     return eachDayOfInterval({ start: startDate, end: endDate });
   }, [weekRange]);
 
-  // Formatação do título da semana (Sem alteração)
   const formatWeekRange = (start: string, end: string) => {
     if (!start || !end) return "Carregando...";
     const startDate = parseDateString(start); 
@@ -171,12 +163,10 @@ export default function PublicScheduleView({
     }
     return `Semana de ${startDay} ${startMonth} a ${endDay} ${endMonth}`;
   };
+  // --- Fim do Mapeamento ---
   
-  // --- [LÓGICA DE RENDERIZAÇÃO ATUALIZADA] ---
-  // Se 'initialSchedule' for nulo, significa que o perfil é privado.
+  // --- Renderização de Perfil Privado (Mantida) ---
   if (initialSchedule === null) {
-    // Não precisa mais do 'Lock' aqui, pois o ProfilePage já trata isso.
-    // Mas é uma boa garantia.
     return (
       <div className="text-center p-8 text-muted-foreground">
         <p>O cronograma deste utilizador é privado.</p>
@@ -187,6 +177,19 @@ export default function PublicScheduleView({
   return (
     <div className="space-y-8">
       
+      {/* --- [NOVO] 4. Renderização Condicional da IA --- */}
+      {/* O resumo só aparece se existir E se estivermos na semana atual (weekOffset === 0) */}
+      {initialAiSummary && weekOffset === 0 && (
+        <Alert className="mb-6 border-indigo-500/50 bg-indigo-50/50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300">
+          <Sparkles className="h-4 w-4 text-indigo-500" />
+          <AlertTitle>O Hype da Semana!</AlertTitle>
+          <AlertDescription>
+            {initialAiSummary}
+          </AlertDescription>
+        </Alert>
+      )}
+      {/* --- [FIM DA NOVIDADE] --- */}
+
       {/* Botões de Navegação da Semana */}
       <div className="flex items-center justify-between mb-6">
         <Button 

@@ -1,3 +1,4 @@
+// app/components/profile/ProfilePage.tsx
 "use client";
 
 import { User, Calendar, Film, Lock, Pen, Loader2 } from "lucide-react";
@@ -15,9 +16,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Media, MediaStatus, ScheduleItem, ProfileVisibility, User as PrismaUser } from "@prisma/client";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+// Imports da IA (removidos daqui, pois estão no PublicScheduleView)
 
 // --- Tipos Atualizados ---
-
 type ListCounts = {
   TO_WATCH: number;
   WATCHING: number;
@@ -41,6 +42,7 @@ type ProfilePageProps = {
   listCounts: ListCounts;
   initialSchedule: ScheduleItemWithMedia[] | null;
   initialWeekRange: { start: string, end: string } | null;
+  aiSummary: string | null; // <-- Recebe a prop
 };
 // --- Fim dos Tipos ---
 
@@ -53,7 +55,8 @@ export default function ProfilePage({
   activeTab = "cronograma",
   listCounts,
   initialSchedule,
-  initialWeekRange
+  initialWeekRange,
+  aiSummary // <-- Recebe a prop
 }: ProfilePageProps) {
 
   const router = useRouter();
@@ -61,11 +64,8 @@ export default function ProfilePage({
   const searchParams = useSearchParams();
 
   const handleTabChange = (value: string) => {
-    // Cria uma cópia dos parâmetros atuais
     const params = new URLSearchParams(searchParams.toString());
-
     params.set("tab", value);
-
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
@@ -76,31 +76,25 @@ export default function ProfilePage({
           <CardContent className="p-12 text-center">
             <Loader2 className="mx-auto h-12 w-12 text-muted-foreground mb-4 animate-spin" />
             <h2 className="text-2xl font-bold">A Carregar Perfil...</h2>
-            <p className="text-muted-foreground mt-2">
-              A buscar os dados deste utilizador.
-            </p>
           </CardContent>
         </Card>
       </div>
     );
   }
-  // --- A CHAVE "}" EXTRA FOI REMOVIDA DAQUI ---
-
-  // Esta linha agora é segura, pois o 'if' acima já foi executado.
+  
   const fallbackLetter = (user.name || user.username).charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen bg-background">
       
-      {/* Secção Hero (Renderiza sempre) */}
+      {/* Secção Hero (Corrigida com 'fill' e 'object-cover') */}
       <div className="p-8 pt-28 md:pt-32 relative overflow-hidden">
         {user.profileBannerUrl ? (
           <Image
             src={user.profileBannerUrl}
             alt="Banner do perfil"
-            layout="fill"
-            objectFit="cover"
-            className="absolute inset-0 z-0"
+            fill
+            className="absolute inset-0 z-0 object-cover"
             priority 
           />
         ) : (
@@ -150,7 +144,7 @@ export default function ProfilePage({
                 <div className="flex-shrink-0 w-full md:w-auto">
                   {isOwner ? (
                     <Link 
-                      href="/dashboard" 
+                      href="/dashboard" // <-- [CORRIGIDO] Underscore removido
                       className={cn(
                         buttonVariants({ variant: "outline", size: "sm" }), 
                         "w-full md:w-36 bg-white/20 text-white border-white/30 hover:bg-white/30"
@@ -165,7 +159,7 @@ export default function ProfilePage({
                       username={user.username}
                       className="w-full md:w-36"
                     />
-                  )}
+                  )} {/* <-- [CORRIGIDO] Underscore removido */}
                 </div>
               </div>
             </div>
@@ -173,11 +167,8 @@ export default function ProfilePage({
         </div>
       </div>
 
-
       {/* Conteúdo Principal (Abas) */}
       <div className="container mx-auto max-w-5xl py-8">
-        
-        {/* Verifica a flag 'canViewProfile' antes de renderizar as abas */}
         {!canViewProfile ? (
           // Mensagem de Perfil Privado
           <Card className="shadow-lg border-2">
@@ -192,8 +183,8 @@ export default function ProfilePage({
         ) : (
           // Conteúdo das Abas (se o perfil for visível)
           <Tabs 
-            value={activeTab} // Use 'value' (controlado) em vez de 'defaultValue'
-            onValueChange={handleTabChange} // Chama a função ao mudar
+            value={activeTab} 
+            onValueChange={handleTabChange} 
             className="w-full"
           >
             <div className="flex justify-center mb-4">
@@ -216,9 +207,9 @@ export default function ProfilePage({
                 <TabsContent value="cronograma" className="mt-0">
                   <PublicScheduleView 
                     username={user.username}
-                    // Passa os dados iniciais!
                     initialSchedule={initialSchedule}
                     initialWeekRange={initialWeekRange}
+                    initialAiSummary={aiSummary} // <-- Passa o resumo para o componente
                   />
                 </TabsContent>
 
@@ -231,9 +222,10 @@ export default function ProfilePage({
                     showWatchedList={user.showWatchedList}
                     showDroppedList={user.showDroppedList}
                     isOwner={isOwner} 
-                    counts={listCounts} // Passa as contagens recebidas
+                    counts={listCounts} 
                   />
                 </TabsContent>
+                
               </CardContent>
             </Card>
           </Tabs>

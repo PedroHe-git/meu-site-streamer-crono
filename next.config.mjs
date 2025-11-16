@@ -61,6 +61,7 @@ const nextConfig = {
   },
 
   async headers() {
+    const PROD_URL = "https://meucronograma.live";
     return [
       {
         // Aplica os cabeçalhos de segurança (CSP) a todas as rotas
@@ -69,25 +70,28 @@ const nextConfig = {
       },
       // --- [INÍCIO DA NOVA SEÇÃO DE CORS] ---
       {
-        // Aplica os cabeçalhos de CORS APENAS às suas rotas de API
+        // 2. Aplica o CORS corrigido APENAS às rotas de API
         source: "/api/:path*",
         headers: [
           {
             key: "Access-Control-Allow-Origin",
-            // Permite o seu localhost de testes
-            value: "http://localhost:3000", 
+            // Permite o localhost E o seu domínio de produção
+            value: process.env.NODE_ENV === "development" 
+              ? "http://localhost:3000" 
+              : PROD_URL,
           },
           {
             key: "Access-Control-Allow-Methods",
-            value: "GET",
+            // [CORRIGIDO] Permite todos os métodos que a sua app usa
+            value: "GET, POST, PUT, DELETE, PATCH, OPTIONS",
           },
           {
             key: "Access-Control-Allow-Headers",
-            value: "Content-Type",
+            // [CORRIGIDO] Adiciona 'Authorization' para futuras necessidades
+            value: "Content-Type, Authorization",
           },
         ],
       },
-      // --- [FIM DA NOVA SEÇÃO DE CORS] ---
     ];
   },
 };
