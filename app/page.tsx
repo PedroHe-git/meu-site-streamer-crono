@@ -2,59 +2,47 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import LandingPage from "./components/LandingPage";
-import Navbar from "./components/Navbar"; // Opcional: Pode não ser usado se o layout já tiver
 import HomeFeeds from "./components/HomeFeeds"; 
 import UserSearch from "./components/UserSearch";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { LayoutDashboard } from "lucide-react";
-import { redirect } from "next/navigation"; // [NOVO] Importar redirect
-import { UserRole } from "@prisma/client"; // [NOVO] Importar o Enum de Roles
+import { UserRole } from "@prisma/client";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
 
-  // 1. Visitante (Sem sessão)
+  // 1. Visitante (Sem Login) -> Vê a Landing Page
   if (!session) {
-    return (
-      <>
-        <LandingPage />
-      </>
-    );
+    return <LandingPage />;
   }
 
-  // [CORREÇÃO] 1.5. Redirecionamento de Segurança/Role
-  // Se o utilizador for um CRIADOR, envia diretamente para o Dashboard
-  if (session.user.role === UserRole.CREATOR) {
-    redirect('/dashboard');
-  }
-
-  // 2. Usuário Logado Comum (VISITOR)
+  // 2. Usuário Logado (Qualquer tipo) -> Vê o Feed
+  // NÃO colocamos nenhum redirect aqui. O Criador vê o feed igual a todos.
+  
   const firstName = session.user.name?.split(" ")[0] || session.user.username;
+  const isCreator = session.user.role === UserRole.CREATOR;
 
   return (
-    <>
-      <main className="min-h-screen bg-background pb-20">
-        
-        {/* Cabeçalho com Pesquisa */}
-        <div className="border-b bg-muted/20 sticky top-[57px] z-30 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
-            <div className="container mx-auto px-4 py-6">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                    
-                    {/* Saudação */}
-                    <div className="flex items-center gap-2 self-start md:self-center">
-                        <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 whitespace-nowrap">
-                            <span>👋</span> Olá, {firstName}!
-                        </h1>
-                    </div>
+    <main className="min-h-screen bg-background pb-20">
+      {/* Cabeçalho Flutuante */}
+      <div className="border-b bg-muted/20 sticky top-[57px] z-30 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
+          <div className="container mx-auto px-4 py-6">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                  
+                  <div className="flex items-center gap-2 self-start md:self-center">
+                      <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 whitespace-nowrap">
+                          <span>👋</span> Olá, {firstName}!
+                      </h1>
+                  </div>
 
-                    {/* Barra de Pesquisa Centralizada */}
-                    <div className="w-full md:max-w-md">
-                        <UserSearch />
-                    </div>
-                </div>
-                
-                {/* Botão Dashboard Mobile (Caso um Visitor tenha acesso, ou removido se for só para Creator) */}
+                  <div className="w-full md:max-w-md">
+                      <UserSearch />
+                  </div>
+              </div>
+              
+              {/* Botão Dashboard (Só aparece para Criadores, mas não força a ida) */}
+              {isCreator && (
                 <div className="md:hidden mt-4 flex justify-center">
                     <Link href="/dashboard" className="w-full">
                         <Button variant="outline" className="w-full gap-2">
@@ -63,15 +51,14 @@ export default async function Home() {
                         </Button>
                     </Link>
                 </div>
+              )}
+          </div>
+      </div>
 
-            </div>
-        </div>
-
-        {/* Feeds (Seguindo / Descobrir) */}
-        <div className="container mx-auto px-4 py-8">
-            <HomeFeeds />
-        </div>
-      </main>
-    </>
+      {/* O Conteúdo Principal é o Feed para todos */}
+      <div className="container mx-auto px-4 py-8">
+          <HomeFeeds />
+      </div>
+    </main>
   );
 }

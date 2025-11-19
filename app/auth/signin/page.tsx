@@ -49,7 +49,7 @@ export default function LoginPage() {
         // --- [FIM DA CORREÇÃO] ---
         setIsLoading(false);
       } else if (result?.ok) {
-        router.push('/');
+        window.location.href = '/';
       }
     } catch (err) {
       setError("Ocorreu um erro inesperado. Tente novamente.");
