@@ -1,32 +1,39 @@
+// app/page.tsx
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import LandingPage from "./components/LandingPage";
-import Navbar from "./components/Navbar";
+import Navbar from "./components/Navbar"; // Opcional: Pode não ser usado se o layout já tiver
 import HomeFeeds from "./components/HomeFeeds"; 
-import UserSearch from "./components/UserSearch"; // <--- [NOVO] Importar
+import UserSearch from "./components/UserSearch";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { LayoutDashboard } from "lucide-react";
+import { redirect } from "next/navigation"; // [NOVO] Importar redirect
+import { UserRole } from "@prisma/client"; // [NOVO] Importar o Enum de Roles
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
 
-  // 1. Visitante
+  // 1. Visitante (Sem sessão)
   if (!session) {
     return (
       <>
-        
         <LandingPage />
       </>
     );
   }
 
-  // 2. Usuário Logado
+  // [CORREÇÃO] 1.5. Redirecionamento de Segurança/Role
+  // Se o utilizador for um CRIADOR, envia diretamente para o Dashboard
+  if (session.user.role === UserRole.CREATOR) {
+    redirect('/dashboard');
+  }
+
+  // 2. Usuário Logado Comum (VISITOR)
   const firstName = session.user.name?.split(" ")[0] || session.user.username;
 
   return (
     <>
-      
       <main className="min-h-screen bg-background pb-20">
         
         {/* Cabeçalho com Pesquisa */}
@@ -45,11 +52,9 @@ export default async function Home() {
                     <div className="w-full md:max-w-md">
                         <UserSearch />
                     </div>
-
-                   
                 </div>
                 
-                {/* Botão Dashboard Mobile (Aparece embaixo em telas pequenas) */}
+                {/* Botão Dashboard Mobile (Caso um Visitor tenha acesso, ou removido se for só para Creator) */}
                 <div className="md:hidden mt-4 flex justify-center">
                     <Link href="/dashboard" className="w-full">
                         <Button variant="outline" className="w-full gap-2">
