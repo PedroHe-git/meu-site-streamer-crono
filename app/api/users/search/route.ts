@@ -1,47 +1,45 @@
-// app/api/users/search/route.ts (Corrigido)
-
+// app/api/users/search/route.ts
 import { NextResponse, NextRequest } from "next/server";
 import prisma from '@/lib/prisma';
 import { UserRole } from "@prisma/client";
+import { checkRateLimit } from "@/lib/ratelimit";
+import { headers } from "next/headers";
 
 export const revalidate = 0;
 export const runtime = 'nodejs';
 
-// GET /api/users/search?q=...
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    // 1. Segurança: Rate Limit (30 buscas por minuto por IP)
+    const headersList = headers();
+    const ip = headersList.get("x-forwarded-for") || "unknown";
     
-    // --- [ESTA É A LINHA CRÍTICA] ---
-    // Deve ser .get('q') para coincidir com o fetch
-    const query = searchParams.get('q');
-    // --- [FIM DA CORREÇÃO] ---
+    if (!checkRateLimit(ip, 30, 60 * 1000)) {
+      return new NextResponse(JSON.stringify({ error: "Muitas pesquisas. Aguarde um pouco." }), { status: 429 });
+    }
 
-    // Se não houver query, ou for muito curta, retorna array vazio (200 OK)
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get('q');
+
     if (!query || query.length < 2) {
       return NextResponse.json([]); 
     }
 
-    // Busca utilizadores que são CREATORs
-    // E cujo username OU name contenham a query (case-insensitive)
+    // 2. Busca Segura (Apenas Criadores)
     const creators = await prisma.user.findMany({
       where: {
-        role: UserRole.CREATOR, // Apenas criadores
+        role: UserRole.CREATOR,
         username: {
             contains: query,
-            mode: 'insensitive', // Ignora maiúsculas/minúsculas
+            mode: 'insensitive', 
         },
-        // (O seu ficheiro original só procurava no username,
-        //  mas pode adicionar a procura no 'name' se quiser)
-        // OR: [ 
-        //   { username: { contains: query, mode: 'insensitive' } },
-        //   { name: { contains: query, mode: 'insensitive' } }
-        // ]
       },
+      // 3. Privacidade: Retornar APENAS dados públicos
       select: { 
         username: true,
         name: true,
         image: true,
+        // NUNCA selecionar email, hashedPassword, etc.
       },
       take: 10, 
       orderBy: {

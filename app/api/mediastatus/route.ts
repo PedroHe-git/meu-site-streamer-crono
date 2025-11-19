@@ -21,11 +21,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
+    // 1. Receber igdbId no destructuring
     const { 
       status, 
       title, 
       tmdbId,
       malId,
+      igdbId, // <--- NOVO
       posterPath,
       mediaType,
       isWeekly 
@@ -35,45 +37,47 @@ export async function POST(request: Request) {
       return new NextResponse(JSON.stringify({ error: "Dados em falta (status, title, mediaType)" }), { status: 400 });
     }
     
-    if (mediaType !== 'OUTROS' && !tmdbId && !malId) {
-        return new NextResponse(JSON.stringify({ error: "ID (tmdbId ou malId) é obrigatório para este tipo" }), { status: 400 });
+    // 2. Atualizar validação de ID obrigatório
+    if (mediaType !== 'OUTROS' && !tmdbId && !malId && !igdbId) {
+        return new NextResponse(JSON.stringify({ error: "ID (tmdbId, malId ou igdbId) é obrigatório para este tipo" }), { status: 400 });
     }
 
-    // 1. Encontrar ou Criar a 'Media' principal
+    // 3. Lógica para Encontrar Mídia
     let media;
+    let whereClause: any = { mediaType: mediaType }; // 'any' facilita a tipagem dinâmica do Prisma aqui
     
-    let whereClause: Prisma.MediaWhereInput = { mediaType: mediaType };
-    
-    // Define a condição de ID apenas se o ID for fornecido
     if (mediaType === 'ANIME' && malId) {
         whereClause.malId = Number(malId);
     } else if ((mediaType === 'MOVIE' || mediaType === 'SERIES') && tmdbId) {
         whereClause.tmdbId = Number(tmdbId);
+    } else if (mediaType === 'GAME' && igdbId) { // <--- NOVO BLOCO
+        whereClause.igdbId = Number(igdbId);
     } else if (mediaType === 'OUTROS') {
-        // Itens manuais 'OUTROS' são únicos pelo título E user
         whereClause.title = title;
     }
 
-    if ((mediaType !== 'OUTROS' && (tmdbId || malId)) || mediaType === 'OUTROS') {
-       // Tenta encontrar a mídia existente
+    // Tenta encontrar
+    if (mediaType !== 'OUTROS' || mediaType === 'OUTROS') {
         media = await prisma.media.findFirst({
             where: whereClause,
         });
     }
 
+    // 4. Lógica para Criar Mídia se não existir
     if (!media) {
       media = await prisma.media.create({
         data: {
           title,
           tmdbId: tmdbId ? Number(tmdbId) : null,
           malId: malId ? Number(malId) : null,
+          igdbId: igdbId ? Number(igdbId) : null, // <--- NOVO CAMPO
           posterPath: posterPath || "",
           mediaType: mediaType, 
         },
       });
     }
 
-    // 2. Criar ou Atualizar (Upsert) o 'MediaStatus' para este utilizador
+    // O restante (upsert do MediaStatus) continua igual
     const mediaStatus = await prisma.mediaStatus.upsert({
       where: {
         userId_mediaId: {

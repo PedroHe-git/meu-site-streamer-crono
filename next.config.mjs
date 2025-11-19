@@ -6,30 +6,43 @@ import path from 'path';
 const cspValue = [
   "default-src 'self';",
 
-  // ✅ Libera scripts do domínio principal, scripts.clarity.ms e Vercel
   "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.clarity.ms https://scripts.clarity.ms *.vercel-insights.com;",
 
-  // ✅ Estilos
   "style-src 'self' 'unsafe-inline' fonts.googleapis.com;",
 
-  // --- [CORREÇÃO AQUI: Adicionado 'blob:'] ---
-  // Permite URLs temporários (blob:) para a pré-visualização do avatar
-  "img-src 'self' data: blob: image.tmdb.org cdn.myanimelist.net i.imgur.com https://www.clarity.ms https://c.clarity.ms c.bing.com *.public.blob.vercel-storage.com;",
+  // --- [CORREÇÃO 1: Adicionado 'images.igdb.com' na CSP] ---
+  "img-src 'self' data: blob: image.tmdb.org cdn.myanimelist.net i.imgur.com images.igdb.com https://www.clarity.ms https://c.clarity.ms c.bing.com *.public.blob.vercel-storage.com;",
 
-  // ✅ Fontes
   "font-src 'self' fonts.gstatic.com;",
 
-  // ✅ Permite conexões (incluindo Vercel Blob)
   "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms https://i.clarity.ms https://n.clarity.ms vitals.vercel-insights.com *.public.blob.vercel-storage.com;",
 
   "frame-src 'self';",
 ].join(' ');
+
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
     value: cspValue,
   },
+  {
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload'
+  },
+  {
+    key: 'X-Content-Type-Options',
+    value: 'nosniff'
+  },
+  {
+    key: 'X-Frame-Options',
+    value: 'DENY' // Impede que seu site seja aberto num iframe (evita Clickjacking)
+  },
+  {
+    key: 'Referrer-Policy',
+    value: 'strict-origin-when-cross-origin'
+  }
 ];
+
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -50,7 +63,12 @@ const nextConfig = {
         hostname: "i.imgur.com",
         pathname: "/**",
       },
-      // Domínio do Vercel Blob (já estava correto)
+      // --- [CORREÇÃO 2: Adicionado Configuração do Next Image para IGDB] ---
+      {
+        protocol: "https",
+        hostname: "images.igdb.com",
+        pathname: "/igdb/image/upload/**",
+      },
       {
         protocol: "https",
         hostname: "*.public.blob.vercel-storage.com",
@@ -63,30 +81,24 @@ const nextConfig = {
     const PROD_URL = "https://meucronograma.live";
     return [
       {
-        // Aplica os cabeçalhos de segurança (CSP) a todas as rotas
         source: "/:path*",
         headers: securityHeaders,
       },
-      // --- [INÍCIO DA NOVA SEÇÃO DE CORS] ---
       {
-        // 2. Aplica o CORS corrigido APENAS às rotas de API
         source: "/api/:path*",
         headers: [
           {
             key: "Access-Control-Allow-Origin",
-            // Permite o localhost E o seu domínio de produção
             value: process.env.NODE_ENV === "development" 
               ? "http://localhost:3000" 
               : PROD_URL,
           },
           {
             key: "Access-Control-Allow-Methods",
-            // [CORRIGIDO] Permite todos os métodos que a sua app usa
             value: "GET, POST, PUT, DELETE, PATCH, OPTIONS",
           },
           {
             key: "Access-Control-Allow-Headers",
-            // [CORRIGIDO] Adiciona 'Authorization' para futuras necessidades
             value: "Content-Type, Authorization",
           },
         ],

@@ -1,4 +1,4 @@
-"use client"; 
+"use client";
 
 import { useState } from "react";
 // --- [MUDANÇA 1] ---
@@ -22,20 +22,21 @@ import { ImageWithFallback } from "@/components/ui/image-with-fallback";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Tipos
-type MediaType = "MOVIE" | "ANIME" | "SERIES" | "OUTROS";
+type MediaType = "MOVIE" | "ANIME" | "SERIES" | "GAME" | "OUTROS";
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
 
 type SearchResult = {
   source: MediaType;
-  tmdbId: number | null; 
+  tmdbId: number | null;
   malId: number | null;
+  igdbId?: number | null;
   title: string;
   posterPath: string | null;
   releaseYear: number | null;
 };
 
 type MediaSearchProps = {
-  onMediaAdded: () => void; 
+  onMediaAdded: () => void;
 };
 
 export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
@@ -44,13 +45,13 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [addingState, setAddingState] = useState<string | null>(null);
-  
+
   // --- [MUDANÇA 2] ---
   // Separamos as mensagens de erro e sucesso
   const [message, setMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState(""); // <-- NOVO ESTADO
   // --- [FIM MUDANÇA 2] ---
-  
+
   const [showManualForm, setShowManualForm] = useState(false);
 
   // Estados para o formulário manual
@@ -78,6 +79,9 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
       case "SERIES":
         apiUrl = `/api/search-series?q=${encodeURIComponent(query)}`;
         break;
+      case "GAME":
+        apiUrl = `/api/search-games?q=${encodeURIComponent(query)}`;
+        break;
       default:
         setLoading(false);
         setMessage("Tipo de mídia 'OUTROS' não é pesquisável.");
@@ -88,7 +92,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
       const res = await fetch(apiUrl);
       if (!res.ok) throw new Error("Falha ao buscar mídias");
       const data = await res.json();
-      
+
       if (!data || data.length === 0) {
         setMessage("Nenhum resultado encontrado.");
       }
@@ -114,7 +118,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
     // --- [FIM MUDANÇA 3] ---
 
     if ("source" in media) {
-      const idKey = media.tmdbId || media.malId; 
+      const idKey = media.tmdbId || media.malId || media.igdbId;
 
       if (!idKey) {
         setMessage("Este item não pode ser adicionado (ID em falta).");
@@ -122,28 +126,30 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
       }
 
       key = `${media.source}-${idKey}-${status}`;
-      
+
       mediaData = {
         title: media.title,
-        mediaType: media.source,  
-        tmdbId: media.tmdbId,     
-        malId: media.malId,       
-        posterPath: media.posterPath, 
+        mediaType: media.source,
+        tmdbId: media.tmdbId,
+        malId: media.malId,
+        igdbId: media.igdbId || null,
+        posterPath: media.posterPath,
         status: status,
       };
     } else {
       key = `${media.type}-${media.title}-${status}`;
       mediaData = {
         title: media.title,
-        mediaType: media.type, 
+        mediaType: media.type,
         tmdbId: null,
         malId: null,
-        posterPath: media.posterUrl, 
+        igdbId: null,
+        posterPath: media.posterUrl,
         status: status,
       };
 
-      if (media.type !== 'OUTROS') {
-        setMessage("Para adicionar manualmente Filmes, Séries ou Animes, use a busca ou selecione o tipo 'Outros'.");
+      if (media.type !== 'OUTROS' && media.type !== 'GAME') {
+        setMessage("Para adicionar manualmente Filmes, Séries ou Animes, use a busca (recomendado) ou selecione 'Outros'/'Jogos'.");
         return;
       }
     }
@@ -161,16 +167,16 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
       if (!res.ok) {
         throw new Error(data.error || "Falha ao adicionar");
       }
-      
+
       onMediaAdded(); // Chama o handler do pai para re-fetch
-      
+
       // --- [INÍCIO DA MUDANÇA 4] ---
       // Feedback visual e limpeza da UI
       setSuccessMessage(`"${mediaData.title}" foi adicionado com sucesso!`);
-      
+
       if ("source" in media) {
         // Se foi da busca, limpa a busca e os resultados
-        setResults([]); 
+        setResults([]);
         setQuery("");
       } else {
         // Se foi manual, limpa o formulário manual
@@ -180,7 +186,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
         setShowManualForm(false);
       }
       // --- [FIM DA MUDANÇA 4] ---
-      
+
     } catch (err: any) {
       setMessage(err.message || "Erro ao adicionar.");
     } finally {
@@ -233,6 +239,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                 <SelectItem value="MOVIE">Filme</SelectItem>
                 <SelectItem value="SERIES">Série</SelectItem>
                 <SelectItem value="ANIME">Anime</SelectItem>
+                <SelectItem value="GAME">Jogos</SelectItem>
                 <SelectItem value="OUTROS">Outros</SelectItem>
               </SelectContent>
             </Select>
@@ -297,7 +304,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                   <p className="text-xs text-muted-foreground mb-1"> Use &lsquo;Copiar Endereço da Imagem&rsquo; no <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-primary underline">Imgur</a>. </p>
                 </div>
               </div>
-              
+
               <p className="text-sm text-muted-foreground">Adicionar à lista:</p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -354,7 +361,8 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {results.map((media) => {
             
-            const idKey = media.tmdbId || media.malId;
+            // [CORREÇÃO] Agora aceita igdbId
+            const idKey = media.tmdbId || media.malId || media.igdbId;
             
             if (!idKey) {
               return null; 
@@ -398,9 +406,11 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                       disabled={addingState !== null}
                       className="h-7 px-2 text-xs"
                     >
-                      {addingState === toWatchKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Próximos Conteúdos"}
+                      {addingState === toWatchKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Próximos"}
                     </Button>
-                    {(media.source === "ANIME" || media.source === "SERIES") && (
+
+                    {/* [CORREÇÃO] Exibir botão 'Essa Semana' também para Jogos (GAME) */}
+                    {(media.source === "ANIME" || media.source === "SERIES" || media.source === "GAME") && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -411,6 +421,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                         {addingState === watchingKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Essa Semana"}
                       </Button>
                     )}
+
                     <Button
                       size="sm"
                       variant="outline"

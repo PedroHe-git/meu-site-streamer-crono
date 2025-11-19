@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Resend } from "resend";
 import crypto from "crypto";
+import { checkRateLimit } from "@/lib/ratelimit";
+import { headers } from "next/headers";
 
 export const runtime = 'nodejs';
 
@@ -60,13 +62,19 @@ export async function POST(request: Request) {
     }
 
     // [SEGURANÇA] Token Criptograficamente Forte (Hex de 32 bytes = 64 caracteres)
-    const token = crypto.randomBytes(32).toString('hex'); 
+    const token = crypto.randomBytes(32).toString('hex');
     const expires = new Date(new Date().getTime() + 3600 * 1000); // 1 hora
+
+    const ip = headers().get("x-forwarded-for") || "unknown";
+    // Limite restrito: 3 pedidos de reset a cada 1 hora
+    if (!checkRateLimit(ip, 3, 60 * 60 * 1000)) {
+      return new NextResponse(JSON.stringify({ error: "Muitas tentativas. Aguarde." }), { status: 429 });
+    }
 
     await prisma.passwordResetToken.deleteMany({
       where: { email: email },
     });
-    
+
     await prisma.passwordResetToken.create({
       data: {
         email: email,

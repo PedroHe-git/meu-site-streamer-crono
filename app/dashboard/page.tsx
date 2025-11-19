@@ -10,7 +10,7 @@ import {
 import { Step, STATUS, CallBackProps, Props } from 'react-joyride';
 import { useSession, signIn } from "next-auth/react";
 import { redirect } from "next/navigation";
-import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility } from "@prisma/client";
+import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility, MediaType } from "@prisma/client";
 import Image from "next/image";
 import { Input } from "@/components/ui/input";
 
@@ -55,7 +55,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
 type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
-type MediaType = "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
+
+// [NOTA] MediaType já vem importado do Prisma, não precisamos redefinir aqui.
 
 type MappedMediaItem = {
   id: string;
@@ -108,26 +109,19 @@ export default function DashboardPage() {
   const [dataVersionKey, setDataVersionKey] = useState(0);
 
   // Estados de Perfil
-
   const userRole = session?.user?.role as UserRole | undefined;
   const isCreator = userRole === UserRole.CREATOR;
 
   const [displayName, setDisplayName] = useState(session?.user?.name || "");
-
   const [bio, setBio] = useState(session?.user?.bio || "");
-
   const [discordWebhook, setDiscordWebhook] = useState("");
-
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
 
   const [showToWatch, setShowToWatch] = useState(session?.user?.showToWatchList ?? true);
-
   const [showWatching, setShowWatching] = useState(session?.user?.showWatchingList ?? true);
-
   const [showWatched, setShowWatched] = useState(session?.user?.showWatchedList ?? true);
-
   const [showDropped, setShowDropped] = useState(session?.user?.showDroppedList ?? true);
 
   // Estados do Cropper (Avatar)
@@ -186,43 +180,48 @@ export default function DashboardPage() {
   useEffect(() => {
     if (session?.user) {
       setDisplayName(session.user.name || "");
-
       setBio(session.user.bio || "");
-
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
       if (!selectedFile) setPreviewImage(session.user.image || null);
-
       if (!selectedBannerFile) setPreviewBanner(session.user.profileBannerUrl || null);
-
       setShowToWatch(session.user.showToWatchList ?? true);
-
       setShowWatching(session.user.showWatchingList ?? true);
-
       setShowWatched(session.user.showWatchedList ?? true);
-
       setShowDropped(session.user.showDroppedList ?? true);
-
       setDiscordWebhook((session.user as any).discordWebhookUrl || "");
     }
   }, [session?.user, selectedFile, selectedBannerFile]);
 
-  // Busca de Dados
+  // --- [CORREÇÃO AQUI] Busca de Dados Blindada ---
   const fetchSharedData = useCallback(async () => {
     setIsUpdating(true);
     try {
       const resWatching = await fetch(`/api/mediastatus?status=WATCHING&page=1&pageSize=50&searchTerm=`);
-      if (!resWatching.ok) throw new Error(`Falha ao buscar a lista WATCHING`);
-      const watchingData = await resWatching.json();
-      setInitialMediaItems(watchingData.items);
+      
+      if (!resWatching.ok) {
+         console.warn("Falha ao buscar lista WATCHING - usando array vazio");
+         setInitialMediaItems([]); 
+      } else {
+         const watchingData = await resWatching.json();
+         // Garante que nunca é undefined
+         setInitialMediaItems(watchingData.items || []); 
+      }
 
       const resSchedule = await fetch(`/api/schedule?list=pending`);
-      if (!resSchedule.ok) throw new Error('Falha ao buscar schedule');
-      const scheduleData = await resSchedule.json();
-      setInitialScheduleItems(scheduleData);
+      if (!resSchedule.ok) {
+         console.warn("Falha ao buscar schedule - usando array vazio");
+         setInitialScheduleItems([]);
+      } else {
+         const scheduleData = await resSchedule.json();
+         // Garante que é array
+         setInitialScheduleItems(Array.isArray(scheduleData) ? scheduleData : []);
+      }
 
     } catch (error) {
-      console.error("Erro ao buscar dados compartilhados:", error);
+      console.error("Erro crítico ao buscar dados:", error);
       setActionError("Falha ao carregar dados do dashboard.");
+      // Reset seguro em caso de erro
+      setInitialMediaItems([]);
       setInitialScheduleItems([]);
     } finally {
       setIsUpdating(false);
@@ -241,8 +240,11 @@ export default function DashboardPage() {
   }, [status, fetchSharedData]);
 
 
-  // Mapeamento de Dados
+  // --- [CORREÇÃO AQUI] Mapeamento Seguro ---
   const mapDataToMediaItems = (dataItems: MediaStatusWithMedia[]): MappedMediaItem[] => {
+    // Segurança extra: se for null/undefined, retorna vazio
+    if (!dataItems || !Array.isArray(dataItems)) return [];
+
     return dataItems.map((item) => ({
       ...item,
       id: item.id,
@@ -260,9 +262,14 @@ export default function DashboardPage() {
       media: item.media,
     }));
   };
+
   const mapDataToScheduleItems = (dataItems: ScheduleItemWithMedia[]): MappedScheduleItem[] => {
+     // Segurança extra
+    if (!dataItems || !Array.isArray(dataItems)) return [];
+    
     return dataItems.map((item) => ({ ...item, scheduledAt: new Date(item.scheduledAt) }));
   };
+
   const mediaItems = useMemo(() => mapDataToMediaItems(initialMediaItems), [initialMediaItems]);
   const scheduleItems = useMemo(() => mapDataToScheduleItems(initialScheduleItems), [initialScheduleItems]);
 
@@ -273,7 +280,6 @@ export default function DashboardPage() {
   }, [fetchSharedData]);
 
   const handleAddSchedule = (newSchedule: MappedScheduleItem) => {
-
     setInitialScheduleItems((prev) => [...prev, newSchedule]);
     handleDataChanged();
   };
@@ -306,16 +312,48 @@ export default function DashboardPage() {
     setIsSavingSettings(true); setSettingsMessage("A guardar..."); setActionError(null);
 
     let newImageUrl = session?.user?.image || null;
-
     let newBannerUrl = session?.user?.profileBannerUrl || null;
+
     try {
       if (selectedFile) { setSettingsMessage("A fazer upload do avatar..."); newImageUrl = await handleAvatarUpload(); setSettingsMessage("Upload concluído..."); }
       if (selectedBannerFile) { setSettingsMessage("A fazer upload do banner..."); newBannerUrl = await handleBannerUpload(); setSettingsMessage("Uploads concluídos..."); }
-      const payload = { name: displayName, bio: bio, profileVisibility: profileVisibility, showToWatchList: showToWatch, showWatchingList: showWatching, showWatchedList: showWatched, showDroppedList: showDropped, image: newImageUrl, profileBannerUrl: newBannerUrl, discordWebhookUrl: discordWebhook, };
+      
+      const payload = { 
+        name: displayName, 
+        bio: bio, 
+        profileVisibility: profileVisibility, 
+        showToWatchList: showToWatch, 
+        showWatchingList: showWatching, 
+        showWatchedList: showWatched, 
+        showDroppedList: showDropped, 
+        image: newImageUrl, 
+        profileBannerUrl: newBannerUrl, 
+        discordWebhookUrl: discordWebhook, 
+      };
+      
       const res = await fetch('/api/profile/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), });
+      
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Falha ao guardar definições.'); }
+      
       const newSettings = await res.json();
-      if (updateSession) { await updateSession({ ...session, user: { ...session?.user, name: newSettings.name, image: newSettings.image, bio: newSettings.bio, profileVisibility: newSettings.profileVisibility, showToWatchList: newSettings.showToWatchList, showWatchingList: newSettings.showWatchingList, showWatchedList: newSettings.showWatchedList, showDroppedList: newSettings.showDroppedList, profileBannerUrl: newSettings.profileBannerUrl, } }); }
+      
+      if (updateSession) { 
+        await updateSession({ 
+          ...session, 
+          user: { 
+            ...session?.user, 
+            name: newSettings.name, 
+            image: newSettings.image, 
+            bio: newSettings.bio, 
+            profileVisibility: newSettings.profileVisibility, 
+            showToWatchList: newSettings.showToWatchList, 
+            showWatchingList: newSettings.showWatchingList, 
+            showWatchedList: newSettings.showWatchedList, 
+            showDroppedList: newSettings.showDroppedList, 
+            profileBannerUrl: newSettings.profileBannerUrl, 
+          } 
+        }); 
+      }
       setSettingsMessage("Guardado!"); setSelectedFile(null); setSelectedBannerFile(null);
     } catch (error: any) {
       console.error("Erro ao guardar definições:", error); setSettingsMessage(""); setActionError(`Erro: ${error.message}`); if (selectedFile) { setPreviewImage(session?.user?.image || null); } if (selectedBannerFile) { setPreviewBanner(session?.user?.profileBannerUrl || null); }
@@ -423,8 +461,6 @@ export default function DashboardPage() {
                       <p className="text-xs text-muted-foreground text-right">{200 - (bio?.length || 0)} caracteres restantes</p>
                     </div>
 
-                    {/* --- [INÍCIO DO CÓDIGO RESTAURADO] --- */}
-
                     {/* Status da Live (Twitch) */}
                     <div className="space-y-2 pt-2">
                       <Label className="text-sm font-medium text-foreground">Status da Live (Twitch)</Label>
@@ -454,7 +490,7 @@ export default function DashboardPage() {
                       )}
                     </div>
 
-                    {/* --- [INÍCIO DO NOVO CAMPO DISCORD] --- */}
+                    {/* Webhook do Discord */}
                     <div className="space-y-2 pt-2 border-t">
                       <Label htmlFor="discord-webhook" className="text-sm font-medium text-foreground">
                         Notificações Discord
@@ -471,7 +507,6 @@ export default function DashboardPage() {
                         Cole o Webhook do seu servidor para anunciar o cronograma automaticamente.
                       </p>
                     </div>
-                    {/* --- [FIM DO NOVO CAMPO DISCORD] --- */}
 
                     {/* Privacidade */}
                     <div className="space-y-2 pt-2">
@@ -504,8 +539,6 @@ export default function DashboardPage() {
                         </Label>
                       </RadioGroup>
                     </div>
-
-                    {/* --- [FIM DO CÓDIGO RESTAURADO] --- */}
 
                     {/* Switches de Visibilidade */}
                     <div className="space-y-2 pt-2">
@@ -553,13 +586,11 @@ export default function DashboardPage() {
                 </Card>
               )}
             </aside>
-            {/* --- FIM DA SIDEBAR --- */}
-
 
             {/* Coluna da Direita (Conteúdo Principal com Abas) */}
             <div className="lg:col-span-3">
               <Tabs defaultValue="listas">
-                {/* --- Correção do Grid para 4 Colunas --- */}
+                {/* Grid para 4 Colunas */}
                 <TabsList className="grid w-full grid-cols-4 md:max-w-xl mb-4">
                   <TabsTrigger value="listas"> <List className="h-4 w-4 mr-2" /> Minhas Listas </TabsTrigger>
                   <TabsTrigger value="agenda"> <CalendarDays className="h-4 w-4 mr-2" /> Gerir Agenda </TabsTrigger>
@@ -569,7 +600,6 @@ export default function DashboardPage() {
 
                 <TabsContent value="listas" className="mt-6 space-y-6" id="tour-step-2-listas-busca">
                   <MediaSearch onMediaAdded={handleDataChanged} />
-                  {/* Passa o dataVersionKey para o MyLists */}
                   <MyLists
                     onDataChanged={handleDataChanged}
                     dataVersionKey={dataVersionKey}
@@ -588,20 +618,17 @@ export default function DashboardPage() {
 
                 <TabsContent value="calendario" className="mt-6" id="tour-step-4-calendario">
                   <FullCalendar
-                    key={dataVersionKey} // Usa a key para forçar atualização
+                    key={dataVersionKey}
                     scheduleItems={scheduleItems}
                   />
                 </TabsContent>
 
-                {/* --- Correção: Envolve o StatsTab com TabsContent --- */}
                 <TabsContent value="stats">
                   <StatsTab />
                 </TabsContent>
 
               </Tabs>
             </div>
-            {/* --- FIM DO CONTEÚDO PRINCIPAL --- */}
-
           </div>
         </main>
       </div>

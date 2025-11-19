@@ -33,6 +33,7 @@ enum MediaType {
   MOVIE
   ANIME
   SERIES
+  GAME
   OUTROS
 }
 
@@ -86,6 +87,7 @@ model Media {
   mediaType     MediaType
   tmdbId        Int?
   malId         Int?
+  igdbId        Int?
   title         String
   posterPath    String?
   releaseYear   Int?
@@ -93,6 +95,7 @@ model Media {
   scheduleItems ScheduleItem[]
   @@unique([mediaType, tmdbId])
   @@unique([mediaType, malId])
+  @@unique([mediaType, igdbId])
 }
 
 model MediaStatus {
