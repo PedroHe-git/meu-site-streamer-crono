@@ -52,6 +52,7 @@ export async function sendWeeklySchedule(webhookUrl: string, streamerName: strin
   const payload = {
     username: "Agenda do Streamer",
     avatar_url: "https://cdn-icons-png.flaticon.com/512/4270/4270587.png",
+    content: "📢 **Atenção @everyone!** Confira a programação da semana! 👇",
     embeds: [
       {
         title: `📅 Cronograma da Semana: ${streamerName}`,
