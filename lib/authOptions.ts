@@ -7,12 +7,10 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import TwitchProvider from "next-auth/providers/twitch";
 import bcrypt from "bcrypt";
-import { v4 as uuidv4 } from "uuid";
 
 const prisma = new PrismaClient();
 
 export const authOptions: AuthOptions = {
-
   adapter: PrismaAdapter(prisma),
   providers: [
     TwitchProvider({
@@ -34,6 +32,7 @@ export const authOptions: AuthOptions = {
           showWatchedList: true,
           showDroppedList: true,
           profileBannerUrl: null,
+          discordWebhookUrl: null, // <--- ADICIONADO AQUI
         };
       },
     }),
@@ -59,6 +58,7 @@ export const authOptions: AuthOptions = {
           showWatchedList: true,
           showDroppedList: true,
           profileBannerUrl: null,
+          discordWebhookUrl: null, // <--- ADICIONADO AQUI
         };
       },
     }),
@@ -91,6 +91,10 @@ export const authOptions: AuthOptions = {
           throw new Error("Credenciais inválidas");
         }
 
+        // Precisamos garantir que o user retornado tenha a propriedade, 
+        // mesmo que venha do banco (o banco já tem o campo, então o prisma retorna)
+        // O TypeScript pode reclamar se o tipo do prisma não bater exatamente,
+        // mas geralmente para o authorize ele infere. Se der erro aqui, avise.
         return user;
       },
     }),
@@ -101,7 +105,6 @@ export const authOptions: AuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       if (account?.provider === "credentials") {
-
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!dbUser?.emailVerified) {
           console.log("Tentativa de login com email não verificado:", user.email);
@@ -118,11 +121,9 @@ export const authOptions: AuthOptions = {
           await prisma.user.update({
             where: { id: existingUser.id },
             data: {
-
               twitchUsername: (profile as any)?.preferred_username,
             }
           });
-
           user.twitchUsername = (profile as any)?.preferred_username;
         }
       }
@@ -131,84 +132,59 @@ export const authOptions: AuthOptions = {
 
     async jwt({ token, user, trigger, session }) {
       if (user) {
-
         token.id = user.id;
         token.name = user.name ?? null;
         token.picture = user.image ?? null;
-
         token.role = user.role;
-
         token.username = user.username;
-
         token.bio = user.bio ?? null;
-
         token.profileVisibility = user.profileVisibility;
-
         token.twitchUsername = user.twitchUsername ?? null;
-
         token.showToWatchList = user.showToWatchList;
-
         token.showWatchingList = user.showWatchingList;
-
         token.showWatchedList = user.showWatchedList;
-
         token.showDroppedList = user.showDroppedList;
-
         token.profileBannerUrl = user.profileBannerUrl ?? null;
+        token.discordWebhookUrl = user.discordWebhookUrl ?? null;
       }
 
       if (trigger === "update" && session) {
-
         const userPayload = session.user;
         if (userPayload) {
           token.name = userPayload.name ?? null;
           token.picture = userPayload.image ?? null;
-
           token.bio = userPayload.bio ?? null;
-
           token.profileVisibility = userPayload.profileVisibility;
-
           token.showToWatchList = userPayload.showToWatchList;
-
           token.showWatchingList = userPayload.showWatchingList;
-
           token.showWatchedList = userPayload.showWatchedList;
-
           token.showDroppedList = userPayload.showDroppedList;
-
           token.profileBannerUrl = userPayload.profileBannerUrl ?? null;
+          
+          if (userPayload.discordWebhookUrl !== undefined) {
+             token.discordWebhookUrl = userPayload.discordWebhookUrl;
+          }
         }
       }
-
       return token;
     },
 
     async session({ session, token }) {
       if (token && session.user) {
-
         session.user.id = token.id;
         session.user.name = token.name;
         session.user.image = token.picture;
-
         session.user.role = token.role;
-
         session.user.username = token.username;
-
         session.user.bio = token.bio;
-
         session.user.profileVisibility = token.profileVisibility;
-
         session.user.twitchUsername = token.twitchUsername;
-
         session.user.showToWatchList = token.showToWatchList;
-
         session.user.showWatchingList = token.showWatchingList;
-
         session.user.showWatchedList = token.showWatchedList;
-
         session.user.showDroppedList = token.showDroppedList;
-
         session.user.profileBannerUrl = token.profileBannerUrl;
+        session.user.discordWebhookUrl = token.discordWebhookUrl;
       }
       return session;
     },

@@ -5,8 +5,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-// --- [MUDANÇA 1] Importar ícones de paginação ---
-import { Loader2, Trash2, Film, List as ListIcon, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Loader2,
+  Trash2,
+  Film,
+  List as ListIcon,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRightLeft,
+  Play
+} from "lucide-react";
 import Image from "next/image";
 import { Media, MediaStatus } from "@prisma/client";
 import { Input } from "@/components/ui/input";
@@ -14,7 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -24,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // --- Tipos ---
 type MediaStatusWithMedia = MediaStatus & { media: Media };
@@ -38,20 +48,19 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
   const [activeList, setActiveList] = useState<StatusKey>("TO_WATCH");
   const [mediaItems, setMediaItems] = useState<MediaStatusWithMedia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  const [counts, setCounts] = useState<Record<StatusKey, number>>({ 
-    TO_WATCH: 0, 
-    WATCHING: 0, 
-    WATCHED: 0, 
-    DROPPED: 0 
+  const [updatingId, setUpdatingId] = useState<string | null>(null); // Estado para loading individual
+
+  const [counts, setCounts] = useState<Record<StatusKey, number>>({
+    TO_WATCH: 0,
+    WATCHING: 0,
+    WATCHED: 0,
+    DROPPED: 0
   });
-  
-  // --- [MUDANÇA 2] Ajuste nos estados de paginação ---
+
+  // Estados de Paginação
   const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0); // <-- Adicionado para calcular o total de páginas
+  const [totalCount, setTotalCount] = useState(0);
   const pageSize = 12;
-  // const [hasMore, setHasMore] = useState(false); // <-- Removido
-  // --- [FIM MUDANÇA 2] ---
 
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -71,7 +80,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
   const fetchCounts = useCallback(async () => {
     try {
       const statuses: StatusKey[] = ["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"];
-      const promises = statuses.map(status => 
+      const promises = statuses.map(status =>
         fetch(`/api/mediastatus?status=${status}&pageSize=1&page=1`).then(res => res.json())
       );
       const results = await Promise.all(promises);
@@ -85,7 +94,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   }, []);
 
-  // --- [MUDANÇA 3] Lógica de 'fetchListData' simplificada ---
+  // Função para buscar dados da lista
   const fetchListData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -98,12 +107,10 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
 
       const res = await fetch(`/api/mediastatus?${query.toString()}`);
       if (!res.ok) throw new Error("Falha ao carregar lista");
-      
+
       const data = await res.json();
-      
-      // Sempre substitui os itens, em vez de anexar
-      setMediaItems(data.items); 
-      // Armazena o total de itens para calcular as páginas
+
+      setMediaItems(data.items);
       setTotalCount(data.totalCount);
 
     } catch (error) {
@@ -111,24 +118,68 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     } finally {
       setIsLoading(false);
     }
-  }, [activeList, page, searchTerm]); // Depende da página
-  // --- [FIM MUDANÇA 3] ---
+  }, [activeList, page, searchTerm]);
 
-  // Efeito Principal: Reage à versão dos dados E à mudança de página/aba/busca
+  // Efeitos
   useEffect(() => {
     fetchListData();
-  }, [fetchListData, dataVersionKey]); // <-- 'page' já está em fetchListData
+  }, [fetchListData, dataVersionKey]);
 
-  // Efeito para contagens: Roda na carga e quando a versão muda
   useEffect(() => {
     fetchCounts();
   }, [fetchCounts, dataVersionKey]);
 
-  // Efeito para resetar a página quando a aba ou busca muda
   useEffect(() => {
     setPage(1);
   }, [activeList, searchTerm]);
 
+
+  // --- Handler de Mudança Rápida de Status ---
+  const handleStatusChange = async (mediaId: string, newStatus: string) => {
+    setUpdatingId(mediaId);
+    try {
+      const res = await fetch(`/api/mediastatus`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: mediaId,
+          status: newStatus
+        }),
+      });
+
+      if (!res.ok) throw new Error("Falha ao mover item");
+
+      onDataChanged(); // Atualiza a lista globalmente
+
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const toggleWeekly = async (item: MediaStatusWithMedia) => {
+    setUpdatingId(item.id);
+    try {
+      const res = await fetch('/api/mediastatus', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: item.id,
+          status: item.status, // Mantém o status atual
+          isWeekly: !item.isWeekly // Inverte o valor atual
+        })
+      });
+
+      if (!res.ok) throw new Error("Falha ao atualizar");
+      onDataChanged(); // Atualiza a UI
+
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   // --- Handlers de Edição ---
   const handleEditClick = (item: MediaStatusWithMedia) => {
@@ -154,7 +205,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
       if (!res.ok) throw new Error("Falha ao atualizar");
       setIsEditOpen(false);
       setEditingItem(null);
-      onDataChanged(); 
+      onDataChanged();
     } catch (error) {
       console.error(error);
     } finally {
@@ -162,7 +213,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   };
 
-  // --- Handlers de Exclusão (com AlertDialog) ---
+  // --- Handlers de Exclusão ---
   const handleDeleteClick = (id: string) => {
     setItemToDelete(id);
     setIsDeleteOpen(true);
@@ -174,7 +225,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     try {
       const res = await fetch(`/api/mediastatus?id=${itemToDelete}`, { method: 'DELETE' });
       if (!res.ok) throw new Error("Falha ao remover");
-      onDataChanged(); 
+      onDataChanged();
     } catch (error) {
       console.error(error);
     } finally {
@@ -184,9 +235,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   };
 
-  // --- [MUDANÇA 4] Cálculo do total de páginas ---
   const totalPages = Math.ceil(totalCount / pageSize);
-  // --- [FIM MUDANÇA 4] ---
 
   return (
     <>
@@ -202,7 +251,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
               <Input
                 placeholder="Filtrar nesta lista..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)} 
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
               />
             </div>
@@ -210,8 +259,8 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
         </CardHeader>
         <CardContent>
           <Tabs value={activeList} onValueChange={(v) => setActiveList(v as StatusKey)} className="w-full">
-            
-            {/* Lista de Abas com Badges de Contagem */}
+
+            {/* Lista de Abas */}
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-6">
               <TabsTrigger value="TO_WATCH" className="flex gap-2">
                 Próximos Conteúdos <Badge variant="outline" className="border-purple-600 text-purple-600 ml-2">{counts.TO_WATCH}</Badge>
@@ -220,7 +269,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                 Essa Semana <Badge variant="outline" className="border-blue-600 text-blue-600 ml-2">{counts.WATCHING}</Badge>
               </TabsTrigger>
               <TabsTrigger value="WATCHED" className="flex gap-2">
-                Já Assistidos <Badge variant="outline" className="border-green-600 text-green-600 ml-2">{counts.WATCHED}</Badge>
+                Assistidos <Badge variant="outline" className="border-green-600 text-green-600 ml-2">{counts.WATCHED}</Badge>
               </TabsTrigger>
               <TabsTrigger value="DROPPED" className="flex gap-2">
                 Abandonados <Badge variant="outline" className="border-orange-600 text-orange-600 ml-2">{counts.DROPPED}</Badge>
@@ -228,7 +277,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
             </TabsList>
 
             <div className="min-h-[300px]">
-              {isLoading ? ( // <-- Removido 'page === 1' para mostrar o loading em toda mudança de página
+              {isLoading ? (
                 <div className="flex justify-center items-center h-40">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -236,7 +285,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                 <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
                   <ListIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p>
-                    {searchTerm 
+                    {searchTerm
                       ? `Nenhum item encontrado para "${searchTerm}".`
                       : "Nenhum item nesta lista."
                     }
@@ -245,8 +294,9 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {mediaItems.map((item) => (
-                    <Card key={item.id} className="overflow-hidden group hover:shadow-lg transition-all duration-300">
-                      <div className="relative aspect-[2/3] w-full overflow-hidden">
+                    <Card key={item.id} className="overflow-hidden group hover:shadow-lg transition-all duration-300 flex flex-col h-full">
+                      {/* Imagem (Sem overlay de botões) */}
+                      <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
                         {item.media.posterPath ? (
                           <Image
                             src={item.media.posterPath}
@@ -256,39 +306,121 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                           />
                         ) : (
-                          <div className="w-full h-full bg-muted flex items-center justify-center">
+                          <div className="w-full h-full flex items-center justify-center">
                             <Film className="h-12 w-12 text-muted-foreground opacity-50" />
                           </div>
                         )}
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2 p-4">
-                          <Button size="sm" variant="secondary" onClick={() => handleEditClick(item)}>
-                            Mover / Editar
-                          </Button>
-                          <Button size="icon" variant="destructive" onClick={() => handleDeleteClick(item.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+
                         <div className="absolute top-2 right-2">
-                          <Badge variant="secondary" className="shadow-sm backdrop-blur-md bg-black/50 text-white border-0">
-                            {item.media.mediaType === 'MOVIE' ? 'Filme' : 
-                             item.media.mediaType === 'SERIES' ? 'Série' : 
-                             item.media.mediaType === 'ANIME' ? 'Anime' : 'Outro'}
+                          <Badge variant="secondary" className="shadow-sm backdrop-blur-md bg-black/50 text-white border-0 text-[10px] px-1.5 h-5">
+                            {item.media.mediaType === 'MOVIE' ? 'Filme' :
+                              item.media.mediaType === 'SERIES' ? 'Série' :
+                                item.media.mediaType === 'ANIME' ? 'Anime' : 'Outro'}
                           </Badge>
                         </div>
                       </div>
-                      
-                      <div className="p-3 space-y-1">
-                        <h3 className="font-semibold truncate" title={item.media.title}>{item.media.title}</h3>
-                        {item.isWeekly && (
-                          <Badge variant="outline" className="text-xs border-blue-500 text-blue-500">Semanal</Badge>
-                        )}
+
+                      {/* Corpo do Card */}
+                      <div className="p-3 flex flex-col gap-2 flex-1">
+                        <div>
+                          <h3 className="font-semibold truncate text-sm" title={item.media.title}>{item.media.title}</h3>
+                          {/* Badge Visual se for Semanal */}
+                          {item.isWeekly && (
+                            <Badge variant="outline" className="text-[10px] border-blue-500 text-blue-500 mt-1 h-5 px-1">
+                              Semanal
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="mt-auto pt-2 space-y-2">
+
+                          {/* Botão Começar Agora */}
+                          {item.status === 'TO_WATCH' && (
+                            <Button
+                              size="sm"
+                              className="w-full bg-green-600 hover:bg-green-700 text-white h-8 text-xs"
+                              onClick={() => handleStatusChange(item.id, 'WATCHING')}
+                              disabled={updatingId === item.id}
+                            >
+                              {updatingId === item.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Play className="h-3 w-3 mr-1" /> Começar Agora</>}
+                            </Button>
+                          )}
+
+                          {/* Select de Status */}
+                          <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                            {updatingId === item.id && item.status !== 'TO_WATCH' ? (
+                              <div className="flex items-center justify-center w-full h-8 text-xs text-muted-foreground bg-muted/50 rounded">
+                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                Movendo...
+                              </div>
+                            ) : (
+                              <Select
+                                defaultValue={item.status}
+                                onValueChange={(value) => handleStatusChange(item.id, value)}
+                                disabled={updatingId === item.id}
+                              >
+                                <SelectTrigger className="h-8 w-full text-xs border-input bg-background/50 hover:bg-accent transition-colors">
+                                  <div className="flex items-center gap-2 overflow-hidden">
+                                    <ArrowRightLeft className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    <span className="truncate">
+                                      {item.status === 'TO_WATCH' && "Próximos Conteúdos"}
+                                      {item.status === 'WATCHING' && "Essa Semana"}
+                                      {item.status === 'WATCHED' && "Já Assistidos"}
+                                      {item.status === 'DROPPED' && "Abandonado"}
+                                    </span>
+                                  </div>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="TO_WATCH">Próximos Conteúdos</SelectItem>
+                                  <SelectItem value="WATCHING">Essa Semana</SelectItem>
+                                  <SelectItem value="WATCHED">Já Assistido</SelectItem>
+                                  <SelectItem value="DROPPED">Abandonado</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </div>
+
+                          {/* --- [NOVA LINHA: Semanal + Lixeira] --- */}
+                          <div className="flex items-center justify-between pt-2 border-t mt-1">
+
+                            {/* Checkbox Semanal */}
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id={`weekly-${item.id}`}
+                                checked={item.isWeekly}
+                                onCheckedChange={() => toggleWeekly(item)}
+                                disabled={updatingId === item.id}
+                                className="h-4 w-4"
+                              />
+                              <Label
+                                htmlFor={`weekly-${item.id}`}
+                                className="text-xs text-muted-foreground cursor-pointer font-normal select-none hover:text-foreground transition-colors"
+                              >
+                                Ep. Semanal
+                              </Label>
+                            </div>
+
+                            {/* Botão Excluir */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              onClick={() => handleDeleteClick(item.id)}
+                              title="Remover item"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          {/* --------------------------------------- */}
+
+                        </div>
                       </div>
                     </Card>
                   ))}
                 </div>
               )}
-              
-              {/* --- [MUDANÇA 5] Substituído 'hasMore' pelo bloco de paginação --- */}
+
+              {/* Paginação */}
               {totalPages > 1 && !isLoading && (
                 <div className="flex justify-between items-center pt-6 mt-6 border-t">
                   <Button
@@ -312,55 +444,10 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                   </Button>
                 </div>
               )}
-              {/* --- [FIM MUDANÇA 5] --- */}
-
             </div>
           </Tabs>
         </CardContent>
       </Card>
-
-      {/* Modal de Edição */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Item</DialogTitle>
-            <CardDescription>{editingItem?.media.title}</CardDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Mover para a lista:</Label>
-              <Select value={newStatus} onValueChange={(v) => setNewStatus(v as StatusKey)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TO_WATCH">Próximos Conteúdos (Futuro)</SelectItem>
-                  <SelectItem value="WATCHING">Essa Semana (Para Agendar)</SelectItem>
-                  <SelectItem value="WATCHED">Já Assistidos (Concluído)</SelectItem>
-                  <SelectItem value="DROPPED">Abandonados</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center space-x-2 border p-3 rounded-md">
-              <Switch id="weekly-mode" checked={isWeekly} onCheckedChange={setIsWeekly} />
-              <div className="flex-1">
-                <Label htmlFor="weekly-mode" className="cursor-pointer font-medium">Modo Semanal</Label>
-                <p className="text-xs text-muted-foreground">Ative se este item sai um episódio por semana.</p>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveChanges} disabled={isSaving}>
-              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Salvar Alterações
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Modal de Exclusão (AlertDialog) */}
       <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
@@ -373,8 +460,8 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDelete} 
+            <AlertDialogAction
+              onClick={confirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={isDeleting}
             >

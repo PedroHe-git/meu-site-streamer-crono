@@ -10,7 +10,7 @@ import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "d
 import { generateScheduleSummary } from "@/lib/ai"; // <--- IMPORTAR IA
 import { unstable_cache as cache } from "next/cache";
 
-// Cache de 10 minutos
+// Cache de 24 horas
 export const revalidate = 86400;
 
 // --- Tipos (Mantidos) ---
@@ -136,7 +136,7 @@ async function getUserProfileData(username: string, sessionUserId: string | unde
 
     aiSummary = await cache(
       async () => {
-        // Este console.log SÓ VAI APARECER a cada 12h (ou se o cronograma mudar)
+        // Este console.log SÓ VAI APARECER a cada 24h (ou se o cronograma mudar)
         console.log(`GERANDO NOVO RESUMO DE IA (CACHE) para: ${user.username}`);
         return generateScheduleSummary(user.username, scheduleItems);
       },

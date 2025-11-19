@@ -22,6 +22,7 @@ declare module "next-auth" {
     showWatchedList: boolean;
     showDroppedList: boolean;
     profileBannerUrl: string | null; // <-- ADICIONADO AQUI
+    discordWebhookUrl: string | null;
   }
 
   /**
@@ -49,6 +50,7 @@ declare module "next-auth/jwt" {
     showWatchingList: boolean;
     showWatchedList: boolean;
     showDroppedList: boolean;
-    profileBannerUrl: string | null; // <-- ADICIONADO AQUI
+    profileBannerUrl: string | null;
+    discordWebhookUrl: string | null; 
   }
 }

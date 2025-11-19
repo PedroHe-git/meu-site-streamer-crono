@@ -60,6 +60,8 @@ model User {
   profileVisibility ProfileVisibility @default(PUBLIC)
   twitchUsername   String?           @unique
 
+  discordWebhookUrl String?  @map("discord_webhook_url")
+
   // Relações
   accounts      Account[]
   sessions      Session[]

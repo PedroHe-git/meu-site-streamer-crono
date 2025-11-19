@@ -1,166 +1,72 @@
-// app/page.tsx (Agora com verificação de Role)
-
-"use client"; 
-
-import { useState, useEffect } from "react"; 
-import Link from "next/link";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/authOptions";
+import LandingPage from "./components/LandingPage";
+import Navbar from "./components/Navbar";
+import HomeFeeds from "./components/HomeFeeds"; 
+import UserSearch from "./components/UserSearch"; // <--- [NOVO] Importar
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; 
-import { useSession } from "next-auth/react"; 
-import { useRouter } from "next/navigation"; 
+import Link from "next/link";
+import { LayoutDashboard } from "lucide-react";
 
-import { UserRole } from "@prisma/client";
+export default async function Home() {
+  const session = await getServerSession(authOptions);
 
-// --- [INÍCIO DA MUDANÇA] ---
-// 1. Re-importamos a LandingPage
-import LandingPage from "@/app/components/LandingPage";
-// --- [FIM DA MUDANÇA] ---
-
-type CreatorSearchResult = {
-  username: string;
-  name: string | null;
-  image: string | null;
-};
-
-export default function HomePage() {
-  const { data: session, status } = useSession();
-  const router = useRouter(); 
-
-  const userRole = session?.user?.role as UserRole | undefined;
-  const isCreator = userRole === UserRole.CREATOR;
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [results, setResults] = useState<CreatorSearchResult[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [searchError, setSearchError] = useState("");
-
-  useEffect(() => {
-    if (status !== 'authenticated' || searchTerm.length < 2) {
-      setResults([]); 
-      setIsLoading(false);
-      return;
-    }
-    
-    setIsLoading(true);
-    setSearchError("");
-
-    const handler = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/users/search?q=${encodeURIComponent(searchTerm)}`);
-        if (!res.ok) {
-          throw new Error("Falha ao buscar criadores");
-        }
-        const data = await res.json();
-        setResults(data);
-      } catch (err: any) {
-        setSearchError(err.message || "Erro ao pesquisar.");
-        setResults([]); 
-      } finally {
-        setIsLoading(false);
-      }
-    }, 500); 
-
-    return () => clearTimeout(handler);
-
-  }, [searchTerm, status]); 
-
-  // --- [MUDANÇA] ---
-  // Removemos o useEffect que redirecionava
-  // --- [FIM DA MUDANÇA] ---
-
-
-  // --- Lógica de Renderização ---
-
-  // 1. Estado de Carregamento
-  if (status === 'loading') {
+  // 1. Visitante
+  if (!session) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">A carregar...</p>
-      </div>
+      <>
+        
+        <LandingPage />
+      </>
     );
   }
 
-  // 2. Estado Não Autenticado
-  if (status === 'unauthenticated') {
-    // --- [INÍCIO DA MUDANÇA] ---
-    // 2. Mostramos a LandingPage em vez de redirecionar
-    const handleGetStarted = () => {
-      router.push('/auth/register');
-    };
-    return <LandingPage onGetStarted={handleGetStarted} />;
-    // --- [FIM DA MUDANÇA] ---
-  }
+  // 2. Usuário Logado
+  const firstName = session.user.name?.split(" ")[0] || session.user.username;
 
-  // 3. Estado Autenticado
-  if (status === 'authenticated') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-8 pt-20">
-        <div className="text-center max-w-3xl w-full"> 
-          
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-            Olá, {session.user.name || session.user.username}!
-          </h1>
-          <p className="text-lg text-muted-foreground mb-8">
-            {isCreator 
-              ? "Explore criadores ou vá para o seu painel."
-              : "Explore e siga os seus criadores favoritos."
-            }
-          </p>
+  return (
+    <>
+      
+      <main className="min-h-screen bg-background pb-20">
+        
+        {/* Cabeçalho com Pesquisa */}
+        <div className="border-b bg-muted/20 sticky top-[57px] z-30 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
+            <div className="container mx-auto px-4 py-6">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                    
+                    {/* Saudação */}
+                    <div className="flex items-center gap-2 self-start md:self-center">
+                        <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 whitespace-nowrap">
+                            <span>👋</span> Olá, {firstName}!
+                        </h1>
+                    </div>
 
-          <div className="mb-8 relative">
-              <Input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Pesquisar criadores por nome ou username..."
-                className="w-full p-4 text-lg rounded-lg shadow-sm placeholder:text-muted-foreground"
-              />
-              {isLoading && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  A carregar...
+                    {/* Barra de Pesquisa Centralizada */}
+                    <div className="w-full md:max-w-md">
+                        <UserSearch />
+                    </div>
+
+                   
                 </div>
-              )}
-          </div>
-          
-          {searchError && <p className="text-red-600 mb-4">{searchError}</p>} 
-          {searchTerm.length >= 2 && !isLoading && (
-            <div className="mb-10 text-left bg-card p-4 rounded-lg shadow-md max-h-60 overflow-y-auto border">
-                {results.length === 0 ? (
-                  <p className="text-muted-foreground text-center">Nenhum criador encontrado.</p>
-                ) : (
-                  <ul className="space-y-3">
-                    {results.map((creator) => (
-                      <li key={creator.username}>
-                        <Link href={`/${creator.username}`} className="flex items-center gap-3 p-2 rounded hover:bg-accent transition-colors">
-                          <Avatar className="h-8 w-8">
-                              <AvatarImage src={creator.image ?? undefined} alt={creator.name || creator.username} />
-                              <AvatarFallback>{(creator.name || creator.username).substring(0, 1)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                              <span className="font-medium text-foreground">{creator.name || creator.username}</span>
-                              {creator.name && <span className="text-sm text-muted-foreground ml-1">(@{creator.username})</span>}
-                          </div>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          
-          <div className="flex justify-center">
-              {isCreator && (
-                  <Button asChild size="lg">
-                      <Link href="/dashboard">Ir para o Dashboard</Link>
-                  </Button>
-              )}
-          </div>
+                
+                {/* Botão Dashboard Mobile (Aparece embaixo em telas pequenas) */}
+                <div className="md:hidden mt-4 flex justify-center">
+                    <Link href="/dashboard" className="w-full">
+                        <Button variant="outline" className="w-full gap-2">
+                            <LayoutDashboard className="h-4 w-4" /> 
+                            Ir para o Meu Painel
+                        </Button>
+                    </Link>
+                </div>
 
+            </div>
         </div>
-      </div>
-    );
-  }
 
-  return null;
+        {/* Feeds (Seguindo / Descobrir) */}
+        <div className="container mx-auto px-4 py-8">
+            <HomeFeeds />
+        </div>
+      </main>
+    </>
+  );
 }

@@ -1,15 +1,11 @@
-// Este é o seu ficheiro, apenas com o nome da função alterado de HomePage para LandingPage
-"use client"; // Adicionado "use client" pois o 'onClick' requer
+"use client";
 
 import { Film, Calendar, Users, Sparkles, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button"; // Corrigido o caminho
-import { Card, CardContent } from "@/components/ui/card"; // Corrigido o caminho
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import Link from "next/link"; // <--- Importação do Link
 
-type LandingPageProps = {
-  onGetStarted: () => void;
-};
-
-export default function LandingPage({ onGetStarted }: LandingPageProps) {
+export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
       {/* Hero Section */}
@@ -20,30 +16,32 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             <Film className="h-16 w-16 text-white" />
           </div>
 
-          {/* Title */}
+          
           <h1 className="text-5xl md:text-7xl font-bold mb-6">
             <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               MeuCronograma
             </span>
           </h1>
 
-          {/* Subtitle */}
+          
           <p className="text-xl md:text-2xl text-muted-foreground mb-8">
             Organize filmes, séries e animes em listas personalizadas.<br />
             Crie agendas e compartilhe seu cronograma.
           </p>
 
-          {/* CTA Button */}
+          
           <Button
+            asChild
             size="lg"
-            onClick={onGetStarted}
             className="h-14 px-8 text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-xl"
           >
-            Começar Agora
-            <ArrowRight className="ml-2 h-5 w-5" />
+            <Link href="/auth/register">
+                Começar Agora
+                <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
           </Button>
 
-          {/* Badge */}
+          
           <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 rounded-full text-purple-700 dark:text-purple-300">
             <Sparkles className="h-4 w-4" />
             <span className="text-sm font-medium">100% Gratuito</span>
@@ -51,10 +49,10 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         </div>
       </section>
 
-      {/* Features Section */}
+      
       <section className="container mx-auto px-4 py-16">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {/* Feature 1 */}
+          
           <Card className="border-2 hover:border-purple-300 transition-all hover:shadow-xl">
             <CardContent className="p-8 text-center">
               <div className="inline-flex items-center justify-center p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl mb-6">
@@ -67,7 +65,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             </CardContent>
           </Card>
 
-          {/* Feature 2 */}
+          
           <Card className="border-2 hover:border-purple-300 transition-all hover:shadow-xl">
             <CardContent className="p-8 text-center">
               <div className="inline-flex items-center justify-center p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl mb-6">
@@ -80,7 +78,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             </CardContent>
           </Card>
 
-          {/* Feature 3 */}
+          
           <Card className="border-2 hover:border-purple-300 transition-all hover:shadow-xl">
             <CardContent className="p-8 text-center">
               <div className="inline-flex items-center justify-center p-4 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl mb-6">
@@ -95,7 +93,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         </div>
       </section>
 
-      {/* How It Works */}
+      
       <section className="container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-4xl font-bold text-center mb-12">
@@ -154,13 +152,16 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           <p className="text-xl text-purple-100 mb-8">
             Organize seu entretenimento de forma simples e eficiente
           </p>
+          {/* CTA Button Footer - Agora usa Link */}
           <Button
+            asChild
             size="lg"
-            onClick={onGetStarted}
             className="h-14 px-8 text-lg bg-white text-purple-600 hover:bg-purple-50"
           >
-            Criar Conta Grátis
-            <ArrowRight className="ml-2 h-5 w-5" />
+            <Link href="/auth/register">
+                Criar Conta Grátis
+                <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
           </Button>
         </div>
       </section>

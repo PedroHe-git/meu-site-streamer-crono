@@ -31,6 +31,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"; 
+import { Megaphone } from "lucide-react"; // Ícone
+import { Toaster } from "@/components/ui/toaster";
+
 
 // Tipos
 type MediaType = "MOVIE" | "SERIES" | "ANIME" | "OUTROS";
@@ -108,6 +111,28 @@ export default function ScheduleManager({
       month: "long",
     });
   };
+
+
+  const [isAnnouncing, setIsAnnouncing] = useState(false);
+
+const handleAnnounce = async () => {
+  const confirm = window.confirm("Deseja publicar o cronograma atual no Discord?");
+  if (!confirm) return;
+
+  setIsAnnouncing(true);
+  try {
+    const res = await fetch("/api/announce", { method: "POST" });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || "Erro ao anunciar");
+
+    alert("Cronograma enviado para o Discord com sucesso!");
+  } catch (error: any) {
+    alert(error.message);
+  } finally {
+    setIsAnnouncing(false);
+  }
+};
 
   const selectedMediaInfo = useMemo(() => {
     if (!selectedMedia) return null;
@@ -482,13 +507,35 @@ export default function ScheduleManager({
       {/* Coluna 2: Próximos Agendamentos */}
       <Card className="lg:col-span-2 shadow-lg border-2">
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Próximos Agendamentos</span>
-            <Badge>{upcomingSchedules.length}</Badge>
-          </CardTitle>
-          <CardDescription>
-            Itens que você planejou assistir (incluindo atrasados).
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2">
+                <span>Próximos Agendamentos</span>
+                <Badge>{upcomingSchedules.length}</Badge>
+              </CardTitle>
+              <CardDescription>
+                Itens que você planejou assistir (incluindo atrasados).
+              </CardDescription>
+            </div>
+            
+            {/* --- BOTÃO NOVO --- */}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleAnnounce} 
+              disabled={isAnnouncing || upcomingSchedules.length === 0}
+              className="gap-2 border-[#5865F2] text-[#5865F2] hover:bg-[#5865F2]/10 dark:text-[#7289da] dark:hover:bg-[#7289da]/20"
+            >
+              <Megaphone className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                {isAnnouncing ? "Enviando..." : "Anunciar no Discord"}
+              </span>
+              <span className="sm:hidden">
+                 {isAnnouncing ? "..." : "Anunciar"}
+              </span>
+            </Button>
+            {/* ------------------ */}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-3 max-h-[600px] overflow-y-auto">
