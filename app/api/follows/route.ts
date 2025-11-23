@@ -1,65 +1,51 @@
-// app/api/follows/route.ts
-
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/authOptions"; //
+import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
-import { Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache"; // Importar cache
 
-export const revalidate = 0;
-// Configura o runtime e a região (necessário para o Prisma no Vercel)
-export const runtime = 'nodejs';
+export const revalidate = 0; // Removemos este revalidate forçado de 0
 
-
-/**
- * API para BUSCAR todos os criadores que o utilizador logado segue.
- */
 export async function GET(request: Request) {
   try {
-    // 1. OBTER O UTILIZADOR LOGADO (O SEGUIDOR)
     const session = await getServerSession(authOptions);
     
     if (!session || !session.user?.id) {
-      // Se não estiver logado, retorna uma lista vazia em vez de um erro 401
-      // pois a homepage pode chamar isto mesmo se o utilizador não estiver logado.
       return NextResponse.json([], { status: 200 });
     }
     
     const visitorId = session.user.id;
 
-    // 2. BUSCAR OS 'FOLLOWS'
-    // Encontra todos os registos onde o 'followerId' é o do nosso visitante
-    const follows = await prisma.follows.findMany({
-      where: {
-        followerId: visitorId,
-      },
-      // 3. INCLUIR OS DADOS DO CRIADOR (O 'following')
-      // (Usa a relação 'following' do modelo Follows)
-      include: {
-        following: {
-          select: {
-            username: true,
-            name: true,
-            image: true, // Se você quiser mostrar o avatar
+    // --- CACHE: Lista de quem sigo ---
+    // Cacheia por 1 hora ou até o usuário seguir alguém novo (usando tags seria ideal, mas por tempo vamos de tempo fixo curto ou revalidação)
+    // Vamos usar unstable_cache para cachear essa consulta específica por usuário
+    const getCachedFollows = unstable_cache(
+      async () => {
+        return await prisma.follows.findMany({
+          where: { followerId: visitorId },
+          include: {
+            following: {
+              select: { username: true, name: true, image: true },
+            },
           },
-        },
+          take: 50,
+          orderBy: { following: { name: 'asc' } },
+        });
       },
-      take: 25, // Limita a 25 criadores por agora
-      orderBy: {
-        following: {
-          name: 'asc', // Ordena por nome
-        },
-      },
-    });
+      [`user-follows-${visitorId}`], // Chave única
+      { 
+        revalidate: 600, // Cache de 10 minutos (suficiente para não bater no banco a cada clique)
+        tags: [`user-follows-${visitorId}`] 
+      } 
+    );
 
-    // 4. Formata a resposta
-    // Extrai apenas os dados do criador (o 'following') da resposta
+    const follows = await getCachedFollows();
     const creators = follows.map(f => f.following);
 
     return NextResponse.json(creators, { status: 200 });
 
   } catch (error) {
     console.error("Erro na API de buscar follows:", error);
-    return new NextResponse(JSON.stringify({ error: "Erro interno do servidor." }), { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro interno" }), { status: 500 });
   }
 }
