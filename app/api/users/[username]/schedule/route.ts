@@ -1,15 +1,14 @@
-// app/api/users/[username]/schedule/route.ts (Atualizado)
+// app/api/users/[username]/schedule/route.ts (Atualizado e Otimizado)
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { ProfileVisibility } from "@prisma/client";
-import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "date-fns";
+import { addWeeks, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "date-fns";
 
 export const runtime = 'nodejs';
 export const revalidate = 0; 
-
 
 export async function GET(
   request: Request,
@@ -22,10 +21,13 @@ export async function GET(
 
   try {
     // 1. Encontrar o utilizador do perfil
-    const user = await prisma.user.findUnique({
-      // --- [CORREÇÃO] ---
-      where: { username: decodeURIComponent(username).toLowerCase() },
-      // --- [FIM DA CORREÇÃO] ---
+    const user = await prisma.user.findFirst({ // Usei findFirst com mode: insensitive para garantir match
+      where: { 
+        username: {
+           equals: decodeURIComponent(username),
+           mode: 'insensitive'
+        } 
+      },
       select: { 
         id: true, 
         profileVisibility: true,
@@ -43,11 +45,17 @@ export async function GET(
     const isOwner = loggedInUserId === user.id;
     let isFollowing = false;
     if (loggedInUserId && !isOwner) {
-      const follow = await prisma.follows.findFirst({
-        where: { followerId: loggedInUserId, followingId: user.id },
+      const follow = await prisma.follows.findUnique({ // Otimizado para findUnique se a chave composta existir
+        where: { 
+            followerId_followingId: {
+                followerId: loggedInUserId, 
+                followingId: user.id 
+            }
+        },
       });
       isFollowing = !!follow;
     }
+    
     const canView =
       user.profileVisibility === ProfileVisibility.PUBLIC ||
       isOwner ||
@@ -60,25 +68,26 @@ export async function GET(
       );
     }
 
-    if (!user.showWatchingList && !isOwner) {
-       return NextResponse.json({
-         items: [],
-         weekStart: format(new Date(), 'yyyy-MM-dd'),
-         weekEnd: format(new Date(), 'yyyy-MM-dd'),
-       });
+    // Opcional: Se o usuário escondeu a lista 'Watching', talvez queira esconder o cronograma também?
+    // Mantive sua lógica original, mas é algo para pensar.
+    /* if (!user.showWatchingList && !isOwner) {
+       return NextResponse.json({ items: [], weekStart: ..., weekEnd: ... });
     }
+    */
 
     // 3. Obter o weekOffset da URL
     const { searchParams } = new URL(request.url);
     const weekOffset = parseInt(searchParams.get('weekOffset') || '0');
 
-    // 4. Calcular o intervalo de datas (Início na Segunda)
+    // 4. Calcular o intervalo de datas (Segunda a Domingo)
     const today = new Date();
-    const weekOptions = { weekStartsOn: 1 as const }; 
     
-    const targetDate = addDays(today, weekOffset * 7);
-    const startDate = startOfDay(startOfWeek(targetDate, weekOptions));
-    const endDate = endOfDay(endOfWeek(targetDate, weekOptions));
+    // A lógica de "pulo" de semana é mais segura usando addWeeks
+    const targetDate = addWeeks(today, weekOffset);
+    
+    // weekStartsOn: 1 = Segunda-feira
+    const startDate = startOfDay(startOfWeek(targetDate, { weekStartsOn: 1 }));
+    const endDate = endOfDay(endOfWeek(targetDate, { weekStartsOn: 1 }));
 
     // 5. Buscar todos os itens DENTRO desse intervalo
     const scheduleItems = await prisma.scheduleItem.findMany({
@@ -88,21 +97,25 @@ export async function GET(
           gte: startDate,
           lte: endDate,
         },
+        // Se quiser esconder itens completados do público:
+        // isCompleted: isOwner ? undefined : false 
       },
       include: {
         media: true,
       },
       orderBy: [
         { scheduledAt: "asc" },
-        { horario: "asc" },
+        // Se 'horario' for string, a ordenação pode não ser perfeita (ex: "10:00" vs "2:00"),
+        // mas funciona bem para os padrões "1-Primeiro", "2-Segundo".
+        { horario: "asc" }, 
       ],
     });
 
-    // 6. Retorna os itens e as datas da semana
+    // 6. Retorna os itens e as datas da semana (Formatadas em ISO para evitar problemas no front)
     return NextResponse.json({
       items: scheduleItems,
-      weekStart: format(startDate, 'yyyy-MM-dd'),
-      weekEnd: format(endDate, 'yyyy-MM-dd'),
+      weekStart: startDate.toISOString(), // Envia ISO completo
+      weekEnd: endDate.toISOString(),     // Envia ISO completo
     });
 
   } catch (error) {

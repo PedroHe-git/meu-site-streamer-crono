@@ -1,15 +1,24 @@
-// app/components/PublicScheduleView.tsx
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Media, ScheduleItem } from "@prisma/client";
-import { Loader2, CalendarOff, Clock, Calendar, ChevronLeft, ChevronRight, ListOrdered, Tv, Sparkles, Snowflake } from "lucide-react";
+import { 
+  Loader2, 
+  CalendarOff, 
+  Clock, 
+  Calendar, 
+  ChevronLeft, 
+  ChevronRight, 
+  ListOrdered, 
+  Tv, 
+  Sparkles 
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
 import { Separator } from "@/components/ui/separator"; 
-import { format, eachDayOfInterval } from "date-fns";
+import { format, eachDayOfInterval, parseISO, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Carousel,
@@ -21,8 +30,17 @@ import {
 import { cn } from "@/lib/utils"; 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Tipos
-type ScheduleItemWithMedia = ScheduleItem & { media: Media };
+// Tipos Flexíveis
+type ScheduleItemWithMedia = {
+  id: string;
+  scheduledAt: string | Date;
+  horario: string | null;
+  seasonNumber: number | null;
+  episodeNumber: number | null;
+  episodeNumberEnd: number | null;
+  isCompleted: boolean;
+  media: Media;
+};
 
 type PublicScheduleViewProps = {
   username: string;
@@ -31,9 +49,23 @@ type PublicScheduleViewProps = {
   initialAiSummary: string | null; 
 };
 
+// --- CONSTANTES ---
+// Define quantas semanas no passado o usuário pode ver.
+// -1 permite ver a semana passada. 0 bloqueia tudo antes da semana atual.
+const MIN_WEEK_OFFSET = -1; 
+
 // --- Funções de Data ---
-function getUTCDate(dateString: string | Date): Date {
-  const date = new Date(dateString);
+function normalizeDate(dateInput: string | Date): Date | null {
+    if (!dateInput) return null;
+    try {
+        const date = typeof dateInput === 'string' ? parseISO(dateInput) : dateInput;
+        return isValid(date) ? date : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function getUTCDate(date: Date): Date {
   return new Date(
     date.getUTCFullYear(),
     date.getUTCMonth(),
@@ -43,12 +75,21 @@ function getUTCDate(dateString: string | Date): Date {
     date.getUTCSeconds()
   );
 }
-function formatSimpleDate(date: Date) {
+
+function formatSimpleDate(dateInput: string | Date) {
+  const date = normalizeDate(dateInput);
+  if (!date) return "";
   return format(getUTCDate(date), "PPP", { locale: ptBR }); 
 }
-function parseDateString(dateString: string) {
+
+function parseWeekRangeDate(dateString: string) {
+    if (!dateString) return new Date();
+    if (dateString.includes('T')) {
+        return parseISO(dateString);
+    }
     return new Date(dateString + 'T12:00:00'); 
 }
+
 const formatHorario = (horario: string | null): string | null => {
   if (horario === "1-Primeiro") return "Primeiro";
   if (horario === "2-Segundo") return "Segundo";
@@ -104,22 +145,31 @@ export default function PublicScheduleView({
 
   const scheduleMap = useMemo(() => {
     const groups = new Map<string, { date: Date; items: ScheduleItemWithMedia[] }>();
+    
     scheduleItems.forEach((item) => {
       if (!item.media) return; 
-      const dateKey = getUTCDate(item.scheduledAt).toDateString(); 
+      
+      const validDate = normalizeDate(item.scheduledAt);
+      if (!validDate) return;
+
+      const dateKey = getUTCDate(validDate).toDateString(); 
+      
       if (!groups.has(dateKey)) {
         groups.set(dateKey, {
-          date: new Date(item.scheduledAt),
+          date: validDate,
           items: [],
         });
       }
+      
       const dayItems = groups.get(dateKey)!.items;
       dayItems.push(item);
+      
       dayItems.sort((a, b) => {
         if (a.horario && b.horario) return a.horario.localeCompare(b.horario);
         return a.horario ? -1 : 1;
       });
     });
+    
     return groups;
   }, [scheduleItems]); 
 
@@ -127,15 +177,21 @@ export default function PublicScheduleView({
     if (!weekRange.start || !weekRange.end) {
       return [];
     }
-    const startDate = parseDateString(weekRange.start);
-    const endDate = parseDateString(weekRange.end);
-    return eachDayOfInterval({ start: startDate, end: endDate });
+    const startDate = parseWeekRangeDate(weekRange.start);
+    const endDate = parseWeekRangeDate(weekRange.end);
+    
+    try {
+        return eachDayOfInterval({ start: startDate, end: endDate });
+    } catch (e) {
+        console.error("Erro ao calcular intervalo de dias:", e);
+        return [];
+    }
   }, [weekRange]);
 
   const formatWeekRange = (start: string, end: string) => {
     if (!start || !end) return "Carregando...";
-    const startDate = parseDateString(start); 
-    const endDate = parseDateString(end);
+    const startDate = parseWeekRangeDate(start); 
+    const endDate = parseWeekRangeDate(end);
     const startDay = format(startDate, "dd");
     const startMonth = format(startDate, "MMM", { locale: ptBR });
     const endDay = format(endDate, "dd");
@@ -157,7 +213,6 @@ export default function PublicScheduleView({
   return (
     <div className="space-y-8">
       
-      {/* Resumo da IA (Festivo) */}
       {initialAiSummary && weekOffset === 0 && (
         <Alert className="mb-6 border-red-200 bg-gradient-to-r from-red-50 to-green-50 dark:from-red-950/30 dark:to-green-950/30 text-red-800 dark:text-red-200 shadow-sm">
           <Sparkles className="h-4 w-4 text-red-500" />
@@ -176,7 +231,9 @@ export default function PublicScheduleView({
           variant="outline" 
           size="sm"
           onClick={() => setWeekOffset(weekOffset - 1)}
-          disabled={isLoading}
+          // --- TRAVA APLICADA AQUI ---
+          disabled={isLoading || weekOffset <= MIN_WEEK_OFFSET}
+          className={cn(weekOffset <= MIN_WEEK_OFFSET && "opacity-50 cursor-not-allowed")}
         >
           <ChevronLeft className="h-4 w-4 mr-2" />
           Anterior
@@ -232,7 +289,7 @@ export default function PublicScheduleView({
             {dayGroup ? (
               <Carousel
                 opts={{ align: "start", loop: false }}
-                className="w-full group/carousel" // Adicionando group/carousel para controlar visibilidade dos botões
+                className="w-full group/carousel"
               >
                 <CarouselContent className="-ml-4 pb-8 pt-4"> 
                   {dayGroup.items.map((item) => {
@@ -249,7 +306,6 @@ export default function PublicScheduleView({
                       >
                         <div className="p-1 h-full relative group">
                           
-                          {/* --- EFEITO 1: LUZES DE NATAL --- */}
                           {isEpisodic && (
                             <div className="xmas-lights">
                                 <div className="light"></div>
@@ -259,7 +315,6 @@ export default function PublicScheduleView({
                             </div>
                           )}
 
-                          {/* --- EFEITO 2: NEVE ACUMULADA --- */}
                           {!isEpisodic && (
                              <>
                                 <div className="snow-top"></div>
@@ -267,7 +322,6 @@ export default function PublicScheduleView({
                              </>
                           )}
 
-                          {/* CARD DE ITEM */}
                           <Card className={cn(
                             "shadow-md h-full flex flex-col relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300 border-t-4",
                             isEpisodic ? "border-t-green-600 dark:border-t-green-500" : "border-t-red-500 dark:border-t-red-700"
@@ -314,7 +368,7 @@ export default function PublicScheduleView({
                                 <div className="mt-auto flex flex-col gap-1 text-sm text-muted-foreground pt-2 border-t border-dashed">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="h-3.5 w-3.5 text-red-500" />
-                                    <span className="text-xs">{formatSimpleDate(new Date(item.scheduledAt))}</span>
+                                    <span className="text-xs">{formatSimpleDate(item.scheduledAt)}</span>
                                   </div>
                                   {item.horario && (
                                     <div className="flex items-center gap-2">
@@ -332,11 +386,6 @@ export default function PublicScheduleView({
                   })}
                 </CarouselContent>
                 
-                {/* BOTÕES DE NAVEGAÇÃO DO CARROSSEL (Personalizados) 
-                  - Agora sempre visíveis em desktop (md:flex)
-                  - Ficam sobre o carrossel com z-index alto
-                  - Estilo circular vermelho e branco para destacar
-                */}
                 <CarouselPrevious 
                   className="hidden md:flex absolute -left-4 top-1/2 -translate-y-1/2 z-30 h-10 w-10 border-2 border-white bg-red-600 text-white shadow-lg hover:bg-red-700 hover:text-white hover:scale-110 transition-all duration-200"
                 >
@@ -354,14 +403,13 @@ export default function PublicScheduleView({
               <Card className="shadow-sm border-dashed border-2 bg-muted/20">
                 <CardContent className="p-8 text-center text-muted-foreground flex flex-col items-center">
                   <div className="bg-muted p-3 rounded-full mb-3">
-                     <Clock className="h-6 w-6 opacity-50" />
+                      <Clock className="h-6 w-6 opacity-50" />
                   </div>
                   <p>Nenhum item agendado para este dia.</p>
                 </CardContent>
               </Card>
             )}
 
-            {/* Divisória entre os dias */}
             {index < allDaysOfWeek.length - 1 && (
               <div className="relative py-8 md:py-12 flex items-center justify-center">
                 <Separator className="absolute w-full opacity-50" />
