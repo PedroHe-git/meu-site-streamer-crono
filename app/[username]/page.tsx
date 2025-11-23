@@ -1,3 +1,5 @@
+// app/[username]/page.tsx
+
 import { notFound } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -7,31 +9,66 @@ import { unstable_cache } from "next/cache";
 import { ProfileVisibility } from "@prisma/client";
 import { startOfWeek, endOfWeek, addDays, startOfDay, endOfDay, subHours } from "date-fns";
 
-// Cache de 1 hora para o perfil público
+// 1. CORREÇÃO: Importar o nome correto da função
+import { generateScheduleSummary } from "@/lib/ai"; 
+
 const getCachedUserProfile = async (username: string) => {
   const normalizedUsername = decodeURIComponent(username).toLowerCase();
 
   const getProfileData = unstable_cache(
     async () => {
-      const user = await prisma.user.findFirst({
+      let user = await prisma.user.findFirst({
         where: { 
-          username: {
-             equals: normalizedUsername,
-             mode: 'insensitive' 
-          }
+          username: { equals: normalizedUsername, mode: 'insensitive' }
         },
         include: {
-          _count: {
-            select: { followers: true, following: true }
-          }
+          _count: { select: { followers: true, following: true } }
         }
       });
 
       if (!user) return null;
 
+      const today = subHours(new Date(), 4);
+      const startOfCurrentWeek = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
+      const futureLimit = endOfDay(addDays(startOfCurrentWeek, 28));
+      
+      const scheduleItems = await prisma.scheduleItem.findMany({
+        where: {
+          userId: user.id,
+          scheduledAt: { gte: startOfCurrentWeek, lte: futureLimit }
+        },
+        include: { media: true },
+        orderBy: { scheduledAt: 'asc' },
+        take: 200
+      });
+
       const mediaStatuses = await prisma.mediaStatus.findMany({
         where: { userId: user.id }
       });
+
+      // --- LÓGICA DO HYPE MAN (IA) ---
+      if (!user.aiSummary && scheduleItems.length > 0) {
+        try {
+          console.log("🤖 Hype Man: Gerando resumo para", user.username);
+          
+          // 2. CORREÇÃO: Usar o nome correto E a ordem correta dos parâmetros
+          // A sua função pede: (username, items)
+          const aiText = await generateScheduleSummary(user.username, scheduleItems);
+
+          if (aiText) {
+            user = await prisma.user.update({
+              where: { id: user.id },
+              data: { aiSummary: aiText },
+              include: {
+                _count: { select: { followers: true, following: true } }
+              }
+            });
+            console.log("✅ Hype Man: Resumo salvo com sucesso!");
+          }
+        } catch (error) {
+          console.error("❌ Erro ao gerar Hype Man:", error);
+        }
+      }
 
       const listCounts = {
         TO_WATCH: mediaStatuses.filter(i => i.status === 'TO_WATCH').length,
@@ -39,24 +76,6 @@ const getCachedUserProfile = async (username: string) => {
         WATCHED: mediaStatuses.filter(i => i.status === 'WATCHED').length,
         DROPPED: mediaStatuses.filter(i => i.status === 'DROPPED').length,
       };
-
-      const today = subHours(new Date(), 4);
-      
-      const startOfCurrentWeek = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
-      const futureLimit = endOfDay(addDays(startOfCurrentWeek, 28));
-      
-      const scheduleItems = await prisma.scheduleItem.findMany({
-        where: {
-          userId: user.id,
-          scheduledAt: { 
-              gte: startOfCurrentWeek,
-              lte: futureLimit
-          }
-        },
-        include: { media: true },
-        orderBy: { scheduledAt: 'asc' },
-        take: 200
-      });
 
       return { user, listCounts, scheduleItems };
     },
@@ -67,17 +86,11 @@ const getCachedUserProfile = async (username: string) => {
   return getProfileData();
 };
 
-// Cache para verificar se segue (separado do perfil)
 const getCachedFollowStatus = async (followerId: string, followingId: string) => {
   return unstable_cache(
     async () => {
       const follow = await prisma.follows.findUnique({
-        where: {
-          followerId_followingId: {
-            followerId,
-            followingId
-          }
-        }
+        where: { followerId_followingId: { followerId, followingId } }
       });
       return !!follow;
     },
@@ -98,12 +111,9 @@ export default async function UserProfile({
 
   const cachedData = await getCachedUserProfile(params.username);
 
-  if (!cachedData || !cachedData.user) {
-    notFound();
-  }
+  if (!cachedData || !cachedData.user) notFound();
 
   const { user, listCounts, scheduleItems } = cachedData;
-
   const isOwner = sessionUserId === user.id;
   
   let isFollowing = false;
@@ -138,11 +148,7 @@ export default async function UserProfile({
       } else {
           dateString = new Date().toISOString(); 
       }
-
-      return {
-          ...item,
-          scheduledAt: dateString,
-      };
+      return { ...item, scheduledAt: dateString };
   });
 
   return (
@@ -156,7 +162,6 @@ export default async function UserProfile({
       // @ts-ignore
       initialSchedule={serializedSchedule}
       initialWeekRange={formattedWeekRange}
-      // CORREÇÃO AQUI: Passamos o campo aiSummary do banco em vez de null/page.tsx]
       aiSummary={user.aiSummary} 
     />
   );

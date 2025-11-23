@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/authOptions";
 // --- [FIM CORREÇÃO] ---
 import prisma from '@/lib/prisma';
 import { Prisma } from "@prisma/client";
+import { revalidateTag } from "next/cache"; // Importação necessária para o cache on-demand
 
 export const runtime = 'nodejs';
 
@@ -87,6 +88,14 @@ export async function POST(request: Request) {
       // Retornamos 'isWeekly' para o frontend saber qual mensagem mostrar.
       return { updatedMediaStatus, itemWasCompleted: true, isWeekly: mediaStatus.isWeekly };
     });
+
+    // --- REVALIDAÇÃO DE CACHE ---
+    // Limpa o cache do perfil público para refletir a conclusão imediatamente
+    if (user.username) {
+       const tag = `user-profile-${user.username.toLowerCase()}`;
+       revalidateTag(tag);
+       console.log(`Cache revalidado (COMPLETE) para: ${tag}`);
+    }
 
     // Retorna o resultado da transação
     return NextResponse.json(result);

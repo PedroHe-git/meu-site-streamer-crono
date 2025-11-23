@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
 import { Separator } from "@/components/ui/separator"; 
-import { format, addDays, parseISO, isValid } from "date-fns";
+import { format, addDays, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious,
@@ -42,6 +42,7 @@ const MIN_WEEK_OFFSET = -1;
 // --- FUNÇÕES DE DATA (UTC FORCE) ---
 function getUTCDate(dateInput: string | Date): Date {
   const date = typeof dateInput === 'string' ? parseISO(dateInput) : dateInput;
+  // Cria a data usando os componentes UTC para evitar que o fuso do navegador altere o dia
   return new Date(
     date.getUTCFullYear(),
     date.getUTCMonth(),
@@ -52,6 +53,7 @@ function getUTCDate(dateInput: string | Date): Date {
   );
 }
 
+// Formatação que usa a data "corrigida"
 function formatSimpleDate(dateInput: string | Date) {
   const utcDate = getUTCDate(dateInput);
   return format(utcDate, "PPP", { locale: ptBR }); 
@@ -107,6 +109,7 @@ export default function PublicScheduleView({
     fetchSchedule(weekOffset);
   }, [weekOffset, fetchSchedule, initialSchedule, initialWeekRange]); 
 
+  // --- MAPEAMENTO DE ITENS POR DIA (Usando UTC) ---
   const scheduleMap = useMemo(() => {
     const groups = new Map<string, { date: Date; items: ScheduleItemWithMedia[] }>();
     
@@ -135,6 +138,7 @@ export default function PublicScheduleView({
     return groups;
   }, [scheduleItems]); 
 
+  // --- GERAÇÃO DOS DIAS DA SEMANA (Segunda -> Domingo) ---
   const allDaysOfWeek = useMemo(() => {
     if (!weekRange.start) return [];
     
@@ -148,10 +152,15 @@ export default function PublicScheduleView({
     return days;
   }, [weekRange.start]);
 
+  // --- CORREÇÃO DA FORMATAÇÃO DO TEXTO ---
   const formatWeekRange = (start: string, end: string) => {
-    if (!start || !end) return "Carregando...";
+    if (!start) return "Carregando...";
+    
     const startDate = getUTCDate(start);
-    const endDate = getUTCDate(end);
+    
+    // CORREÇÃO: Força o cálculo visual do fim da semana (Start + 6 dias)
+    // Ignora o 'end' que vem da API para evitar arredondamentos de horário (23:59 -> 00:00 do dia seguinte)
+    const endDate = addDays(startDate, 6); 
     
     const startDay = format(startDate, "dd");
     const startMonth = format(startDate, "MMM", { locale: ptBR });
@@ -210,7 +219,7 @@ export default function PublicScheduleView({
         <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg border border-dashed">
           <CalendarOff className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
           <h3 className="text-xl font-semibold">Semana Silenciosa ❄️</h3>
-          <p className="text-muted-foreground">Nenhum agendamento encontrado.</p>
+          <p className="text-muted-foreground">Parece que o Papai Noel ainda não trouxe o cronograma.</p>
         </div>
       )}
 

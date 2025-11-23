@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { revalidateTag } from "next/cache"; // <--- IMPORTANTE: Importe a função de revalidação
 
+export const runtime = 'nodejs';
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -73,8 +75,12 @@ export async function POST(request: Request) {
 
     // --- A LINHA MÁGICA DE REVALIDAÇÃO ---
     // Isso invalida o cache da página de perfil público, forçando uma atualização na próxima visita.
-    // A tag 'user-profile' deve ser a mesma usada no unstable_cache em app/[username]/page.tsx
-    revalidateTag('user-profile'); 
+    // A tag 'user-profile-[username]' deve ser a mesma usada no unstable_cache em app/[username]/page.tsx
+    if (session.user.username) {
+       const tag = `user-profile-${session.user.username.toLowerCase()}`;
+       revalidateTag(tag); 
+       console.log(`Cache revalidado (POST) para: ${tag}`);
+    }
     // -------------------------------------
 
     return NextResponse.json(newScheduleItem);
@@ -100,15 +106,32 @@ export async function DELETE(request: Request) {
     }
   
     try {
+      // Primeiro verifica se o item existe e pertence ao usuário
+      const itemToDelete = await prisma.scheduleItem.findUnique({
+        where: { id: id },
+        select: { userId: true }
+      });
+
+      if (!itemToDelete) {
+          return new NextResponse("Item não encontrado", { status: 404 });
+      }
+
+      if (itemToDelete.userId !== session.user.id) {
+          return new NextResponse("Proibido", { status: 403 });
+      }
+
       await prisma.scheduleItem.delete({
         where: {
             id: id,
-            userId: session.user.id // Garante que só apaga o seu próprio item
         }
       });
 
       // --- REVALIDAÇÃO TAMBÉM NA DELEÇÃO ---
-      revalidateTag('user-profile');
+      if (session.user.username) {
+        const tag = `user-profile-${session.user.username.toLowerCase()}`;
+        revalidateTag(tag);
+        console.log(`Cache revalidado (DELETE) para: ${tag}`);
+      }
       // -------------------------------------
   
       return NextResponse.json({ success: true });
