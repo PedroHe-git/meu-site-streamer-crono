@@ -10,12 +10,13 @@ const cspValue = [
 
   "style-src 'self' 'unsafe-inline' fonts.googleapis.com;",
 
-  // --- [CORREÇÃO 1: Adicionado 'images.igdb.com' na CSP] ---
-  "img-src 'self' data: blob: image.tmdb.org cdn.myanimelist.net i.imgur.com images.igdb.com https://www.clarity.ms https://c.clarity.ms c.bing.com *.public.blob.vercel-storage.com;",
+  // --- [ATUALIZADO]: Adicionado 's4.anilist.co' para as capas da AniList ---
+  "img-src 'self' data: blob: image.tmdb.org cdn.myanimelist.net i.imgur.com images.igdb.com s4.anilist.co https://www.clarity.ms https://c.clarity.ms c.bing.com *.public.blob.vercel-storage.com;",
 
   "font-src 'self' fonts.gstatic.com;",
 
-  "connect-src 'self' *.neon.tech api.jikan.moe https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms https://i.clarity.ms https://n.clarity.ms vitals.vercel-insights.com *.public.blob.vercel-storage.com;",
+  // --- [ATUALIZADO]: Adicionei 'graphql.anilist.co' para a API funcionar ---
+  "connect-src 'self' *.neon.tech api.jikan.moe graphql.anilist.co https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms https://i.clarity.ms https://n.clarity.ms vitals.vercel-insights.com *.public.blob.vercel-storage.com;",
 
   "frame-src 'self';",
 ].join(' ');
@@ -35,7 +36,7 @@ const securityHeaders = [
   },
   {
     key: 'X-Frame-Options',
-    value: 'DENY' // Impede que seu site seja aberto num iframe (evita Clickjacking)
+    value: 'DENY'
   },
   {
     key: 'Referrer-Policy',
@@ -63,11 +64,16 @@ const nextConfig = {
         hostname: "i.imgur.com",
         pathname: "/**",
       },
-      // --- [CORREÇÃO 2: Adicionado Configuração do Next Image para IGDB] ---
       {
         protocol: "https",
         hostname: "images.igdb.com",
         pathname: "/igdb/image/upload/**",
+      },
+      // --- [NOVO]: Configuração para AniList ---
+      {
+        protocol: "https",
+        hostname: "s4.anilist.co",
+        pathname: "/**",
       },
       {
         protocol: "https",

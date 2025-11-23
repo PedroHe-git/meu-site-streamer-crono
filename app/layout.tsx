@@ -6,16 +6,14 @@ import AuthProvider from "./components/AuthProvider";
 import Navbar from "./components/Navbar";
 import { ThemeProvider } from "@/app/components/theme-provider";
 import Script from "next/script";
-import { Analytics } from "@vercel/analytics/next"
+import ChristmasSnow from "@/app/components/ChristmasSnow"; // <--- IMPORTAR
 
 const inter = Inter({ subsets: ["latin"] });
 
-// 🔹 Metadados do site
 export const metadata: Metadata = {
   title: "Meu Cronograma",
   description: "Organize seus filmes, séries e animes.",
 };
-
 
 const clarityId = process.env.NEXT_PUBLIC_CLARITY_ID;
 
@@ -27,7 +25,6 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        {/* Script do Microsoft Clarity — carrega apenas em produção */}
         {clarityId && process.env.NODE_ENV === "production" && (
           <Script
             id="microsoft-clarity"
@@ -51,6 +48,9 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
+            {/* Adiciona a Neve aqui, em cima de tudo */}
+            <ChristmasSnow />
+            
             <Navbar />
             <main>{children}</main>
           </ThemeProvider>

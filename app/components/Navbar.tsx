@@ -1,4 +1,4 @@
-// app/components/Navbar.tsx (Atualizado)
+// app/components/Navbar.tsx
 
 "use client";
 
@@ -14,12 +14,10 @@ import {
   SheetTitle, 
   SheetTrigger 
 } from "@/components/ui/sheet";
-import { Users } from "lucide-react"; 
+import { Users, Snowflake } from "lucide-react"; // <--- Importar Snowflake
 import FollowedCreatorsList from "./FollowedCreatorsList"; 
 
-// --- [MUDANÇA 1: Importar o Avatar] ---
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-// --- [NOVA IMPORTAÇÃO] ---
 import { cn } from "@/lib/utils";
 
 
@@ -29,8 +27,6 @@ export default function Navbar() {
   const userRole = session?.user?.role;
   const isCreator = userRole === "CREATOR";
   
-  // --- [MUDANÇA 2: Definir o Fallback do Avatar] ---
-  // Obter a primeira letra do nome ou username, ou "U"
   const fallbackLetter = (session?.user?.name || session?.user?.username || "U")
                          .charAt(0)
                          .toUpperCase();
@@ -39,33 +35,31 @@ export default function Navbar() {
     <nav className="bg-background border-b border-border shadow-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         
-        <Link href="/" className="text-2xl font-bold text-foreground hover:text-primary">
-          MeuCronograma
+        {/* Logo Festivo */}
+        <Link href="/" className="text-2xl font-bold text-foreground hover:text-primary flex items-center gap-2 group">
+          <span className="relative">
+            MeuCronograma
+            {/* Gorro de Natal "Simulado" com ícone */}
+            <Snowflake className="h-5 w-5 text-blue-400 absolute -top-3 -right-4 animate-pulse group-hover:rotate-180 transition-transform duration-700" />
+          </span>
         </Link>
         
-        <div className="flex items-center gap-3"> {/* Aumentado o gap para 3 */}
+        <div className="flex items-center gap-3"> 
           
-          {/* --- [INÍCIO DA CORREÇÃO DO FLICKER] --- */}
-          {/* Substituímos o "A carregar..." por placeholders (esqueletos)
-            que têm o mesmo tamanho dos botões. 
-            Isto impede que a navbar mude de tamanho e "empurre" a página.
-          */}
           {status === "loading" && (
             <div className="flex items-center gap-3">
               <div className="h-9 w-20 rounded-md bg-muted animate-pulse" />
               <div className="h-9 w-16 rounded-md bg-muted animate-pulse" />
             </div>
           )}
-          {/* --- [FIM DA CORREÇÃO] --- */}
 
-          
           {status === "unauthenticated" && (
             <>
               <Link href="/auth/register" className={buttonVariants({ variant: "ghost", className: "h-9 px-3 text-sm" })}>
                 Registrar
               </Link>
-              <Link href="/auth/signin" className={buttonVariants({ className: "h-9 px-4 text-sm" })}>
-                Entrar
+              <Link href="/auth/signin" className={buttonVariants({ className: "h-9 px-4 text-sm bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white border-none" })}>
+                 Entrar 🎅
               </Link>
             </>
           )}
@@ -91,10 +85,8 @@ export default function Navbar() {
             </>
           )}
 
-          {/* Botão do Tema */}
           <ThemeToggle />
 
-          {/* Menu "Seguindo" */}
           {status === 'authenticated' && (
             <Sheet>
               <SheetTrigger asChild>
@@ -105,7 +97,9 @@ export default function Navbar() {
               </SheetTrigger>
               <SheetContent className="w-full sm:max-w-md p-0 flex flex-col">
                 <SheetHeader className="p-6 pb-4">
-                  <SheetTitle className="text-xl">Criadores que você segue</SheetTitle>
+                  <SheetTitle className="text-xl flex items-center gap-2">
+                    Criadores que você segue <Snowflake className="h-4 w-4 text-blue-400"/>
+                  </SheetTitle>
                 </SheetHeader>
                 <div className="overflow-y-auto p-6 pt-0">
                   <FollowedCreatorsList />
@@ -114,18 +108,15 @@ export default function Navbar() {
             </Sheet>
           )}
 
-          {/* --- [MUDANÇA 3: Mostrar o Avatar do Utilizador] --- */}
-          {/* Só mostra se o utilizador estiver logado */}
           {status === 'authenticated' && session?.user && (
-            <Avatar className="h-9 w-9 border">
+            <Avatar className="h-9 w-9 border border-red-200 ring-2 ring-red-100 dark:ring-red-900">
               <AvatarImage 
                 src={session.user.image ?? undefined} 
                 alt={session.user.username} 
               />
-              <AvatarFallback>{fallbackLetter}</AvatarFallback>
+              <AvatarFallback className="bg-red-50 text-red-600 font-bold">{fallbackLetter}</AvatarFallback>
             </Avatar>
           )}
-          {/* --- [FIM DA MUDANÇA] --- */}
           
         </div>
       </div>

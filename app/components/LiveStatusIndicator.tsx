@@ -32,8 +32,8 @@ export default function LiveStatusIndicator({ username, className }: Props) {
     // Busca imediatamente
     fetchStatus();
 
-    // Define um intervalo para verificar novamente a cada 2 minutos
-    const interval = setInterval(fetchStatus, 120000); // 120000 ms = 2 minutos
+    // AUMENTAR O INTERVALO para 10 ou 15 minutos
+    const interval = setInterval(fetchStatus, 1000 * 60 * 15);
 
     // Limpa o intervalo quando o componente é desmontado
     return () => clearInterval(interval);

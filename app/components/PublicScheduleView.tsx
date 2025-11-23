@@ -3,12 +3,13 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Media, ScheduleItem } from "@prisma/client";
-import { Loader2, CalendarOff, Clock, Calendar, ChevronLeft, ChevronRight, ListOrdered, Tv } from "lucide-react";
+import { Loader2, CalendarOff, Clock, Calendar, ChevronLeft, ChevronRight, ListOrdered, Tv, Sparkles, Snowflake } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ImageWithFallback } from "@/components/ui/image-with-fallback";
-import { format, addDays, eachDayOfInterval } from "date-fns";
+import { Separator } from "@/components/ui/separator"; 
+import { format, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Carousel,
@@ -18,27 +19,19 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils"; 
-
-// --- [NOVO] 1. Importações para a IA ---
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Sparkles } from "lucide-react";
-// --- Fim das Novas Importações ---
 
 // Tipos
 type ScheduleItemWithMedia = ScheduleItem & { media: Media };
 
-// --- Props Atualizadas ---
 type PublicScheduleViewProps = {
   username: string;
   initialSchedule: ScheduleItemWithMedia[] | null;
   initialWeekRange: { start: string, end: string } | null;
-  
-  // [NOVO] 2. Recebe o resumo da IA
   initialAiSummary: string | null; 
 };
-// --- Fim das Props ---
 
-// --- Funções de Data (Mantidas) ---
+// --- Funções de Data ---
 function getUTCDate(dateString: string | Date): Date {
   const date = new Date(dateString);
   return new Date(
@@ -50,14 +43,11 @@ function getUTCDate(dateString: string | Date): Date {
     date.getUTCSeconds()
   );
 }
-function formatDate(date: Date) {
-  return format(getUTCDate(date), "EEEE, dd 'de' MMMM", { locale: ptBR }); 
-}
 function formatSimpleDate(date: Date) {
   return format(getUTCDate(date), "PPP", { locale: ptBR }); 
 }
 function parseDateString(dateString: string) {
-    return new Date(dateString + 'T12:00:00'); // Meio-dia local
+    return new Date(dateString + 'T12:00:00'); 
 }
 const formatHorario = (horario: string | null): string | null => {
   if (horario === "1-Primeiro") return "Primeiro";
@@ -69,25 +59,20 @@ const formatHorario = (horario: string | null): string | null => {
   if (horario) return "Prioridade definida"; 
   return null; 
 };
-// --- Fim das Funções de Data ---
-
 
 export default function PublicScheduleView({ 
   username, 
   initialSchedule, 
   initialWeekRange,
-  initialAiSummary // <-- [NOVO] 3. Recebe a prop da IA
+  initialAiSummary 
 }: PublicScheduleViewProps) {
   
-  // --- Estados (Mantidos) ---
   const [scheduleItems, setScheduleItems] = useState<ScheduleItemWithMedia[]>(initialSchedule || []);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialSchedule ? null : "Perfil privado ou sem dados.");
   const [weekOffset, setWeekOffset] = useState(0);
   const [weekRange, setWeekRange] = useState(initialWeekRange || { start: "", end: "" });
-  // --- Fim dos Estados ---
 
-  // --- Lógica de Fetch (Mantida) ---
   const fetchSchedule = useCallback(async (offset: number) => {
     setIsLoading(true);
     setError(null);
@@ -106,7 +91,6 @@ export default function PublicScheduleView({
     }
   }, [username]);
 
-  // --- useEffect (Mantido) ---
   useEffect(() => {
     if (weekOffset === 0) {
       setScheduleItems(initialSchedule || []);
@@ -117,9 +101,7 @@ export default function PublicScheduleView({
     }
     fetchSchedule(weekOffset);
   }, [weekOffset, fetchSchedule, initialSchedule, initialWeekRange]); 
-  // --- Fim do useEffect ---
 
-  // --- Mapeamento e Formatação (Mantidos) ---
   const scheduleMap = useMemo(() => {
     const groups = new Map<string, { date: Date; items: ScheduleItemWithMedia[] }>();
     scheduleItems.forEach((item) => {
@@ -163,9 +145,7 @@ export default function PublicScheduleView({
     }
     return `Semana de ${startDay} ${startMonth} a ${endDay} ${endMonth}`;
   };
-  // --- Fim do Mapeamento ---
   
-  // --- Renderização de Perfil Privado (Mantida) ---
   if (initialSchedule === null) {
     return (
       <div className="text-center p-8 text-muted-foreground">
@@ -177,20 +157,20 @@ export default function PublicScheduleView({
   return (
     <div className="space-y-8">
       
-      {/* --- [NOVO] 4. Renderização Condicional da IA --- */}
-      {/* O resumo só aparece se existir E se estivermos na semana atual (weekOffset === 0) */}
+      {/* Resumo da IA (Festivo) */}
       {initialAiSummary && weekOffset === 0 && (
-        <Alert className="mb-6 border-indigo-500/50 bg-indigo-50/50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300">
-          <Sparkles className="h-4 w-4 text-indigo-500" />
-          <AlertTitle>O Hype da Semana!</AlertTitle>
+        <Alert className="mb-6 border-red-200 bg-gradient-to-r from-red-50 to-green-50 dark:from-red-950/30 dark:to-green-950/30 text-red-800 dark:text-red-200 shadow-sm">
+          <Sparkles className="h-4 w-4 text-red-500" />
+          <AlertTitle className="flex items-center gap-2">
+             O Hype da Semana! <span className="animate-pulse">🎅</span>
+          </AlertTitle>
           <AlertDescription>
             {initialAiSummary}
           </AlertDescription>
         </Alert>
       )}
-      {/* --- [FIM DA NOVIDADE] --- */}
 
-      {/* Botões de Navegação da Semana */}
+      {/* Navegação */}
       <div className="flex items-center justify-between mb-6">
         <Button 
           variant="outline" 
@@ -219,120 +199,178 @@ export default function PublicScheduleView({
         </Button>
       </div>
 
-      {/* Estado de Erro */}
+      {/* Erro ou Vazio */}
       {error && !isLoading && (
-        <div className="text-center p-8 text-red-600">
-          <p>{error}</p>
-        </div>
+        <div className="text-center p-8 text-red-600"><p>{error}</p></div>
       )}
 
-      {/* Estado Vazio (se a API retornar vazio) */}
       {scheduleItems.length === 0 && !isLoading && !error && (
-        <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg">
-          <CalendarOff className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-xl font-semibold">Cronograma Vazio</h3>
-          <p className="text-muted-foreground">Este criador não agendou nenhum item {weekOffset === 0 ? "esta semana" : "nesta semana"}.</p>
+        <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg border border-dashed">
+          <CalendarOff className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
+          <h3 className="text-xl font-semibold">Semana Silenciosa ❄️</h3>
+          <p className="text-muted-foreground">Parece que o Pai Natal ainda não trouxe os agendamentos.</p>
         </div>
       )}
 
-      {/* Spinner de carregamento (para as semanas > 0) */}
       {isLoading && (
          <div className="flex justify-center items-center min-h-[200px]">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       )}
 
-      {/* Renderização dos dias (apenas se não estiver carregando) */}
-      {!isLoading && allDaysOfWeek.map((day) => {
+      {/* Grid de Dias */}
+      {!isLoading && allDaysOfWeek.map((day, index) => {
         const dayKey = day.toDateString(); 
         const dayGroup = scheduleMap.get(dayKey); 
 
         return (
-          <div key={dayKey}>
-            <h2 className="text-2xl font-bold mb-4 capitalize">
+          <div key={dayKey} className="relative">
+            <h2 className="text-2xl font-bold mb-4 capitalize flex items-center gap-2">
               {format(day, "EEEE, dd 'de' MMMM", { locale: ptBR })}
             </h2>
 
             {dayGroup ? (
               <Carousel
                 opts={{ align: "start", loop: false }}
-                className="w-full"
+                className="w-full group/carousel" // Adicionando group/carousel para controlar visibilidade dos botões
               >
-                <CarouselContent className="-ml-4">
-                  {dayGroup.items.map((item) => (
-                    <CarouselItem 
-                      key={item.id} 
-                      className={cn(
-                        "pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5 transition-all",
-                        item.isCompleted && "opacity-60 grayscale"
-                      )}
-                    >
-                      <div className="p-1">
-                        <Card className="shadow-md">
-                          <CardContent className="flex flex-col p-0">
-                            <ImageWithFallback
-                              src={item.media.posterPath}
-                              alt={item.media.title}
-                              width={500}
-                              height={750}
-                              className="w-full h-60 object-cover rounded-t-lg"
-                            />
-                            <div className="p-4 space-y-2">
-                              
-                              <div className="flex items-center justify-between gap-1">
-                                <Badge variant="outline">
-                                  {item.media.mediaType === "MOVIE" ? "Filme" :
-                                   item.media.mediaType === "SERIES" ? "Série" :
-                                   item.media.mediaType === "ANIME" ? "Anime" : "Outro"}
-                                </Badge>
-                                
-                                {(item.seasonNumber || item.episodeNumber) && (
-                                  <Badge variant="outline" 
-                                    className="flex items-center gap-1 flex-shrink-0 border-purple-500 text-purple-500 dark:border-purple-400 dark:text-purple-400">
-                                    <Tv className="h-3 w-3" />
-                                    <span>
-                                      {item.seasonNumber && `S${String(item.seasonNumber).padStart(2, '0')}`}
-                                      {item.episodeNumber && ` E${String(item.episodeNumber).padStart(2, '0')}`}
-                                    </span>
-                                  </Badge>
-                                )}
+                <CarouselContent className="-ml-4 pb-8 pt-4"> 
+                  {dayGroup.items.map((item) => {
+                    
+                    const isEpisodic = item.seasonNumber || item.episodeNumber;
+
+                    return (
+                      <CarouselItem 
+                        key={item.id} 
+                        className={cn(
+                          "pl-4 basis-1/2 md:basis-1/3 lg:basis-1/5 transition-all",
+                          item.isCompleted && "opacity-60 grayscale"
+                        )}
+                      >
+                        <div className="p-1 h-full relative group">
+                          
+                          {/* --- EFEITO 1: LUZES DE NATAL --- */}
+                          {isEpisodic && (
+                            <div className="xmas-lights">
+                                <div className="light"></div>
+                                <div className="light"></div>
+                                <div className="light"></div>
+                                <div className="light"></div>
+                            </div>
+                          )}
+
+                          {/* --- EFEITO 2: NEVE ACUMULADA --- */}
+                          {!isEpisodic && (
+                             <>
+                                <div className="snow-top"></div>
+                                <div className="snow-fall"></div>
+                             </>
+                          )}
+
+                          {/* CARD DE ITEM */}
+                          <Card className={cn(
+                            "shadow-md h-full flex flex-col relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300 border-t-4",
+                            isEpisodic ? "border-t-green-600 dark:border-t-green-500" : "border-t-red-500 dark:border-t-red-700"
+                          )}>
+                            
+                            <CardContent className="flex flex-col p-0 flex-1">
+                              <div className="relative">
+                                  <ImageWithFallback
+                                    src={item.media.posterPath}
+                                    alt={item.media.title}
+                                    width={500}
+                                    height={750}
+                                    className="w-full h-60 object-cover rounded-t-none"
+                                  />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60"></div>
                               </div>
 
-                              <h3 className="text-lg font-semibold truncate" title={item.media.title}>
-                                {item.media.title}
-                              </h3>
-                              
-                              <div className="flex flex-col items-start gap-1 text-sm text-muted-foreground">
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="h-4 w-4" />
-                                  <span>{formatSimpleDate(new Date(item.scheduledAt))}</span>
+                              <div className="p-4 space-y-3 flex-1 flex flex-col">
+                                
+                                <div className="flex items-center justify-between gap-1">
+                                  <Badge variant="secondary" className="text-[10px] bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-0 font-bold">
+                                    {item.media.mediaType === "MOVIE" ? "Filme" :
+                                     item.media.mediaType === "SERIES" ? "Série" :
+                                     item.media.mediaType === "ANIME" ? "Anime" :
+                                     item.media.mediaType === "GAME" ? "Jogo" : "Outro"}
+                                  </Badge>
+                                  
+                                  {(item.seasonNumber || item.episodeNumber) && (
+                                    <Badge variant="outline" 
+                                      className="flex items-center gap-1 flex-shrink-0 border-red-200 text-red-600 dark:border-red-800 dark:text-red-400 text-[10px]">
+                                      <Tv className="h-3 w-3" />
+                                      <span>
+                                        {item.seasonNumber && `S${String(item.seasonNumber).padStart(2, '0')}`}
+                                        {item.episodeNumber && ` E${String(item.episodeNumber).padStart(2, '0')}`}
+                                      </span>
+                                    </Badge>
+                                  )}
                                 </div>
-                                {item.horario && (
+
+                                <h3 className="text-lg font-bold leading-tight line-clamp-2" title={item.media.title}>
+                                  {item.media.title}
+                                </h3>
+                                
+                                <div className="mt-auto flex flex-col gap-1 text-sm text-muted-foreground pt-2 border-t border-dashed">
                                   <div className="flex items-center gap-2">
-                                    <ListOrdered className="h-4 w-4" />
-                                    <span>{formatHorario(item.horario)}</span>
+                                    <Calendar className="h-3.5 w-3.5 text-red-500" />
+                                    <span className="text-xs">{formatSimpleDate(new Date(item.scheduledAt))}</span>
                                   </div>
-                                )}
+                                  {item.horario && (
+                                    <div className="flex items-center gap-2">
+                                      <ListOrdered className="h-3.5 w-3.5 text-green-500" />
+                                      <span className="text-xs font-medium text-foreground">{formatHorario(item.horario)}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    </CarouselItem>
-                  ))}
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </CarouselItem>
+                    );
+                  })}
                 </CarouselContent>
-                <CarouselPrevious className="absolute left-[-20px] top-1/2 -translate-y-1/2 bg-background border-2 text-foreground/80 hover:text-foreground hover:bg-accent" />
-                <CarouselNext className="absolute right-[-20px] top-1/2 -translate-y-1/2 bg-background border-2 text-foreground/80 hover:text-foreground hover:bg-accent" />
+                
+                {/* BOTÕES DE NAVEGAÇÃO DO CARROSSEL (Personalizados) 
+                  - Agora sempre visíveis em desktop (md:flex)
+                  - Ficam sobre o carrossel com z-index alto
+                  - Estilo circular vermelho e branco para destacar
+                */}
+                <CarouselPrevious 
+                  className="hidden md:flex absolute -left-4 top-1/2 -translate-y-1/2 z-30 h-10 w-10 border-2 border-white bg-red-600 text-white shadow-lg hover:bg-red-700 hover:text-white hover:scale-110 transition-all duration-200"
+                >
+                   <ChevronLeft className="h-6 w-6" />
+                </CarouselPrevious>
+                <CarouselNext 
+                  className="hidden md:flex absolute -right-4 top-1/2 -translate-y-1/2 z-30 h-10 w-10 border-2 border-white bg-red-600 text-white shadow-lg hover:bg-red-700 hover:text-white hover:scale-110 transition-all duration-200"
+                >
+                   <ChevronRight className="h-6 w-6" />
+                </CarouselNext>
+
               </Carousel>
             
             ) : (
-              // Placeholder de dia vazio
-              <Card className="shadow-sm border-dashed">
-                <CardContent className="p-6 text-center text-muted-foreground">
+              <Card className="shadow-sm border-dashed border-2 bg-muted/20">
+                <CardContent className="p-8 text-center text-muted-foreground flex flex-col items-center">
+                  <div className="bg-muted p-3 rounded-full mb-3">
+                     <Clock className="h-6 w-6 opacity-50" />
+                  </div>
                   <p>Nenhum item agendado para este dia.</p>
                 </CardContent>
               </Card>
             )}
+
+            {/* Divisória entre os dias */}
+            {index < allDaysOfWeek.length - 1 && (
+              <div className="relative py-8 md:py-12 flex items-center justify-center">
+                <Separator className="absolute w-full opacity-50" />
+                <div className="relative bg-background px-4 text-muted-foreground">
+                  <Sparkles className="h-4 w-4 text-red-300 dark:text-red-800/70 animate-pulse" />
+                </div>
+              </div>
+            )}
+
           </div>
         );
       })}

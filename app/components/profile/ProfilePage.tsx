@@ -1,9 +1,8 @@
 // app/components/profile/ProfilePage.tsx
 "use client";
 
-import { User, Calendar, Film, Lock, Pen, Loader2 } from "lucide-react";
+import { Calendar, Film, Lock, Pen, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import FollowButton from "@/app/components/FollowButton";
@@ -14,9 +13,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Media, MediaStatus, ScheduleItem, ProfileVisibility, User as PrismaUser } from "@prisma/client";
+import { Media, MediaStatus, ScheduleItem, User as PrismaUser } from "@prisma/client";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-// Imports da IA (removidos daqui, pois estão no PublicScheduleView)
 
 // --- Tipos Atualizados ---
 type ListCounts = {
@@ -42,7 +40,7 @@ type ProfilePageProps = {
   listCounts: ListCounts;
   initialSchedule: ScheduleItemWithMedia[] | null;
   initialWeekRange: { start: string, end: string } | null;
-  aiSummary: string | null; // <-- Recebe a prop
+  aiSummary: string | null; 
 };
 // --- Fim dos Tipos ---
 
@@ -56,7 +54,7 @@ export default function ProfilePage({
   listCounts,
   initialSchedule,
   initialWeekRange,
-  aiSummary // <-- Recebe a prop
+  aiSummary
 }: ProfilePageProps) {
 
   const router = useRouter();
@@ -87,97 +85,117 @@ export default function ProfilePage({
   return (
     <div className="min-h-screen bg-background">
       
-      {/* Secção Hero (Corrigida com 'fill' e 'object-cover') */}
-      <div className="p-8 pt-28 md:pt-32 relative overflow-hidden">
+      {/* --- [ALTERAÇÃO VISUAL] Secção Hero com Imagem de Fundo --- */}
+      <div className="relative w-full h-[400px] md:h-[500px] overflow-hidden">
+        {/* Imagem de Fundo (Banner) */}
         {user.profileBannerUrl ? (
           <Image
             src={user.profileBannerUrl}
             alt="Banner do perfil"
             fill
-            className="absolute inset-0 z-0 object-cover"
+            className="object-cover"
             priority 
           />
         ) : (
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700"></div>
+          // Fallback: Gradiente bonito se não houver imagem
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900"></div>
         )}
-        <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-sm"></div>
         
-        <div className="container mx-auto max-w-5xl relative z-20">
-          <div className="flex flex-col md:flex-row items-center gap-8">
-            {/* Avatar */}
-            <div className="relative -mt-20 md:-mt-24 flex-shrink-0">
-              <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-white shadow-lg">
-                <AvatarImage src={user.image ?? undefined} alt={user.username} />
-                <AvatarFallback className="text-5xl">{fallbackLetter}</AvatarFallback>
-              </Avatar>
-              {user.twitchUsername && (
-                <LiveStatusIndicator
-                  username={user.twitchUsername}
-                  className="absolute bottom-2 right-2"
-                />
-              )}
-            </div>
-
-            {/* Informação do Utilizador */}
-            <div className="flex-1 text-center md:text-left text-white min-w-0">
-              <h1 className="text-3xl md:text-4xl font-bold truncate">{user.name || user.username}</h1>
-              <p className="text-sm text-purple-100 mb-2">@{user.username}</p>
-              <p className="text-purple-50 leading-relaxed max-w-xl mx-auto md:mx-0">
-                {user.bio || "Este utilizador ainda não adicionou uma bio."}
-              </p>
-              
-              <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-6 mt-4">
+        {/* Overlay Escuro (Gradiente) para legibilidade do texto */}
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent"></div>
+        
+        {/* Conteúdo do Perfil (Avatar + Texto) */}
+        <div className="absolute bottom-0 left-0 right-0 pb-8 pt-20 px-4">
+            <div className="container mx-auto max-w-5xl flex flex-col md:flex-row items-end gap-6 md:gap-8">
                 
-                {/* Stats de Seguidores */}
-                <div className="flex gap-4">
-                  <div className="text-center">
-                    <p className="font-bold text-lg">{user.followersCount}</p>
-                    <p className="text-xs text-purple-100">Seguidores</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="font-bold text-lg">{user.followingCount}</p>
-                    <p className="text-xs text-purple-100">A Seguir</p>
-                  </div>
+                {/* Avatar com Borda e Sombra */}
+                <div className="relative flex-shrink-0">
+                    <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-background shadow-xl ring-2 ring-border/20">
+                        <AvatarImage src={user.image ?? undefined} alt={user.username} className="object-cover"/>
+                        <AvatarFallback className="text-4xl bg-muted text-muted-foreground">{fallbackLetter}</AvatarFallback>
+                    </Avatar>
+                     {user.twitchUsername && (
+                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20">
+                           <LiveStatusIndicator username={user.twitchUsername} />
+                        </div>
+                    )}
                 </div>
 
-                {/* Botão de Seguir/Editar */}
-                <div className="flex-shrink-0 w-full md:w-auto">
-                  {isOwner ? (
-                    <Link 
-                      href="/dashboard" // <-- [CORRIGIDO] Underscore removido
-                      className={cn(
-                        buttonVariants({ variant: "outline", size: "sm" }), 
-                        "w-full md:w-36 bg-white/20 text-white border-white/30 hover:bg-white/30"
-                      )}
-                    >
-                      <Pen className="h-4 w-4 mr-2" />
-                      Editar Perfil
-                    </Link>
-                  ) : (
-                    <FollowButton
-                      isFollowingInitial={isFollowing}
-                      username={user.username}
-                      className="w-full md:w-36"
-                    />
-                  )} {/* <-- [CORRIGIDO] Underscore removido */}
+                {/* Informações de Texto */}
+                <div className="flex-1 w-full text-center md:text-left mb-2 md:mb-4 space-y-2">
+                     <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                        <h1 className="text-3xl md:text-5xl font-bold text-foreground drop-shadow-sm">
+                            {user.name || user.username}
+                        </h1>
+                        {/* Badges ou Tags poderiam vir aqui */}
+                     </div>
+                     
+                     <p className="text-muted-foreground font-medium">@{user.username}</p>
+                     
+                     {user.bio && (
+                        <p className="text-foreground/90 text-sm md:text-base max-w-2xl leading-relaxed line-clamp-3 md:line-clamp-none mx-auto md:mx-0">
+                            {user.bio}
+                        </p>
+                     )}
+
+                     {/* Stats e Botões */}
+                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 pt-4">
+                        <div className="flex items-center gap-1">
+                            <span className="font-bold text-foreground">{user.followersCount}</span>
+                            <span className="text-muted-foreground text-sm">Seguidores</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <span className="font-bold text-foreground">{user.followingCount}</span>
+                            <span className="text-muted-foreground text-sm">A Seguir</span>
+                        </div>
+
+                        <div className="md:ml-auto flex gap-2 w-full md:w-auto">
+                             {isOwner ? (
+                                <Link 
+                                href="/dashboard" 
+                                className={cn(buttonVariants({ variant: "outline" }), "w-full md:w-auto")}
+                                >
+                                <Pen className="h-4 w-4 mr-2" />
+                                Editar Perfil
+                                </Link>
+                            ) : (
+                                <FollowButton
+                                isFollowingInitial={isFollowing}
+                                username={user.username}
+                                className="w-full md:w-auto min-w-[120px]"
+                                />
+                            )}
+                        </div>
+                     </div>
                 </div>
-              </div>
             </div>
-          </div>
         </div>
       </div>
+      {/* --- [FIM DA ALTERAÇÃO VISUAL] --- */}
+
 
       {/* Conteúdo Principal (Abas) */}
-      <div className="container mx-auto max-w-5xl py-8">
+      <div className="container mx-auto max-w-5xl py-8 px-4">
         {!canViewProfile ? (
           // Mensagem de Perfil Privado
-          <Card className="shadow-lg border-2">
-            <CardContent className="p-12 text-center">
-              <Lock className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h2 className="text-2xl font-bold">Este perfil é privado</h2>
-              <p className="text-muted-foreground mt-2">
-                Siga este utilizador para ver o seu cronograma e conteúdos.
+          <Card className="shadow-lg border-2 border-dashed">
+            <CardContent className="p-16 text-center flex flex-col items-center">
+              <div className="bg-muted p-4 rounded-full mb-4">
+                 <Lock className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Este perfil é privado</h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                As listas e o cronograma de <strong>@{user.username}</strong> são visíveis apenas para seguidores aprovados.
               </p>
+              {!isFollowing && !isOwner && (
+                 <div className="mt-6">
+                    <FollowButton 
+                        isFollowingInitial={false} 
+                        username={user.username}
+                        className="min-w-[140px]"
+                    />
+                 </div>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -187,34 +205,39 @@ export default function ProfilePage({
             onValueChange={handleTabChange} 
             className="w-full"
           >
-            <div className="flex justify-center mb-4">
-              <TabsList className="grid w-full grid-cols-2 max-w-md">
-                <TabsTrigger value="cronograma">
+            <div className="flex justify-center md:justify-start mb-8 border-b pb-1">
+              <TabsList className="bg-transparent p-0 h-auto gap-6">
+                <TabsTrigger 
+                    value="cronograma"
+                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-base text-muted-foreground data-[state=active]:text-foreground transition-all hover:text-foreground"
+                >
                   <Calendar className="h-4 w-4 mr-2" />
                   Cronograma
                 </TabsTrigger>
-                <TabsTrigger value="listas">
+                <TabsTrigger 
+                    value="listas"
+                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-3 text-base text-muted-foreground data-[state=active]:text-foreground transition-all hover:text-foreground"
+                >
                   <Film className="h-4 w-4 mr-2" />
                   Conteúdos
                 </TabsTrigger>
               </TabsList>
             </div>
 
-            <Card className="shadow-lg border-2">
-              <CardContent className="p-6">
-                
+            {/* Removemos o Card container para um visual mais limpo, direto no fundo da página */}
+            <div className="animate-in fade-in duration-500 slide-in-from-bottom-4">
                 {/* --- ABA CRONOGRAMA --- */}
-                <TabsContent value="cronograma" className="mt-0">
+                <TabsContent value="cronograma" className="mt-0 focus-visible:outline-none">
                   <PublicScheduleView 
                     username={user.username}
                     initialSchedule={initialSchedule}
                     initialWeekRange={initialWeekRange}
-                    initialAiSummary={aiSummary} // <-- Passa o resumo para o componente
+                    initialAiSummary={aiSummary} 
                   />
                 </TabsContent>
 
                 {/* --- ABA LISTAS --- */}
-                <TabsContent value="listas" className="mt-0">
+                <TabsContent value="listas" className="mt-0 focus-visible:outline-none">
                   <UserListsClient
                     username={user.username}
                     showToWatchList={user.showToWatchList}
@@ -225,9 +248,7 @@ export default function ProfilePage({
                     counts={listCounts} 
                   />
                 </TabsContent>
-                
-              </CardContent>
-            </Card>
+            </div>
           </Tabs>
         )}
       </div>
