@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/authOptions";
 import ProfilePage from "@/app/components/profile/ProfilePage";
 import { unstable_cache } from "next/cache";
 import { ProfileVisibility, UserRole } from "@prisma/client";
-import { startOfWeek, endOfWeek, addDays } from "date-fns";
+import { startOfWeek, endOfWeek, addDays, startOfDay, endOfDay } from "date-fns"; // Importei startOfDay e endOfDay
 
 // Cache de 1 hora para o perfil público
 const getCachedUserProfile = unstable_cache(
@@ -40,8 +40,13 @@ const getCachedUserProfile = unstable_cache(
     };
 
     const today = new Date();
-    const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
-    const futureLimit = addDays(startOfCurrentWeek, 21); 
+    
+    // --- CORREÇÃO DE DATAS NO CACHE ---
+    // Força o início da semana na Segunda-feira (1) e zera o horário
+    const startOfCurrentWeek = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
+    
+    // Define um limite futuro seguro (3 semanas)
+    const futureLimit = endOfDay(addDays(startOfCurrentWeek, 21)); 
     
     const scheduleItems = await prisma.scheduleItem.findMany({
       where: {
@@ -105,29 +110,26 @@ export default async function UserProfile({
     followingCount: user._count.following
   };
 
+  // --- CORREÇÃO DE DATAS NO RENDER ---
   const today = new Date();
-  const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
-  const currentWeekEnd = endOfWeek(today, { weekStartsOn: 1 });
+  // Garante que o range inicial enviado pro front seja EXATAMENTE Segunda 00:00 a Domingo 23:59
+  const currentWeekStart = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
+  const currentWeekEnd = endOfDay(endOfWeek(today, { weekStartsOn: 1 }));
 
   const formattedWeekRange = {
       start: currentWeekStart.toISOString(),
       end: currentWeekEnd.toISOString()
   };
 
-  // --- CORREÇÃO DE DATA SEGURA ---
+  // Serialização segura das datas
   const serializedSchedule = scheduleItems.map(item => {
       let dateString: string;
       
-      // Verifica se já é um objeto Date válido
       if (item.scheduledAt instanceof Date && !isNaN(item.scheduledAt.getTime())) {
           dateString = item.scheduledAt.toISOString();
-      } 
-      // Se já for string, usa direto
-      else if (typeof item.scheduledAt === 'string') {
+      } else if (typeof item.scheduledAt === 'string') {
           dateString = item.scheduledAt;
-      } 
-      // Fallback de segurança para evitar crash
-      else {
+      } else {
           dateString = new Date().toISOString(); 
       }
 
@@ -145,7 +147,7 @@ export default async function UserProfile({
       canViewProfile={canViewProfile}
       activeTab={searchParams.tab as "cronograma" | "listas" | undefined}
       listCounts={listCounts}
-      // @ts-ignore: O componente cliente tratará a string
+      // @ts-ignore
       initialSchedule={serializedSchedule}
       initialWeekRange={formattedWeekRange}
       aiSummary={null} 
