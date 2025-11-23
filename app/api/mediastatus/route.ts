@@ -1,9 +1,9 @@
-// app/api/mediastatus/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
-import { MediaStatus, MediaType, MovieStatusType, Prisma } from "@prisma/client";
+import { MediaType, MovieStatusType, Prisma } from "@prisma/client";
+import { revalidateTag } from "next/cache";
 
 export const runtime = 'nodejs';
 export const revalidate = 0; 
@@ -21,13 +21,12 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    // 1. Receber igdbId no destructuring
     const { 
       status, 
       title, 
       tmdbId,
       malId,
-      igdbId, // <--- NOVO
+      igdbId,
       posterPath,
       mediaType,
       isWeekly 
@@ -37,47 +36,45 @@ export async function POST(request: Request) {
       return new NextResponse(JSON.stringify({ error: "Dados em falta (status, title, mediaType)" }), { status: 400 });
     }
     
-    // 2. Atualizar validação de ID obrigatório
+    // Validação de ID obrigatório (exceto para 'OUTROS')
     if (mediaType !== 'OUTROS' && !tmdbId && !malId && !igdbId) {
         return new NextResponse(JSON.stringify({ error: "ID (tmdbId, malId ou igdbId) é obrigatório para este tipo" }), { status: 400 });
     }
 
-    // 3. Lógica para Encontrar Mídia
+    // Lógica para Encontrar ou Criar Mídia
     let media;
-    let whereClause: any = { mediaType: mediaType }; // 'any' facilita a tipagem dinâmica do Prisma aqui
+    let whereClause: any = { mediaType: mediaType };
     
     if (mediaType === 'ANIME' && malId) {
         whereClause.malId = Number(malId);
     } else if ((mediaType === 'MOVIE' || mediaType === 'SERIES') && tmdbId) {
         whereClause.tmdbId = Number(tmdbId);
-    } else if (mediaType === 'GAME' && igdbId) { // <--- NOVO BLOCO
+    } else if (mediaType === 'GAME' && igdbId) {
         whereClause.igdbId = Number(igdbId);
     } else if (mediaType === 'OUTROS') {
         whereClause.title = title;
     }
 
     // Tenta encontrar
-    if (mediaType !== 'OUTROS' || mediaType === 'OUTROS') {
-        media = await prisma.media.findFirst({
-            where: whereClause,
-        });
-    }
+    media = await prisma.media.findFirst({
+        where: whereClause,
+    });
 
-    // 4. Lógica para Criar Mídia se não existir
+    // Se não existir, cria
     if (!media) {
       media = await prisma.media.create({
         data: {
           title,
           tmdbId: tmdbId ? Number(tmdbId) : null,
           malId: malId ? Number(malId) : null,
-          igdbId: igdbId ? Number(igdbId) : null, // <--- NOVO CAMPO
+          igdbId: igdbId ? Number(igdbId) : null,
           posterPath: posterPath || "",
           mediaType: mediaType, 
         },
       });
     }
-
-    // O restante (upsert do MediaStatus) continua igual
+    
+    // Upsert no Status (Salva na lista do usuário)
     const mediaStatus = await prisma.mediaStatus.upsert({
       where: {
         userId_mediaId: {
@@ -101,6 +98,9 @@ export async function POST(request: Request) {
         media: true,
       },
     });
+
+    // Limpa o cache do perfil público
+    revalidateTag('user-profile');
 
     return NextResponse.json(mediaStatus);
   } catch (error) {
@@ -136,11 +136,12 @@ export async function PUT(request: Request) {
     }
 
     const updateData: any = {};
-    if (status) {updateData.status = status;
+    if (status) {
+      updateData.status = status;
       if (status === 'WATCHED') {
         updateData.watchedAt = new Date();
       } else {
-        updateData.watchedAt = null; // Remove o timestamp se mover para "Abandonado"
+        updateData.watchedAt = null; 
       }
     }
     if (isWeekly !== undefined) updateData.isWeekly = isWeekly;
@@ -149,6 +150,9 @@ export async function PUT(request: Request) {
       where: { id: id },
       data: updateData,
     });
+
+    // Limpa o cache do perfil público
+    revalidateTag('user-profile');
 
     return NextResponse.json(updatedMediaStatus);
   } catch (error) {
@@ -168,14 +172,13 @@ export async function DELETE(request: Request) {
   const userId = session.user.id;
 
   const { searchParams } = new URL(request.url);
-  const id = searchParams.get("id"); // Espera o ID do MediaStatus na URL
+  const id = searchParams.get("id"); 
 
   if (!id) {
     return new NextResponse(JSON.stringify({ error: "ID do MediaStatus em falta na URL" }), { status: 400 });
   }
 
   try {
-    
     const mediaStatus = await prisma.mediaStatus.findUnique({
         where: { 
             id: id, 
@@ -185,7 +188,7 @@ export async function DELETE(request: Request) {
     });
 
     if (mediaStatus) {
-        // Apaga agendamentos pendentes para esta média
+        // Apaga agendamentos pendentes para esta mídia
         await prisma.scheduleItem.deleteMany({
             where: {
                 userId: userId,
@@ -200,6 +203,9 @@ export async function DELETE(request: Request) {
       where: { id: id, userId: userId }, 
     });
 
+    // Limpa o cache do perfil público
+    revalidateTag('user-profile');
+
     return new NextResponse(null, { status: 204 }); 
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
@@ -210,7 +216,7 @@ export async function DELETE(request: Request) {
   }
 }
 
-// --- FUNÇÃO GET (Listar Itens) ---
+// --- FUNÇÃO GET (Listar Itens com Correção de Órfãos) ---
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   
@@ -231,45 +237,42 @@ export async function GET(request: Request) {
   }
 
   try {
-    // --- [INÍCIO DA CORREÇÃO] ---
-    // 1. Buscamos TODOS os status primeiro, sem filtro ou ordenação de 'media'
+    // 1. Buscamos TODOS os itens do status
     const allMediaStatus = await prisma.mediaStatus.findMany({
         where: {
             userId: userId,
             status: status,
         },
         include: {
-            media: true, // Inclui a mídia
+            media: true, 
         },
     });
 
-    // 2. Filtramos em JavaScript (muito mais seguro contra dados nulos/órfãos)
+    // 2. Filtro Robusto (JavaScript)
     const filteredItems = allMediaStatus.filter(item => {
-        // Se 'media' for nulo (órfão) ou o título não bater, remove
+        // Segurança contra itens órfãos (sem mídia associada)
         if (!item.media || !item.media.title) {
-            console.warn(`[DATA_CLEANUP] Item órfão encontrado: MediaStatus ID ${item.id} (Media ID ${item.mediaId})`);
-            return false; // Remove órfãos
+            return false; 
         }
+        // Filtro de busca textual
         if (searchTerm) {
             return item.media.title.toLowerCase().includes(searchTerm.toLowerCase());
         }
-        return true; // Mantém se não houver searchTerm
+        return true;
     });
 
-    // 3. Ordenamos em JavaScript (mais seguro)
+    // 3. Ordenação Alfabética (JavaScript)
     filteredItems.sort((a, b) => {
-        // 'a.media.title' está seguro aqui por causa do filtro acima
         return (a.media.title || "").localeCompare(b.media.title || "");
     });
 
-    // 4. Paginação manual
+    // 4. Paginação Manual
     const totalCount = filteredItems.length;
     const skip = (page - 1) * pageSize;
     const paginatedItems = filteredItems.slice(skip, skip + pageSize);
-    // --- [FIM DA CORREÇÃO] ---
 
     return NextResponse.json({
-      items: paginatedItems, // Retorna os itens paginados
+      items: paginatedItems,
       totalCount,
       page,
       pageSize,

@@ -1,105 +1,60 @@
-// app/api/schedule/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
-import { Prisma, ScheduleItem } from "@prisma/client";
+import { revalidateTag } from "next/cache"; // <--- IMPORTANTE: Importe a função de revalidação
 
-export const runtime = 'nodejs';
-export const revalidate = 0; 
-
-// --- FUNÇÃO GET (Listar Agenda) ---
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session?.user?.id) {
     return new NextResponse("Não autorizado", { status: 401 });
   }
-  
-  const userId = session.user.id;
+
   const { searchParams } = new URL(request.url);
-  const list = searchParams.get("list");
+  const listType = searchParams.get("list"); // 'pending' ou 'completed'
 
-  let whereClause: Prisma.ScheduleItemWhereInput = {
-    userId: userId,
-  };
-
-  let orderByClause: Prisma.ScheduleItemOrderByWithRelationInput = {
-    scheduledAt: 'asc', // Padrão: mais antigos primeiro
-  };
-
-  // --- [INÍCIO DA CORREÇÃO] ---
-  if (list === 'pending') {
-    whereClause.isCompleted = false;
-    // REMOVEMOS o filtro de data (gte: new Date())
-    // Agora, ele vai buscar TODOS os itens não concluídos, incluindo os passados.
-    orderByClause = { scheduledAt: 'asc' }; // Os mais antigos (atrasados) aparecem primeiro
-    
-  } else if (list === 'completed') {
-    whereClause.isCompleted = true;
-    orderByClause = { scheduledAt: 'desc' }; // Os mais recentes concluídos aparecem primeiro
-  }
-  // --- [FIM DA CORREÇÃO] ---
+  const userId = session.user.id;
 
   try {
     const scheduleItems = await prisma.scheduleItem.findMany({
-      where: whereClause,
-      include: {
-        media: true, // Inclui os dados da mídia (poster, título)
+      where: {
+        userId: userId,
+        ...(listType === 'pending' ? { isCompleted: false } : {}),
+        ...(listType === 'completed' ? { isCompleted: true } : {}),
       },
-      orderBy: orderByClause,
-      // Se a lista de concluídos ficar muito grande, adicione paginação aqui
-      ...(list === 'completed' && { take: 10 }), // Ex: Limita a 10 concluídos
+      include: {
+        media: true,
+      },
+      orderBy: {
+        scheduledAt: 'asc',
+      },
     });
 
     return NextResponse.json(scheduleItems);
   } catch (error) {
-    console.error("[SCHEDULE_GET]", error);
-    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
+    console.error("Erro ao buscar agendamentos:", error);
+    return new NextResponse("Erro Interno", { status: 500 });
   }
 }
 
-// --- FUNÇÃO POST (Adicionar na Agenda) ---
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session?.user?.id) {
     return new NextResponse("Não autorizado", { status: 401 });
   }
-  
-  const userId = session.user.id;
 
   try {
     const body = await request.json();
-    const { 
-      mediaId, 
-      scheduledAt, 
-      horario, 
-      seasonNumber, 
-      episodeNumber, 
-      episodeNumberEnd 
-    } = body;
+    const { mediaId, scheduledAt, horario, seasonNumber, episodeNumber, episodeNumberEnd } = body;
+    const userId = session.user.id;
 
     if (!mediaId || !scheduledAt) {
-      return new NextResponse(JSON.stringify({ error: "ID da Mídia e Data são obrigatórios" }), { status: 400 });
+      return new NextResponse("Dados inválidos", { status: 400 });
     }
 
-    // Verifica se o MediaStatus (o item na lista) pertence ao utilizador
-    const mediaStatus = await prisma.mediaStatus.findFirst({
-      where: {
-        mediaId: mediaId,
-        userId: userId,
-      },
-    });
-
-    if (!mediaStatus) {
-      return new NextResponse(JSON.stringify({ error: "Este item não está nas suas listas" }), { status: 404 });
-    }
-    // (Opcional) Verifica se o status é 'WATCHING'
-    if (mediaStatus.status !== 'WATCHING') {
-       return new NextResponse(JSON.stringify({ error: "Apenas itens da lista 'Esta Semana' podem ser agendados" }), { status: 400 });
-    }
-
+    // Cria o item no banco
     const newScheduleItem = await prisma.scheduleItem.create({
       data: {
         userId: userId,
@@ -116,48 +71,49 @@ export async function POST(request: Request) {
       }
     });
 
+    // --- A LINHA MÁGICA DE REVALIDAÇÃO ---
+    // Isso invalida o cache da página de perfil público, forçando uma atualização na próxima visita.
+    // A tag 'user-profile' deve ser a mesma usada no unstable_cache em app/[username]/page.tsx
+    revalidateTag('user-profile'); 
+    // -------------------------------------
+
     return NextResponse.json(newScheduleItem);
+
   } catch (error) {
-    console.error("[SCHEDULE_POST]", error);
-    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
+    console.error("Erro ao criar agendamento:", error);
+    return new NextResponse("Erro Interno", { status: 500 });
   }
 }
 
-
-// --- FUNÇÃO DELETE (Remover da Agenda) ---
 export async function DELETE(request: Request) {
-  const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions);
   
-  if (!session?.user?.id) {
-    return new NextResponse("Não autorizado", { status: 401 });
-  }
-  
-  const userId = session.user.id;
-
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get("id"); // Espera o ID na URL
-
-  if (!id) {
-    return new NextResponse(JSON.stringify({ error: "ID do agendamento faltando" }), { status: 400 });
-  }
-
-  try {
-    // Verifica se o item pertence ao utilizador antes de apagar
-    const scheduleItem = await prisma.scheduleItem.findUnique({
-      where: { id: id },
-    });
-
-    if (!scheduleItem || scheduleItem.userId !== userId) {
-      return new NextResponse("Não autorizado", { status: 403 });
+    if (!session?.user?.id) {
+      return new NextResponse("Não autorizado", { status: 401 });
     }
+  
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+  
+    if (!id) {
+        return new NextResponse("ID faltando", { status: 400 });
+    }
+  
+    try {
+      await prisma.scheduleItem.delete({
+        where: {
+            id: id,
+            userId: session.user.id // Garante que só apaga o seu próprio item
+        }
+      });
 
-    await prisma.scheduleItem.delete({
-      where: { id: id },
-    });
-
-    return new NextResponse(null, { status: 204 }); // Sucesso
-  } catch (error) {
-    console.error("[SCHEDULE_DELETE]", error);
-    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
-  }
+      // --- REVALIDAÇÃO TAMBÉM NA DELEÇÃO ---
+      revalidateTag('user-profile');
+      // -------------------------------------
+  
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      console.error("Erro ao apagar agendamento:", error);
+      return new NextResponse("Erro Interno", { status: 500 });
+    }
 }

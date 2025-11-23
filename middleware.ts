@@ -4,9 +4,9 @@ import { UserRole } from "@prisma/client";
 
 export default withAuth(
   function middleware(req: NextRequestWithAuth) {
+    
     // --- MODO DE MANUTENÇÃO ---
-    // Se a variável de ambiente MAINTENANCE_MODE for "true", bloqueia o acesso
-    // Retorna uma página HTML estilizada (Status 503 Service Unavailable)
+    // Se ativado, bloqueia TUDO que não seja arquivo estático.
     if (process.env.MAINTENANCE_MODE === "true") {
       return new NextResponse(
         `
@@ -23,8 +23,8 @@ export default withAuth(
                     align-items: center;
                     height: 100vh;
                     margin: 0;
-                    background-color: #0f172a; /* Fundo escuro moderno */
-                    color: #e2e8f0; /* Texto claro */
+                    background-color: #0f172a;
+                    color: #e2e8f0;
                     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                     text-align: center;
                 }
@@ -35,7 +35,7 @@ export default withAuth(
                     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
                     max-width: 400px;
                 }
-                h1 { margin-bottom: 1rem; color: #fbbf24; } /* Amarelo */
+                h1 { margin-bottom: 1rem; color: #fbbf24; }
                 p { line-height: 1.5; margin-bottom: 1.5rem; }
                 .icon { font-size: 3rem; margin-bottom: 1rem; display: block; }
             </style>
@@ -51,38 +51,46 @@ export default withAuth(
         </body>
         </html>
         `,
-        { status: 503, headers: { "content-type": "text/html" } }
+        { 
+            status: 503, 
+            headers: { "content-type": "text/html" } 
+        }
       );
     }
-    
+
+    // --- LÓGICA NORMAL (Só executa se NÃO estiver em manutenção) ---
     const path = req.nextUrl.pathname;
     const token = req.nextauth.token;
 
-    // 1. Proteção do Dashboard (Apenas Criadores Logados)
+    // Proteção do Dashboard
     if (path.startsWith('/dashboard')) {
       if (!token) {
-         // O withAuth já redireciona para login se retornar false no 'authorized', 
-         // mas aqui garantimos a lógica de role
+         // Redireciona para login se não houver token
          return NextResponse.redirect(new URL('/auth/signin', req.url));
       } 
       if (token.role !== UserRole.CREATOR) {
-         // Se logado mas não for criador, manda para home
+         // Redireciona para home se não for criador
          return NextResponse.redirect(new URL('/', req.url));
       }
     }
     
-    // 2. Se for qualquer outra rota pública (Home, Perfil, etc), permite passar.
     return NextResponse.next();
   },
   {
     callbacks: {
       authorized: ({ token, req }) => {
-        // --- CORREÇÃO CRÍTICA ---
-        // Se for rota de dashboard, EXIGE token.
+        // Se estiver em manutenção, liberamos a autorização para que o middleware (acima)
+        // possa capturar a requisição e mostrar a tela de manutenção HTML.
+        // Se retornarmos 'false' aqui, o NextAuth força o redirecionamento para '/auth/signin'
+        // ANTES de mostrarmos a tela de manutenção.
+        if (process.env.MAINTENANCE_MODE === "true") {
+            return true; 
+        }
+
+        // Lógica normal de proteção de rotas
         if (req.nextUrl.pathname.startsWith('/dashboard')) {
             return !!token;
         }
-        // Para TODAS as outras rotas (Home, Perfil, etc), PERMITE acesso mesmo sem token.
         return true; 
       }
     },
@@ -93,13 +101,11 @@ export default withAuth(
 );
 
 export const config = { 
-    // O matcher agora observa tudo para aplicar o modo manutenção se necessário,
-    // mas a lógica de 'authorized' acima libera o acesso público.
+    // O matcher define onde o middleware roda.
+    // Para o modo manutenção funcionar em TODO o site, precisamos pegar tudo.
+    // O regex abaixo diz: "Pegue tudo, MENOS arquivos estáticos, imagens e favicon".
+    // Removemos 'auth/signin' e 'auth/register' da exclusão para que eles TAMBÉM mostrem a tela de manutenção.
     matcher: [
-        '/dashboard/:path*', 
-        '/api/:path*', 
-        // O matcher negativo abaixo garante que o middleware rode na home '/',
-        // mas ignora arquivos estáticos e rotas de autenticação
-        '/((?!_next/static|_next/image|favicon.ico|auth/signin|auth/register).*)' 
+        '/((?!_next/static|_next/image|favicon.ico).*)'
     ] 
 };

@@ -1,203 +1,160 @@
-// app/[username]/page.tsx
-
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/authOptions";
-import prisma from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import prisma from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/authOptions";
 import ProfilePage from "@/app/components/profile/ProfilePage";
-import { ProfileVisibility, Prisma, MovieStatusType, Media, ScheduleItem, User } from "@prisma/client";
-import { addDays, startOfWeek, endOfWeek, startOfDay, endOfDay, format } from "date-fns";
-import { generateScheduleSummary } from "@/lib/ai"; // <--- IMPORTAR IA
-import { unstable_cache as cache } from "next/cache";
+import { unstable_cache } from "next/cache";
+import { ProfileVisibility, UserRole } from "@prisma/client";
 
-// Cache de 24 horas
-export const revalidate = 86400;
+// --- 1. Função de Busca Cacheada (A Mágica acontece aqui) ---
+// Esta função envolve as queries do Prisma com cache
+const getCachedUserProfile = unstable_cache(
+  async (username: string) => {
+    // Normaliza o username para busca (case insensitive)
+    const normalizedUsername = decodeURIComponent(username).toLowerCase();
 
-// --- Tipos (Mantidos) ---
-type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
-
-type ProfileUser = User & {
-  followersCount: number;
-  followingCount: number;
-};
-
-type ScheduleItemWithMedia = ScheduleItem & { media: Media };
-type ListCounts = {
-  TO_WATCH: number;
-  WATCHING: number;
-  WATCHED: number;
-  DROPPED: number;
-};
-// --- Fim dos Tipos ---
-
-
-/**
- * Função de busca de dados unificada
- */
-async function getUserProfileData(username: string, sessionUserId: string | undefined) {
-  
-  // 1. Buscar o Usuário (Mantido)
-  const user = await prisma.user.findFirst({
-    where: {
-      username: {
-        equals: decodeURIComponent(username),
-        mode: 'insensitive'
+    // Busca o Usuário Principal
+    const user = await prisma.user.findFirst({
+      where: { 
+        username: {
+           equals: normalizedUsername,
+           mode: 'insensitive' 
+        }
+      },
+      include: {
+        _count: {
+          select: { followers: true, following: true }
+        }
       }
-    },
-    include: {
-      _count: {
-        select: {
-          followers: true,
-          following: true,
-        },
-      },
-    },
-  });
-
-  if (!user || user.role !== "CREATOR") {
-    notFound(); 
-  }
-
-  // 2. Verificar permissões (Mantido)
-  let isFollowing = false;
-  const isOwner = user.id === sessionUserId;
-
-  if (sessionUserId && !isOwner) {
-    const followRelation = await prisma.follows.findUnique({
-      where: {
-        followerId_followingId: {
-          followerId: sessionUserId,
-          followingId: user.id,
-        },
-      },
-    });
-    isFollowing = !!followRelation;
-  }
-
-  // 3. Checar visibilidade (Mantido)
-  const canViewProfile =
-    user.profileVisibility === ProfileVisibility.PUBLIC ||
-    isOwner ||
-    (user.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY && isFollowing);
-
-  const profileUserData: ProfileUser = {
-    ...user,
-    followersCount: user._count.followers,
-    followingCount: user._count.following,
-  };
-
-  // Valores padrão
-  let initialSchedule: ScheduleItemWithMedia[] | null = null;
-  let weekRange: { start: string, end: string } | null = null;
-  let listCounts: ListCounts = { TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 };
-  let aiSummary: string | null = null; // <-- [NOVO] Adiciona a variável da IA
-
-  // 4. Se puder ver, busca os dados
-  if (canViewProfile) {
-    const listCountsQuery = prisma.mediaStatus.groupBy({
-      by: ['status'],
-      where: { userId: user.id },
-      _count: { status: true },
     });
 
-    const weekOptions = { weekStartsOn: 1 as const };
-    const startDate = startOfDay(startOfWeek(new Date(), weekOptions));
-    const endDate = endOfDay(endOfWeek(new Date(), weekOptions));
+    if (!user) return null;
+
+    // Busca Listas (Counts)
+    const mediaStatuses = await prisma.mediaStatus.findMany({
+      where: { userId: user.id }
+    });
+
+    const listCounts = {
+      TO_WATCH: mediaStatuses.filter(i => i.status === 'TO_WATCH').length,
+      WATCHING: mediaStatuses.filter(i => i.status === 'WATCHING').length,
+      WATCHED: mediaStatuses.filter(i => i.status === 'WATCHED').length,
+      DROPPED: mediaStatuses.filter(i => i.status === 'DROPPED').length,
+    };
+
+    // Busca Cronograma (Itens não completados ou recentes)
+    // Pegamos um range amplo para o cache ser útil por mais tempo
+    const today = new Date();
+    today.setHours(0,0,0,0);
     
-    const scheduleQuery = prisma.scheduleItem.findMany({
+    const scheduleItems = await prisma.scheduleItem.findMany({
       where: {
         userId: user.id,
-        scheduledAt: { gte: startDate, lte: endDate },
+        isCompleted: false,
+        scheduledAt: {
+            gte: today // Apenas futuros e hoje
+        }
       },
       include: { media: true },
-      orderBy: [{ scheduledAt: "asc" }, { horario: "asc" }],
+      orderBy: { scheduledAt: 'asc' },
+      take: 50 // Limite razoável para cache
     });
 
-    // Roda as queries em paralelo
-    const [listCountsRaw, scheduleItems] = await Promise.all([
-      listCountsQuery,
-      scheduleQuery
-    ]);
-
-    // Formata as contagens (Mantido)
-    listCountsRaw.forEach(item => {
-      if (item.status in listCounts) {
-        listCounts[item.status as StatusKey] = item._count.status;
-      }
-    });
-    
-    initialSchedule = scheduleItems;
-    weekRange = {
-      start: format(startDate, 'yyyy-MM-dd'),
-      end: format(endDate, 'yyyy-MM-dd'),
+    return {
+      user,
+      listCounts,
+      scheduleItems
     };
-    
-    const cacheKey = `ai-summary-${user.id}-${JSON.stringify(scheduleItems)}`;
+  },
+  ['user-profile-full-data'], // Chave interna do cache
+  { 
+    revalidate: 3600, // <-- CACHE DE 1 HORA (O banco descansa por 1h)
+    tags: ['user-profile'] // Tag para invalidar manualmente se precisar
+  }
+);
 
-    aiSummary = await cache(
-      async () => {
-        // Este console.log SÓ VAI APARECER a cada 24h (ou se o cronograma mudar)
-        console.log(`GERANDO NOVO RESUMO DE IA (CACHE) para: ${user.username}`);
-        return generateScheduleSummary(user.username, scheduleItems);
-      },
-      [cacheKey], // Chave de cache única
-      {
-        
-        revalidate: 86400 
-      }
-    )();
-
-  } 
-  
-  // 5. Retorna o payload completo
-  return {
-    user: profileUserData, 
-    isOwner,
-    isFollowing,
-    canViewProfile, 
-    listCounts,
-    initialSchedule,
-    weekRange,
-    aiSummary, // <-- [NOVO] Retorna o resumo
-  };
-}
-
-
-// --- A Página (Server Component) ---
-export default async function UserProfilePage({ params, searchParams }: {
-  params: { username: string };
-  searchParams: { tab: string };
+// --- 2. Componente da Página ---
+export default async function UserProfile({ 
+  params, 
+  searchParams 
+}: { 
+  params: { username: string },
+  searchParams: { tab?: string } 
 }) {
   const session = await getServerSession(authOptions);
-  // @ts-ignore
   const sessionUserId = session?.user?.id;
-  const username = params.username;
-  const activeTab = searchParams.tab === "listas" ? "listas" : "cronograma";
 
-  const data = await getUserProfileData(username, sessionUserId);
+  // 1. Busca os dados (agora vem do CACHE se disponível)
+  const cachedData = await getCachedUserProfile(params.username);
+
+  if (!cachedData || !cachedData.user) {
+    notFound();
+  }
+
+  const { user, listCounts, scheduleItems } = cachedData;
+
+  // 2. Verificações de Acesso (Lógica em tempo real, pois depende de quem visita)
+  const isOwner = sessionUserId === user.id;
   
-  const { 
-    user, 
-    isOwner, 
-    isFollowing, 
-    canViewProfile,
-    listCounts,
-    initialSchedule,
-    weekRange,
-    aiSummary // <-- [NOVO] Obtém o resumo
-  } = data;
+  // Se for dono, não precisamos ir ao banco ver se segue. Se não for, precisamos checar.
+  // Essa query é leve e específica, difícil de cachear genericamente, 
+  // mas podemos evitar se não houver sessão.
+  let isFollowing = false;
+  if (sessionUserId && !isOwner) {
+      const followCheck = await prisma.follows.findUnique({
+          where: {
+              followerId_followingId: {
+                  followerId: sessionUserId,
+                  followingId: user.id
+              }
+          }
+      });
+      isFollowing = !!followCheck;
+  }
+
+  // Regras de Visibilidade
+  const isPublic = user.profileVisibility === ProfileVisibility.PUBLIC;
+  const canViewProfile = isOwner || isPublic || (user.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY && isFollowing);
+
+  // Tratamento de dados para o componente Client
+  const profileUser = {
+    ...user,
+    followersCount: user._count.followers,
+    followingCount: user._count.following
+  };
+
+  // Range da Semana (Para o componente de Cronograma)
+  // Calculamos no servidor para garantir consistência
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  const endOfWeek = new Date(today);
+  endOfWeek.setDate(today.getDate() + 7);
+
+  const formattedWeekRange = {
+      start: startOfWeek.toISOString(),
+      end: endOfWeek.toISOString()
+  };
+
+  // Prepara o Cronograma inicial para a aba
+  // Serializamos as datas para passar pro Client Component (Next.js não gosta de Date objects puros)
+  const serializedSchedule = scheduleItems.map(item => ({
+      ...item,
+      scheduledAt: item.scheduledAt, // O componente Client vai converter se precisar, ou passamos string
+      // Nota: Se o componente esperar Date, o Next.js Server Components serializa automatico em JSON,
+      // mas às vezes reclama. Se der erro, converta para .toISOString().
+  }));
 
   return (
-    <ProfilePage
-      user={user} 
+    <ProfilePage 
+      user={profileUser}
       isOwner={isOwner}
       isFollowing={isFollowing}
-      canViewProfile={canViewProfile} 
-      activeTab={activeTab}
+      canViewProfile={canViewProfile}
+      activeTab={searchParams.tab as "cronograma" | "listas" | undefined}
       listCounts={listCounts}
-      initialSchedule={initialSchedule}
-      initialWeekRange={weekRange}
-      aiSummary={aiSummary} // <-- [NOVO] Passa o resumo para o ProfilePage
+      initialSchedule={serializedSchedule}
+      initialWeekRange={formattedWeekRange}
+      aiSummary={null} // Se tiver resumo de IA no futuro, coloque aqui
     />
   );
 }

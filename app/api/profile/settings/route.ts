@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/authOptions";
 import prisma from "@/lib/prisma";
 import { ProfileVisibility } from "@prisma/client";
 import { z } from "zod";
+import { revalidateTag } from "next/cache";
 
 // Schema de Validação
 const settingsSchema = z.object({
@@ -72,11 +73,7 @@ export async function PUT(request: Request) {
     if (data.twitchUrl && data.twitchUrl.trim() !== "") {
       const cleanUrl = data.twitchUrl.trim();
       
-      // Regex poderoso para pegar o usuário de:
-      // - https://www.twitch.tv/gaules
-      // - twitch.tv/gaules
-      // - gaules
-      // - https://m.twitch.tv/gaules?referrer=...
+   
       const match = cleanUrl.match(/(?:twitch\.tv\/|^)([\w\d_]+)(?:\?|$|\/)/i);
       
       if (match && match[1]) {
@@ -117,9 +114,17 @@ export async function PUT(request: Request) {
       },
     });
 
+    // Limpa o cache do perfil público para refletir a mudança na hora
+    revalidateTag('user-profile');
+
     return NextResponse.json(updatedUser);
 
   } catch (error: any) {
+    // Tratamento específico para erro de unicidade (caso você não tenha removido o @unique do schema)
+    if (error.code === 'P2002' && error.meta?.target?.includes('twitchUsername')) {
+        return new NextResponse(JSON.stringify({ error: "Este canal da Twitch já está vinculado a outra conta." }), { status: 409 });
+    }
+
     console.error("[SETTINGS_PUT]", error);
     return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
   }
