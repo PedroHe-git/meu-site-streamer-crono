@@ -5,9 +5,52 @@ import { UserRole } from "@prisma/client";
 export default withAuth(
   function middleware(req: NextRequestWithAuth) {
     // --- MODO DE MANUTENÇÃO ---
+    // Se a variável de ambiente MAINTENANCE_MODE for "true", bloqueia o acesso
+    // Retorna uma página HTML estilizada (Status 503 Service Unavailable)
     if (process.env.MAINTENANCE_MODE === "true") {
       return new NextResponse(
-        `<!DOCTYPE html><html lang="pt-BR">... (seu HTML de manutenção aqui) ...</html>`,
+        `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Em Manutenção - MeuCronograma</title>
+            <style>
+                body {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background-color: #0f172a; /* Fundo escuro moderno */
+                    color: #e2e8f0; /* Texto claro */
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    text-align: center;
+                }
+                .container {
+                    padding: 2rem;
+                    background-color: #1e293b;
+                    border-radius: 1rem;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                    max-width: 400px;
+                }
+                h1 { margin-bottom: 1rem; color: #fbbf24; } /* Amarelo */
+                p { line-height: 1.5; margin-bottom: 1.5rem; }
+                .icon { font-size: 3rem; margin-bottom: 1rem; display: block; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <span class="icon">🚧</span>
+                <h1>Estamos em Manutenção</h1>
+                <p>O MeuCronograma está passando por uma pausa técnica para otimizar nossos recursos.</p>
+                <p>Voltaremos com tudo no dia 01!</p>
+                <small>Agradecemos a paciência.</small>
+            </div>
+        </body>
+        </html>
+        `,
         { status: 503, headers: { "content-type": "text/html" } }
       );
     }
@@ -56,7 +99,7 @@ export const config = {
         '/dashboard/:path*', 
         '/api/:path*', 
         // O matcher negativo abaixo garante que o middleware rode na home '/',
-        // mas ignora arquivos estáticos
+        // mas ignora arquivos estáticos e rotas de autenticação
         '/((?!_next/static|_next/image|favicon.ico|auth/signin|auth/register).*)' 
     ] 
 };
