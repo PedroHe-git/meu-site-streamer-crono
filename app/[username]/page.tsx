@@ -5,68 +5,72 @@ import { authOptions } from "@/lib/authOptions";
 import ProfilePage from "@/app/components/profile/ProfilePage";
 import { unstable_cache } from "next/cache";
 import { ProfileVisibility, UserRole } from "@prisma/client";
-import { startOfWeek, endOfWeek, addDays, startOfDay, endOfDay } from "date-fns"; // Importei startOfDay e endOfDay
+import { startOfWeek, endOfWeek, addDays, startOfDay, endOfDay, subHours } from "date-fns";
 
 // Cache de 1 hora para o perfil público
-const getCachedUserProfile = unstable_cache(
-  async (username: string) => {
-    const normalizedUsername = decodeURIComponent(username).toLowerCase();
+const getCachedUserProfile = async (username: string) => {
+  const normalizedUsername = decodeURIComponent(username).toLowerCase();
 
-    const user = await prisma.user.findFirst({
-      where: { 
-        username: {
-           equals: normalizedUsername,
-           mode: 'insensitive' 
+  const getProfileData = unstable_cache(
+    async () => {
+      const user = await prisma.user.findFirst({
+        where: { 
+          username: {
+             equals: normalizedUsername,
+             mode: 'insensitive' 
+          }
+        },
+        include: {
+          _count: {
+            select: { followers: true, following: true }
+          }
         }
-      },
-      include: {
-        _count: {
-          select: { followers: true, following: true }
-        }
-      }
-    });
+      });
 
-    if (!user) return null;
+      if (!user) return null;
 
-    const mediaStatuses = await prisma.mediaStatus.findMany({
-      where: { userId: user.id }
-    });
+      const mediaStatuses = await prisma.mediaStatus.findMany({
+        where: { userId: user.id }
+      });
 
-    const listCounts = {
-      TO_WATCH: mediaStatuses.filter(i => i.status === 'TO_WATCH').length,
-      WATCHING: mediaStatuses.filter(i => i.status === 'WATCHING').length,
-      WATCHED: mediaStatuses.filter(i => i.status === 'WATCHED').length,
-      DROPPED: mediaStatuses.filter(i => i.status === 'DROPPED').length,
-    };
+      const listCounts = {
+        TO_WATCH: mediaStatuses.filter(i => i.status === 'TO_WATCH').length,
+        WATCHING: mediaStatuses.filter(i => i.status === 'WATCHING').length,
+        WATCHED: mediaStatuses.filter(i => i.status === 'WATCHED').length,
+        DROPPED: mediaStatuses.filter(i => i.status === 'DROPPED').length,
+      };
 
-    const today = new Date();
-    
-    // --- CORREÇÃO DE DATAS NO CACHE ---
-    // Força o início da semana na Segunda-feira (1) e zera o horário
-    const startOfCurrentWeek = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
-    
-    // Define um limite futuro seguro (3 semanas)
-    const futureLimit = endOfDay(addDays(startOfCurrentWeek, 21)); 
-    
-    const scheduleItems = await prisma.scheduleItem.findMany({
-      where: {
-        userId: user.id,
-        isCompleted: false,
-        scheduledAt: { 
-            gte: startOfCurrentWeek,
-            lte: futureLimit
-        }
-      },
-      include: { media: true },
-      orderBy: { scheduledAt: 'asc' },
-      take: 100
-    });
+      // --- CORREÇÃO DE FUSO HORÁRIO (UTC -> Local) ---
+      // Subtraímos 4 horas do horário do servidor (UTC) para garantir que 
+      // "Domingo à noite" no Brasil ainda seja Domingo, e não Segunda de manhã.
+      const today = subHours(new Date(), 4);
+      
+      const startOfCurrentWeek = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
+      const futureLimit = endOfDay(addDays(startOfCurrentWeek, 28)); // Aumentei para 4 semanas
+      
+      const scheduleItems = await prisma.scheduleItem.findMany({
+        where: {
+          userId: user.id,
+          // REMOVIDO: isCompleted: false 
+          // Agora mostramos itens concluídos também, para manter o histórico da semana visível
+          scheduledAt: { 
+              gte: startOfCurrentWeek,
+              lte: futureLimit
+          }
+        },
+        include: { media: true },
+        orderBy: { scheduledAt: 'asc' },
+        take: 200
+      });
 
-    return { user, listCounts, scheduleItems };
-  },
-  ['user-profile-full-data'], 
-  { revalidate: 3600, tags: ['user-profile'] } 
-);
+      return { user, listCounts, scheduleItems };
+    },
+    [`user-profile-${normalizedUsername}`], 
+    { revalidate: 3600, tags: [`user-profile-${normalizedUsername}`, 'user-profile'] } 
+  );
+
+  return getProfileData();
+};
 
 export default async function UserProfile({ 
   params, 
@@ -110,9 +114,8 @@ export default async function UserProfile({
     followingCount: user._count.following
   };
 
-  // --- CORREÇÃO DE DATAS NO RENDER ---
-  const today = new Date();
-  // Garante que o range inicial enviado pro front seja EXATAMENTE Segunda 00:00 a Domingo 23:59
+  // --- CORREÇÃO NO RENDERIZADOR TAMBÉM ---
+  const today = subHours(new Date(), 4); // Ajuste de fuso aqui também
   const currentWeekStart = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
   const currentWeekEnd = endOfDay(endOfWeek(today, { weekStartsOn: 1 }));
 
@@ -121,10 +124,8 @@ export default async function UserProfile({
       end: currentWeekEnd.toISOString()
   };
 
-  // Serialização segura das datas
   const serializedSchedule = scheduleItems.map(item => {
       let dateString: string;
-      
       if (item.scheduledAt instanceof Date && !isNaN(item.scheduledAt.getTime())) {
           dateString = item.scheduledAt.toISOString();
       } else if (typeof item.scheduledAt === 'string') {
