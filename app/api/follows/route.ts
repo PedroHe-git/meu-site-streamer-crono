@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
-import { unstable_cache } from "next/cache"; // Importar cache
+import { unstable_cache } from "next/cache";
 
-export const revalidate = 0; // Removemos este revalidate forçado de 0
+// Removemos o revalidate = 0 para permitir o cache
+// export const revalidate = 0; 
 
 export async function GET(request: Request) {
   try {
@@ -16,36 +17,45 @@ export async function GET(request: Request) {
     
     const visitorId = session.user.id;
 
-    // --- CACHE: Lista de quem sigo ---
-    // Cacheia por 1 hora ou até o usuário seguir alguém novo (usando tags seria ideal, mas por tempo vamos de tempo fixo curto ou revalidação)
-    // Vamos usar unstable_cache para cachear essa consulta específica por usuário
+    // Cacheia a lista de quem o usuário segue
+    // Chave única por usuário: `user-follows-${visitorId}`
     const getCachedFollows = unstable_cache(
       async () => {
-        return await prisma.follows.findMany({
-          where: { followerId: visitorId },
+        const follows = await prisma.follows.findMany({
+          where: {
+            followerId: visitorId,
+          },
           include: {
             following: {
-              select: { username: true, name: true, image: true },
+              select: {
+                username: true,
+                name: true,
+                image: true,
+              },
             },
           },
-          take: 50,
-          orderBy: { following: { name: 'asc' } },
+          take: 50, // Limite seguro
+          orderBy: {
+            following: {
+              name: 'asc',
+            },
+          },
         });
+        return follows.map(f => f.following);
       },
-      [`user-follows-${visitorId}`], // Chave única
+      [`user-follows-${visitorId}`], 
       { 
-        revalidate: 600, // Cache de 10 minutos (suficiente para não bater no banco a cada clique)
+        revalidate: 3600, // Cache de 1 hora (ou até ser revalidado manualmente)
         tags: [`user-follows-${visitorId}`] 
-      } 
+      }
     );
 
-    const follows = await getCachedFollows();
-    const creators = follows.map(f => f.following);
+    const creators = await getCachedFollows();
 
     return NextResponse.json(creators, { status: 200 });
 
   } catch (error) {
     console.error("Erro na API de buscar follows:", error);
-    return new NextResponse(JSON.stringify({ error: "Erro interno" }), { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro interno do servidor." }), { status: 500 });
   }
 }

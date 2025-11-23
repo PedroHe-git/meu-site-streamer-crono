@@ -1,38 +1,29 @@
-// app/api/users/[username]/follow/route.ts (Corrigido)
-
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import prisma from "@/lib/prisma";
-import { revalidateTag } from "next/cache";
+import { revalidateTag } from "next/cache"; // Importar revalidateTag
 
-// Helper para encontrar utilizador (procura sempre em minúsculas)
 async function findUserByUsername(username: string) {
   const lowerCaseUsername = decodeURIComponent(username).toLowerCase();
-  return await prisma.user.findFirst({
+  return await prisma.user.findUnique({
     where: { username: lowerCaseUsername },
-    select: { id: true, username: true }, // Apenas precisamos do ID para a lógica de 'follow'
+    select: { id: true, username: true },
   });
 }
 
-// GET (Verifica se está a seguir)
+// GET: Verifica se segue (Mantém sem cache ou com cache curto se preferir, mas GET direto é ok aqui se for pouco usado)
 export async function GET(
   request: Request,
   { params }: { params: { username: string } }
 ) {
   const session = await getServerSession(authOptions);
-  
   const loggedInUserId = session?.user?.id;
 
-  if (!loggedInUserId) {
-    return NextResponse.json({ isFollowing: false });
-  }
+  if (!loggedInUserId) return NextResponse.json({ isFollowing: false });
 
   const profileUser = await findUserByUsername(params.username);
-
-  if (!profileUser) {
-    return new NextResponse("Utilizador não encontrado", { status: 404 });
-  }
+  if (!profileUser) return new NextResponse("Utilizador não encontrado", { status: 404 });
 
   const follow = await prisma.follows.findUnique({
     where: {
@@ -46,7 +37,7 @@ export async function GET(
   return NextResponse.json({ isFollowing: !!follow });
 }
 
-// POST (Seguir ou Deixar de Seguir)
+// POST: Seguir / Deixar de Seguir
 export async function POST(
   request: Request,
   { params }: { params: { username: string } }
@@ -60,7 +51,7 @@ export async function POST(
   if (!profileUser) return new NextResponse("Utilizador não encontrado", { status: 404 });
 
   if (profileUser.id === loggedInUserId) {
-    return new NextResponse("Não pode seguir a si mesmo", { status: 400 });
+    return new NextResponse("Não pode seguir-se a si mesmo", { status: 400 });
   }
 
   const existingFollow = await prisma.follows.findUnique({
@@ -94,15 +85,15 @@ export async function POST(
     isFollowing = true;
   }
 
-  // --- REVALIDAÇÃO INTELIGENTE ---
+  // --- REVALIDAÇÃO DE CACHE ---
   
-  // 1. Limpa o cache da LISTA de quem eu sigo (para o menu da sidebar atualizar)
+  // 1. Limpa a lista de "Quem eu sigo" do usuário logado (para a Sidebar atualizar)
   revalidateTag(`user-follows-${loggedInUserId}`);
 
-  // 2. Limpa o cache do PERFIL PÚBLICO que acabei de seguir/deixar de seguir (para atualizar contador de seguidores)
+  // 2. Limpa o perfil público de quem foi seguido (para atualizar o contador de seguidores)
   revalidateTag(`user-profile-${profileUser.username.toLowerCase()}`);
-  
-  // 3. Limpa o cache do MEU perfil público (para atualizar contador de "seguindo")
+
+  // 3. Limpa o perfil público do usuário logado (para atualizar o contador de "seguindo")
   if (session.user.username) {
       revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
   }

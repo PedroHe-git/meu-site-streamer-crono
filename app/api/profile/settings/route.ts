@@ -48,50 +48,24 @@ const settingsSchema = z.object({
 
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
-
-  if (!session || !session.user?.id) {
-    return new NextResponse("Não autorizado", { status: 401 });
-  }
+  if (!session || !session.user?.id) return new NextResponse("Não autorizado", { status: 401 });
 
   try {
     const body = await request.json();
-    
-    // 1. Validação com Zod
     const validation = settingsSchema.safeParse(body);
 
     if (!validation.success) {
-      const errorMessage = validation.error.issues[0].message;
-      return new NextResponse(JSON.stringify({ error: errorMessage }), { status: 400 });
+      return new NextResponse(JSON.stringify({ error: validation.error.issues[0].message }), { status: 400 });
     }
 
     const data = validation.data;
-
-    // 2. Extração inteligente do Username da Twitch
     let cleanTwitchUsername = null;
-    
     if (data.twitchUrl && data.twitchUrl.trim() !== "") {
       const cleanUrl = data.twitchUrl.trim();
-      // Tenta extrair o username se for uma URL (twitch.tv/username)
       const match = cleanUrl.match(/(?:twitch\.tv\/|^)([\w\d_]+)(?:\?|$|\/)/i);
-      
-      if (match && match[1]) {
-        cleanTwitchUsername = match[1];
-      } else {
-        // Se não parecer URL, assume que o usuário digitou só o nick
-        cleanTwitchUsername = cleanUrl;
-      }
+      cleanTwitchUsername = match && match[1] ? match[1] : cleanUrl;
     }
 
-    // 3. Tratamento de Strings Vazias (Discord e Banner) para null
-    const discordUrlToSave = (!data.discordWebhookUrl || data.discordWebhookUrl === "") 
-      ? null 
-      : data.discordWebhookUrl;
-
-    const bannerUrlToSave = (!data.profileBannerUrl || data.profileBannerUrl === "")
-      ? null
-      : data.profileBannerUrl;
-
-    // 4. Atualização no Banco de Dados
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: {
@@ -99,12 +73,9 @@ export async function PUT(request: Request) {
         bio: data.bio,
         profileVisibility: data.profileVisibility as ProfileVisibility,
         image: data.image,
-        profileBannerUrl: bannerUrlToSave,
-        discordWebhookUrl: discordUrlToSave,
-        
-        // Salva o username extraído da Twitch
-        twitchUsername: cleanTwitchUsername, 
-        
+        profileBannerUrl: data.profileBannerUrl || null,
+        discordWebhookUrl: data.discordWebhookUrl || null,
+        twitchUsername: cleanTwitchUsername,
         showToWatchList: data.showToWatchList,
         showWatchingList: data.showWatchingList,
         showWatchedList: data.showWatchedList,
@@ -112,23 +83,16 @@ export async function PUT(request: Request) {
       },
     });
 
-    // --- REVALIDAÇÃO DE CACHE ---
-    // Limpa o cache do perfil público para refletir mudanças instantaneamente
+    // REVALIDAÇÃO
     if (session.user.username) {
        const tag = `user-profile-${session.user.username.toLowerCase()}`;
        revalidateTag(tag);
-       console.log(`Cache revalidado para: ${tag}`);
+       console.log(`Cache revalidado (SETTINGS) para: ${tag}`);
     }
 
     return NextResponse.json(updatedUser);
 
   } catch (error: any) {
-    // Tratamento específico para erro de unicidade (ex: twitchUsername duplicado)
-    if (error.code === 'P2002' && error.meta?.target?.includes('twitchUsername')) {
-        return new NextResponse(JSON.stringify({ error: "Este canal da Twitch já está vinculado a outra conta." }), { status: 409 });
-    }
-
-    console.error("[SETTINGS_PUT]", error);
-    return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
   }
 }
