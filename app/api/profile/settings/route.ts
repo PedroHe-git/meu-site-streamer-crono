@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/authOptions';
-import prisma from '@/lib/prisma';
-import { ProfileVisibility } from '@prisma/client';
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/authOptions";
+import prisma from "@/lib/prisma";
+import { ProfileVisibility } from "@prisma/client";
 import { z } from "zod";
 
-// Esquema de Validação Zod
+// Schema de Validação
 const settingsSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(50, "Nome muito longo"),
   
@@ -36,37 +36,58 @@ const settingsSchema = z.object({
       message: "Deve ser um Webhook oficial do Discord (https://discord.com/api/webhooks/...)"
     }),
 
+  // IMPORTANTE: Adicionamos o campo para receber a URL completa da Twitch
+  twitchUrl: z.string().optional().nullable(),
+
   showToWatchList: z.boolean(),
   showWatchingList: z.boolean(),
   showWatchedList: z.boolean(),
   showDroppedList: z.boolean(),
 });
 
+// Usamos PUT para corresponder ao seu Dashboard
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session?.user?.id) {
-    return new NextResponse('Não autorizado', { status: 401 });
+    return new NextResponse("Não autorizado", { status: 401 });
   }
-  
-  const userId = session.user.id;
 
   try {
     const body = await request.json();
-
-    // CORREÇÃO: Use o método parse dentro de try-catch
-    // OU acesse errors através do objeto error
+    
+    // Validação
     const validation = settingsSchema.safeParse(body);
 
     if (!validation.success) {
-      // SOLUÇÃO 1: Acesse através de validation.error.issues
       const errorMessage = validation.error.issues[0].message;
       return new NextResponse(JSON.stringify({ error: errorMessage }), { status: 400 });
     }
 
     const data = validation.data;
 
-    // Tratamento de Strings Vazias
+    // 1. Extração inteligente do Username da Twitch
+    let cleanTwitchUsername = null;
+    
+    if (data.twitchUrl && data.twitchUrl.trim() !== "") {
+      const cleanUrl = data.twitchUrl.trim();
+      
+      // Regex poderoso para pegar o usuário de:
+      // - https://www.twitch.tv/gaules
+      // - twitch.tv/gaules
+      // - gaules
+      // - https://m.twitch.tv/gaules?referrer=...
+      const match = cleanUrl.match(/(?:twitch\.tv\/|^)([\w\d_]+)(?:\?|$|\/)/i);
+      
+      if (match && match[1]) {
+        cleanTwitchUsername = match[1];
+      } else {
+        // Se não parecer URL, assume que o usuário digitou só o nick
+        cleanTwitchUsername = cleanUrl;
+      }
+    }
+
+    // 2. Tratamento de Strings Vazias (Discord e Banner)
     const discordUrlToSave = (!data.discordWebhookUrl || data.discordWebhookUrl === "") 
       ? null 
       : data.discordWebhookUrl;
@@ -75,9 +96,9 @@ export async function PUT(request: Request) {
       ? null
       : data.profileBannerUrl;
 
-    // Atualização no Banco
+    // 3. Atualização no Banco de Dados
     const updatedUser = await prisma.user.update({
-      where: { id: userId },
+      where: { id: session.user.id },
       data: {
         name: data.name,
         bio: data.bio,
@@ -85,6 +106,10 @@ export async function PUT(request: Request) {
         image: data.image,
         profileBannerUrl: bannerUrlToSave,
         discordWebhookUrl: discordUrlToSave,
+        
+        // Aqui salvamos o username extraído, não a URL
+        twitchUsername: cleanTwitchUsername, 
+        
         showToWatchList: data.showToWatchList,
         showWatchingList: data.showWatchingList,
         showWatchedList: data.showWatchedList,
@@ -93,8 +118,9 @@ export async function PUT(request: Request) {
     });
 
     return NextResponse.json(updatedUser);
-  } catch (error) {
-    console.error('[SETTINGS_PUT]', error);
-    return new NextResponse(JSON.stringify({ error: 'Erro Interno do Servidor' }), { status: 500 });
+
+  } catch (error: any) {
+    console.error("[SETTINGS_PUT]", error);
+    return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
   }
 }

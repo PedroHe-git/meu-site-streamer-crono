@@ -1,20 +1,21 @@
-// app/components/profile/ProfilePage.tsx
 "use client";
 
-import { Calendar, Film, Lock, Pen, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Calendar, Film, Lock, Pen, Loader2, Link as LinkIcon, Share2, Tv, Upload, Eye } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import FollowButton from "@/app/components/FollowButton";
 import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
 import PublicScheduleView from "@/app/components/PublicScheduleView";
 import UserListsClient from "@/app/components/UserListsClient";
 import Image from "next/image"; 
 import Link from "next/link";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants, Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Media, MediaStatus, ScheduleItem, User as PrismaUser } from "@prisma/client";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
 
 // --- Tipos Atualizados ---
 type ListCounts = {
@@ -67,6 +68,11 @@ export default function ProfilePage({
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
+  // Função para redirecionar ao Dashboard
+  const handleEditProfile = () => {
+      router.push("/dashboard");
+  };
+
   if (!user) {
     return (
       <div className="container mx-auto max-w-5xl py-8">
@@ -85,9 +91,9 @@ export default function ProfilePage({
   return (
     <div className="min-h-screen bg-background">
       
-      {/* --- [ALTERAÇÃO VISUAL] Secção Hero com Imagem de Fundo --- */}
+      {/* Hero Section */}
       <div className="relative w-full h-[400px] md:h-[500px] overflow-hidden">
-        {/* Imagem de Fundo (Banner) */}
+        {/* Banner */}
         {user.profileBannerUrl ? (
           <Image
             src={user.profileBannerUrl}
@@ -97,49 +103,45 @@ export default function ProfilePage({
             priority 
           />
         ) : (
-          // Fallback: Gradiente bonito se não houver imagem
           <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900"></div>
         )}
-        
-        {/* Overlay Escuro (Gradiente) para legibilidade do texto */}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent"></div>
         
-        {/* Conteúdo do Perfil (Avatar + Texto) */}
+        {/* Informações do Usuário */}
         <div className="absolute bottom-0 left-0 right-0 pb-8 pt-20 px-4">
             <div className="container mx-auto max-w-5xl flex flex-col md:flex-row items-end gap-6 md:gap-8">
                 
-                {/* Avatar com Borda e Sombra */}
+                {/* Avatar + Status Live */}
                 <div className="relative flex-shrink-0">
                     <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-background shadow-xl ring-2 ring-border/20">
                         <AvatarImage src={user.image ?? undefined} alt={user.username} className="object-cover"/>
                         <AvatarFallback className="text-4xl bg-muted text-muted-foreground">{fallbackLetter}</AvatarFallback>
                     </Avatar>
-                     {user.twitchUsername && (
+                    
+                    {/* Indicador de Live (Desacoplado do Banco) */}
+                    {user.twitchUsername && (
                         <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20">
-                           <LiveStatusIndicator username={user.twitchUsername} />
+                           <LiveStatusIndicator twitchChannel={user.twitchUsername} />
                         </div>
                     )}
                 </div>
 
-                {/* Informações de Texto */}
                 <div className="flex-1 w-full text-center md:text-left mb-2 md:mb-4 space-y-2">
-                     <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
                         <h1 className="text-3xl md:text-5xl font-bold text-foreground drop-shadow-sm">
                             {user.name || user.username}
                         </h1>
-                        {/* Badges ou Tags poderiam vir aqui */}
-                     </div>
-                     
-                     <p className="text-muted-foreground font-medium">@{user.username}</p>
-                     
-                     {user.bio && (
+                      </div>
+                      
+                      <p className="text-muted-foreground font-medium">@{user.username}</p>
+                      
+                      {user.bio && (
                         <p className="text-foreground/90 text-sm md:text-base max-w-2xl leading-relaxed line-clamp-3 md:line-clamp-none mx-auto md:mx-0">
                             {user.bio}
                         </p>
-                     )}
+                      )}
 
-                     {/* Stats e Botões */}
-                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 pt-4">
+                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 pt-4">
                         <div className="flex items-center gap-1">
                             <span className="font-bold text-foreground">{user.followersCount}</span>
                             <span className="text-muted-foreground text-sm">Seguidores</span>
@@ -151,13 +153,16 @@ export default function ProfilePage({
 
                         <div className="md:ml-auto flex gap-2 w-full md:w-auto">
                              {isOwner ? (
-                                <Link 
-                                href="/dashboard" 
-                                className={cn(buttonVariants({ variant: "outline" }), "w-full md:w-auto")}
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="w-full md:w-auto bg-white/10 text-foreground border-white/20 hover:bg-white/20 backdrop-blur-md"
+                                  // Alterado para redirecionar para o Dashboard
+                                  onClick={handleEditProfile}
                                 >
                                 <Pen className="h-4 w-4 mr-2" />
                                 Editar Perfil
-                                </Link>
+                                </Button>
                             ) : (
                                 <FollowButton
                                 isFollowingInitial={isFollowing}
@@ -166,18 +171,15 @@ export default function ProfilePage({
                                 />
                             )}
                         </div>
-                     </div>
+                      </div>
                 </div>
             </div>
         </div>
       </div>
-      {/* --- [FIM DA ALTERAÇÃO VISUAL] --- */}
-
 
       {/* Conteúdo Principal (Abas) */}
       <div className="container mx-auto max-w-5xl py-8 px-4">
         {!canViewProfile ? (
-          // Mensagem de Perfil Privado
           <Card className="shadow-lg border-2 border-dashed">
             <CardContent className="p-16 text-center flex flex-col items-center">
               <div className="bg-muted p-4 rounded-full mb-4">
@@ -199,7 +201,6 @@ export default function ProfilePage({
             </CardContent>
           </Card>
         ) : (
-          // Conteúdo das Abas (se o perfil for visível)
           <Tabs 
             value={activeTab} 
             onValueChange={handleTabChange} 
@@ -224,9 +225,7 @@ export default function ProfilePage({
               </TabsList>
             </div>
 
-            {/* Removemos o Card container para um visual mais limpo, direto no fundo da página */}
             <div className="animate-in fade-in duration-500 slide-in-from-bottom-4">
-                {/* --- ABA CRONOGRAMA --- */}
                 <TabsContent value="cronograma" className="mt-0 focus-visible:outline-none">
                   <PublicScheduleView 
                     username={user.username}
@@ -236,7 +235,6 @@ export default function ProfilePage({
                   />
                 </TabsContent>
 
-                {/* --- ABA LISTAS --- */}
                 <TabsContent value="listas" className="mt-0 focus-visible:outline-none">
                   <UserListsClient
                     username={user.username}

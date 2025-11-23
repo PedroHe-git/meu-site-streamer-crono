@@ -208,7 +208,7 @@ export default function PublicScheduleView({
         <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg border border-dashed">
           <CalendarOff className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
           <h3 className="text-xl font-semibold">Semana Silenciosa ❄️</h3>
-          <p className="text-muted-foreground">Parece que o Pai Natal ainda não trouxe os agendamentos.</p>
+          <p className="text-muted-foreground">Parece que o Papai Noel ainda não trouxe os agendamentos.</p>
         </div>
       )}
 
