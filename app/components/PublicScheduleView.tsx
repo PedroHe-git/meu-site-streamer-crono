@@ -40,7 +40,6 @@ type PublicScheduleViewProps = {
 const MIN_WEEK_OFFSET = -1; 
 
 // --- FUNÇÕES DE DATA (UTC FORCE) ---
-// Essa função garante que a data seja interpretada como UTC, evitando que volte para o dia anterior
 function getUTCDate(dateInput: string | Date): Date {
   const date = typeof dateInput === 'string' ? parseISO(dateInput) : dateInput;
   return new Date(
@@ -53,7 +52,6 @@ function getUTCDate(dateInput: string | Date): Date {
   );
 }
 
-// Formatação que usa a data "corrigida"
 function formatSimpleDate(dateInput: string | Date) {
   const utcDate = getUTCDate(dateInput);
   return format(utcDate, "PPP", { locale: ptBR }); 
@@ -109,14 +107,12 @@ export default function PublicScheduleView({
     fetchSchedule(weekOffset);
   }, [weekOffset, fetchSchedule, initialSchedule, initialWeekRange]); 
 
-  // --- MAPEAMENTO DE ITENS POR DIA (Usando UTC) ---
   const scheduleMap = useMemo(() => {
     const groups = new Map<string, { date: Date; items: ScheduleItemWithMedia[] }>();
     
     scheduleItems.forEach((item) => {
       if (!item.media) return; 
       
-      // Converte para UTC para agrupar corretamente
       const utcDate = getUTCDate(item.scheduledAt);
       const dateKey = utcDate.toDateString(); 
       
@@ -139,14 +135,11 @@ export default function PublicScheduleView({
     return groups;
   }, [scheduleItems]); 
 
-  // --- GERAÇÃO DOS DIAS DA SEMANA (Segunda -> Domingo) ---
   const allDaysOfWeek = useMemo(() => {
     if (!weekRange.start) return [];
     
-    // Pega a data de início da semana (que a API garantiu ser Segunda)
     const start = getUTCDate(weekRange.start);
     
-    // Gera 7 dias consecutivos a partir dela
     const days = [];
     for (let i = 0; i < 7; i++) {
         days.push(addDays(start, i));
@@ -157,7 +150,6 @@ export default function PublicScheduleView({
 
   const formatWeekRange = (start: string, end: string) => {
     if (!start || !end) return "Carregando...";
-    // Usa UTC para formatar o título também
     const startDate = getUTCDate(start);
     const endDate = getUTCDate(end);
     
@@ -229,7 +221,6 @@ export default function PublicScheduleView({
       )}
 
       {!isLoading && allDaysOfWeek.map((day, index) => {
-        // Usa a data UTC para gerar a chave e exibir o título
         const dateKey = day.toDateString(); 
         const dayGroup = scheduleMap.get(dateKey); 
 
@@ -276,7 +267,6 @@ export default function PublicScheduleView({
                                 <div className="mt-auto flex flex-col gap-1 text-sm text-muted-foreground pt-2 border-t border-dashed">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="h-3.5 w-3.5 text-red-500" />
-                                    {/* Usa a função formatSimpleDate que corrige o fuso */}
                                     <span className="text-xs">{formatSimpleDate(item.scheduledAt)}</span>
                                   </div>
                                   {item.horario && (

@@ -1,12 +1,9 @@
 "use client";
 
 import { useState } from "react";
-// --- [INÍCIO DA MUDANÇA 1] ---
-// Removemos o Accordion e importamos os Tabs
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// --- [FIM DA MUDANÇA 1] ---
 import PaginatedList from "./PaginatedList";
-import { Lock, Search } from "lucide-react"; // Removemos o ícone Bell
+import { Lock, Search } from "lucide-react"; 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge"; 
@@ -54,21 +51,17 @@ export default function UserListsClient({
   const canViewWatched = isOwner || showWatchedList;
   const canViewDropped = isOwner || showDroppedList;
 
-  // --- [INÍCIO DA MUDANÇA 2] ---
-  // Define a aba padrão. Dá prioridade a "Essa Semana" ou "Próximos".
   let defaultTab = "";
   if (canViewWatching) defaultTab = "watching";
   else if (canViewToWatch) defaultTab = "to-watch";
   else if (canViewWatched) defaultTab = "watched";
   else if (canViewDropped) defaultTab = "dropped";
-  // --- [FIM DA MUDANÇA 2] ---
 
   const anyListVisible = canViewToWatch || canViewWatching || canViewWatched || canViewDropped;
 
   return (
     <div className="space-y-6">
 
-      {/* Barra de Pesquisa (Mantida) */}
       <Card className="shadow-lg border-2">
         <CardHeader>
           <CardTitle>Listas de {username}</CardTitle>
@@ -90,11 +83,8 @@ export default function UserListsClient({
 
 
       {anyListVisible ? (
-        // --- [INÍCIO DA MUDANÇA 3] ---
-        // Substituímos o <Accordion> por <Tabs>
         <Tabs defaultValue={defaultTab} className="w-full">
           
-          {/* 1. As "cabeçalhos" das abas */}
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto sm:h-10">
             {canViewToWatch && (
               <TabsTrigger value="to-watch" className="relative">
@@ -145,7 +135,6 @@ export default function UserListsClient({
             )}
           </TabsList>
           
-          {/* 2. O conteúdo das abas (dentro de um Card para manter o visual) */}
           <Card className="shadow-lg border-2 mt-6">
             <CardContent className="p-6">
               {canViewToWatch && (
@@ -172,9 +161,7 @@ export default function UserListsClient({
           </Card>
           
         </Tabs>
-        // --- [FIM DA MUDANÇA 3] ---
       ) : (
-        // Mensagem de fallback se TODAS as listas forem privadas
         <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg">
           <Lock className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-xl font-semibold">Listas Privadas</h3>

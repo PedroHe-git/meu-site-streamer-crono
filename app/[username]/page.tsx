@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 import ProfilePage from "@/app/components/profile/ProfilePage";
 import { unstable_cache } from "next/cache";
-import { ProfileVisibility, UserRole } from "@prisma/client";
+import { ProfileVisibility } from "@prisma/client";
 import { startOfWeek, endOfWeek, addDays, startOfDay, endOfDay, subHours } from "date-fns";
 
 // Cache de 1 hora para o perfil público
@@ -40,19 +40,14 @@ const getCachedUserProfile = async (username: string) => {
         DROPPED: mediaStatuses.filter(i => i.status === 'DROPPED').length,
       };
 
-      // --- CORREÇÃO DE FUSO HORÁRIO (UTC -> Local) ---
-      // Subtraímos 4 horas do horário do servidor (UTC) para garantir que 
-      // "Domingo à noite" no Brasil ainda seja Domingo, e não Segunda de manhã.
       const today = subHours(new Date(), 4);
       
       const startOfCurrentWeek = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
-      const futureLimit = endOfDay(addDays(startOfCurrentWeek, 28)); // Aumentei para 4 semanas
+      const futureLimit = endOfDay(addDays(startOfCurrentWeek, 28));
       
       const scheduleItems = await prisma.scheduleItem.findMany({
         where: {
           userId: user.id,
-          // REMOVIDO: isCompleted: false 
-          // Agora mostramos itens concluídos também, para manter o histórico da semana visível
           scheduledAt: { 
               gte: startOfCurrentWeek,
               lte: futureLimit
@@ -70,6 +65,25 @@ const getCachedUserProfile = async (username: string) => {
   );
 
   return getProfileData();
+};
+
+// Cache para verificar se segue (separado do perfil)
+const getCachedFollowStatus = async (followerId: string, followingId: string) => {
+  return unstable_cache(
+    async () => {
+      const follow = await prisma.follows.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId,
+            followingId
+          }
+        }
+      });
+      return !!follow;
+    },
+    [`follow-status-${followerId}-${followingId}`], 
+    { revalidate: 3600, tags: [`follow-${followerId}`] } 
+  )();
 };
 
 export default async function UserProfile({ 
@@ -94,15 +108,7 @@ export default async function UserProfile({
   
   let isFollowing = false;
   if (sessionUserId && !isOwner) {
-      const followCheck = await prisma.follows.findUnique({
-          where: {
-              followerId_followingId: {
-                  followerId: sessionUserId,
-                  followingId: user.id
-              }
-          }
-      });
-      isFollowing = !!followCheck;
+      isFollowing = await getCachedFollowStatus(sessionUserId, user.id);
   }
 
   const isPublic = user.profileVisibility === ProfileVisibility.PUBLIC;
@@ -114,8 +120,7 @@ export default async function UserProfile({
     followingCount: user._count.following
   };
 
-  // --- CORREÇÃO NO RENDERIZADOR TAMBÉM ---
-  const today = subHours(new Date(), 4); // Ajuste de fuso aqui também
+  const today = subHours(new Date(), 4);
   const currentWeekStart = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
   const currentWeekEnd = endOfDay(endOfWeek(today, { weekStartsOn: 1 }));
 
@@ -151,7 +156,8 @@ export default async function UserProfile({
       // @ts-ignore
       initialSchedule={serializedSchedule}
       initialWeekRange={formattedWeekRange}
-      aiSummary={null} 
+      // CORREÇÃO AQUI: Passamos o campo aiSummary do banco em vez de null/page.tsx]
+      aiSummary={user.aiSummary} 
     />
   );
 }

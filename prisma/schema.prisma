@@ -53,6 +53,7 @@ model User {
   hashedPassword String?
   username       String    @unique
   role           UserRole  @default(VISITOR)
+  aiSummary     String?   @db.Text
 
   // --- Campos de Personalização ---
   bio              String?   @db.Text // Mantido

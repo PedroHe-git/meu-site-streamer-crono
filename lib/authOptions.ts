@@ -32,7 +32,7 @@ export const authOptions: AuthOptions = {
           showWatchedList: true,
           showDroppedList: true,
           profileBannerUrl: null,
-          discordWebhookUrl: null, // <--- ADICIONADO AQUI
+          discordWebhookUrl: null,
         };
       },
     }),
@@ -58,7 +58,7 @@ export const authOptions: AuthOptions = {
           showWatchedList: true,
           showDroppedList: true,
           profileBannerUrl: null,
-          discordWebhookUrl: null, // <--- ADICIONADO AQUI
+          discordWebhookUrl: null,
         };
       },
     }),
@@ -91,10 +91,6 @@ export const authOptions: AuthOptions = {
           throw new Error("Credenciais inválidas");
         }
 
-        // Precisamos garantir que o user retornado tenha a propriedade, 
-        // mesmo que venha do banco (o banco já tem o campo, então o prisma retorna)
-        // O TypeScript pode reclamar se o tipo do prisma não bater exatamente,
-        // mas geralmente para o authorize ele infere. Se der erro aqui, avise.
         return user;
       },
     }),
