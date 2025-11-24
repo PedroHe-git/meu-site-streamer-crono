@@ -4,11 +4,9 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { ProfileVisibility } from "@prisma/client";
 import { addWeeks, startOfWeek, endOfWeek, startOfDay, endOfDay, subHours } from "date-fns";
-import { unstable_cache } from "next/cache"; // Importar cache
+import { unstable_cache } from "next/cache"; 
 
 export const runtime = 'nodejs';
-// Removemos revalidate = 0 para permitir cache
-// export const revalidate = 0; 
 
 export async function GET(
   request: Request,
@@ -21,51 +19,75 @@ export async function GET(
   const weekOffset = parseInt(searchParams.get('weekOffset') || '0');
 
   try {
-    // 1. Validação de Acesso (Cacheada por 5 minutos para segurança/performance)
-    // Precisamos saber se o perfil é público ou se o usuário logado segue ele.
-    // Essa verificação é leve, mas podemos otimizar.
-    
-    // Para simplificar e garantir segurança, vamos fazer essa checagem rápida:
-    const userProfile = await prisma.user.findFirst({
-      where: { 
-        username: { equals: decodeURIComponent(username), mode: 'insensitive' } 
-      },
-      select: { id: true, profileVisibility: true }
-    });
+    const normalizedUsername = decodeURIComponent(username).toLowerCase();
 
-    if (!userProfile) {
+    // --- CACHE 1: Validação de Permissão de Acesso (1 hora ou até revalidação) ---
+    // Esta função verifica se o perfil existe, suas configs de privacidade e se o usuário logado o segue.
+    // Chave de cache: depende do perfil visitado E de quem está visitando.
+    const getCachedAccess = unstable_cache(
+      async (visitorId: string | undefined) => {
+        const userProfile = await prisma.user.findFirst({
+          where: { 
+            username: { equals: normalizedUsername, mode: 'insensitive' } 
+          },
+          select: { id: true, profileVisibility: true }
+        });
+
+        if (!userProfile) return null;
+
+        const isOwner = visitorId === userProfile.id;
+        let isFollowing = false;
+
+        if (visitorId && !isOwner) {
+          const follow = await prisma.follows.findUnique({
+            where: { 
+                followerId_followingId: {
+                    followerId: visitorId, 
+                    followingId: userProfile.id 
+                }
+            },
+          });
+          isFollowing = !!follow;
+        }
+
+        const canView =
+          userProfile.profileVisibility === ProfileVisibility.PUBLIC ||
+          isOwner ||
+          (userProfile.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY && isFollowing);
+
+        return { 
+            exists: true, 
+            canView, 
+            profileId: userProfile.id,
+            isOwner // Retornamos para uso interno se precisar
+        };
+      },
+      [`access-check-${normalizedUsername}-${loggedInUserId || 'public'}`], 
+      {
+        revalidate: 3600, 
+        // Tags importantes: 
+        // - user-profile-[username]: se o dono mudar a visibilidade, invalida.
+        // - user-follows-[visitorId]: se o visitante seguir/deixar de seguir, invalida.
+        tags: [
+            `user-profile-${normalizedUsername}`, 
+            loggedInUserId ? `user-follows-${loggedInUserId}` : 'public-access'
+        ]
+      }
+    );
+
+    const accessData = await getCachedAccess(loggedInUserId);
+
+    if (!accessData) {
       return new NextResponse(JSON.stringify({ error: "Utilizador não encontrado" }), { status: 404 });
     }
 
-    const isOwner = loggedInUserId === userProfile.id;
-    let isFollowing = false;
-    
-    if (loggedInUserId && !isOwner) {
-      const follow = await prisma.follows.findUnique({
-        where: { 
-            followerId_followingId: {
-                followerId: loggedInUserId, 
-                followingId: userProfile.id 
-            }
-        },
-      });
-      isFollowing = !!follow;
-    }
-    
-    const canView =
-      userProfile.profileVisibility === ProfileVisibility.PUBLIC ||
-      isOwner ||
-      (userProfile.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY && isFollowing);
-
-    if (!canView) {
+    if (!accessData.canView) {
       return new NextResponse(JSON.stringify({ error: "Este perfil é privado." }), { status: 403 });
     }
 
-    // 2. Busca do Cronograma Cacheada (AQUI ESTÁ A MÁGICA)
-    // Usamos o weekOffset na chave para cachear cada semana individualmente.
+    // --- CACHE 2: Busca do Cronograma (Já implementado, mantido) ---
     const getCachedSchedule = unstable_cache(
         async (targetUserId: string, offset: number) => {
-            // Ajuste de Fuso
             const today = subHours(new Date(), 4);
             const targetDate = addWeeks(today, offset);
             const startDate = startOfDay(startOfWeek(targetDate, { weekStartsOn: 1 }));
@@ -89,16 +111,14 @@ export async function GET(
                 weekEnd: endDate.toISOString()
             };
         },
-        [`user-schedule-${userProfile.id}-${weekOffset}`], // Chave única por usuário E semana
+        [`user-schedule-${accessData.profileId}-${weekOffset}`], 
         {
-            revalidate: 3600, // Cache de 1 hora
-            // Usamos a tag do perfil do usuário. Assim, se ele adicionar um item (na rota POST),
-            // a tag 'user-profile-nome' é revalidada e TODAS as semanas cacheadas são limpas.
-            tags: [`user-profile-${username.toLowerCase()}`] 
+            revalidate: 3600, 
+            tags: [`user-profile-${normalizedUsername}`] 
         }
     );
 
-    const data = await getCachedSchedule(userProfile.id, weekOffset);
+    const data = await getCachedSchedule(accessData.profileId, weekOffset);
 
     return NextResponse.json(data);
 

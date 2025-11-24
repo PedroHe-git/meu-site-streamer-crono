@@ -4,8 +4,8 @@ import { authOptions } from "@/lib/authOptions";
 import prisma from '@/lib/prisma';
 import { unstable_cache } from "next/cache";
 
-// Removemos o revalidate = 0 para permitir o cache
-// export const revalidate = 0; 
+// CORREÇÃO: Força esta rota a ser dinâmica, pois depende de headers/cookies (sessão)
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       },
       [`user-follows-${visitorId}`], 
       { 
-        revalidate: 3600, // Cache de 1 hora (ou até ser revalidado manualmente)
+        revalidate: 3600, // Cache de 1 hora
         tags: [`user-follows-${visitorId}`] 
       }
     );

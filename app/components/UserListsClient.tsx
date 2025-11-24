@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PaginatedList from "./PaginatedList";
 import { Lock, Search } from "lucide-react"; 
@@ -25,15 +25,6 @@ type UserListsClientProps = {
   counts: ListCounts; 
 };
 
-// Componente para a mensagem de privacidade
-const PrivacyMessage = () => (
-  <div className="flex flex-col items-center justify-center text-center p-12 bg-muted/50 rounded-lg">
-    <Lock className="h-12 w-12 text-muted-foreground mb-4" />
-    <h3 className="text-xl font-semibold">Lista Privada</h3>
-    <p className="text-muted-foreground">O dono deste perfil tornou esta lista privada.</p>
-  </div>
-);
-
 export default function UserListsClient({
   username,
   showToWatchList,
@@ -51,11 +42,15 @@ export default function UserListsClient({
   const canViewWatched = isOwner || showWatchedList;
   const canViewDropped = isOwner || showDroppedList;
 
+  // Lógica para determinar a aba padrão
   let defaultTab = "";
   if (canViewWatching) defaultTab = "watching";
   else if (canViewToWatch) defaultTab = "to-watch";
   else if (canViewWatched) defaultTab = "watched";
   else if (canViewDropped) defaultTab = "dropped";
+
+  // Estado para controlar a aba ativa e renderização condicional
+  const [activeTab, setActiveTab] = useState(defaultTab);
 
   const anyListVisible = canViewToWatch || canViewWatching || canViewWatched || canViewDropped;
 
@@ -81,9 +76,13 @@ export default function UserListsClient({
         </CardHeader>
       </Card>
 
-
       {anyListVisible ? (
-        <Tabs defaultValue={defaultTab} className="w-full">
+        <Tabs 
+          defaultValue={defaultTab} 
+          value={activeTab} 
+          onValueChange={setActiveTab} // Atualiza o estado ao mudar de aba
+          className="w-full"
+        >
           
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto sm:h-10">
             {canViewToWatch && (
@@ -137,24 +136,38 @@ export default function UserListsClient({
           
           <Card className="shadow-lg border-2 mt-6">
             <CardContent className="p-6">
+              {/* Renderização Condicional: Só carrega o PaginatedList se a aba estiver ativa */}
+              {/* Isso evita fetches desnecessários para abas ocultas */}
+              
               {canViewToWatch && (
                 <TabsContent value="to-watch" className="mt-0">
-                  <PaginatedList key="to-watch" username={username} status="TO_WATCH" searchTerm={searchTerm} />
+                  {activeTab === "to-watch" && (
+                    <PaginatedList key="to-watch" username={username} status="TO_WATCH" searchTerm={searchTerm} />
+                  )}
                 </TabsContent>
               )}
+              
               {canViewWatching && (
                 <TabsContent value="watching" className="mt-0">
-                  <PaginatedList key="watching" username={username} status="WATCHING" searchTerm={searchTerm} />
+                  {activeTab === "watching" && (
+                    <PaginatedList key="watching" username={username} status="WATCHING" searchTerm={searchTerm} />
+                  )}
                 </TabsContent>
               )}
+              
               {canViewWatched && (
                 <TabsContent value="watched" className="mt-0">
-                  <PaginatedList key="watched" username={username} status="WATCHED" searchTerm={searchTerm} />
+                  {activeTab === "watched" && (
+                    <PaginatedList key="watched" username={username} status="WATCHED" searchTerm={searchTerm} />
+                  )}
                 </TabsContent>
               )}
+              
               {canViewDropped && (
                 <TabsContent value="dropped" className="mt-0">
-                  <PaginatedList key="dropped" username={username} status="DROPPED" searchTerm={searchTerm} />
+                  {activeTab === "dropped" && (
+                    <PaginatedList key="dropped" username={username} status="DROPPED" searchTerm={searchTerm} />
+                  )}
                 </TabsContent>
               )}
             </CardContent>
