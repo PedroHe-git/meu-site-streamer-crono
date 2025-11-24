@@ -4,9 +4,11 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { ProfileVisibility } from "@prisma/client";
 import { addWeeks, startOfWeek, endOfWeek, startOfDay, endOfDay, subHours } from "date-fns";
+import { unstable_cache } from "next/cache"; // Importar cache
 
 export const runtime = 'nodejs';
-export const revalidate = 0; 
+// Removemos revalidate = 0 para permitir cache
+// export const revalidate = 0; 
 
 export async function GET(
   request: Request,
@@ -15,34 +17,35 @@ export async function GET(
   const session = await getServerSession(authOptions);
   const loggedInUserId = session?.user?.id;
   const { username } = params;
+  const { searchParams } = new URL(request.url);
+  const weekOffset = parseInt(searchParams.get('weekOffset') || '0');
 
   try {
-    const user = await prisma.user.findFirst({
+    // 1. Validação de Acesso (Cacheada por 5 minutos para segurança/performance)
+    // Precisamos saber se o perfil é público ou se o usuário logado segue ele.
+    // Essa verificação é leve, mas podemos otimizar.
+    
+    // Para simplificar e garantir segurança, vamos fazer essa checagem rápida:
+    const userProfile = await prisma.user.findFirst({
       where: { 
-        username: {
-           equals: decodeURIComponent(username),
-           mode: 'insensitive'
-        } 
+        username: { equals: decodeURIComponent(username), mode: 'insensitive' } 
       },
-      select: { 
-        id: true, 
-        profileVisibility: true,
-        showWatchingList: true
-      },
+      select: { id: true, profileVisibility: true }
     });
 
-    if (!user) {
+    if (!userProfile) {
       return new NextResponse(JSON.stringify({ error: "Utilizador não encontrado" }), { status: 404 });
     }
 
-    const isOwner = loggedInUserId === user.id;
+    const isOwner = loggedInUserId === userProfile.id;
     let isFollowing = false;
+    
     if (loggedInUserId && !isOwner) {
       const follow = await prisma.follows.findUnique({
         where: { 
             followerId_followingId: {
                 followerId: loggedInUserId, 
-                followingId: user.id 
+                followingId: userProfile.id 
             }
         },
       });
@@ -50,44 +53,54 @@ export async function GET(
     }
     
     const canView =
-      user.profileVisibility === ProfileVisibility.PUBLIC ||
+      userProfile.profileVisibility === ProfileVisibility.PUBLIC ||
       isOwner ||
-      (user.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY && isFollowing);
+      (userProfile.profileVisibility === ProfileVisibility.FOLLOWERS_ONLY && isFollowing);
 
     if (!canView) {
       return new NextResponse(JSON.stringify({ error: "Este perfil é privado." }), { status: 403 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const weekOffset = parseInt(searchParams.get('weekOffset') || '0');
+    // 2. Busca do Cronograma Cacheada (AQUI ESTÁ A MÁGICA)
+    // Usamos o weekOffset na chave para cachear cada semana individualmente.
+    const getCachedSchedule = unstable_cache(
+        async (targetUserId: string, offset: number) => {
+            // Ajuste de Fuso
+            const today = subHours(new Date(), 4);
+            const targetDate = addWeeks(today, offset);
+            const startDate = startOfDay(startOfWeek(targetDate, { weekStartsOn: 1 }));
+            const endDate = endOfDay(endOfWeek(targetDate, { weekStartsOn: 1 }));
 
-    // --- AJUSTE DE FUSO E SEMANA ---
-    // Subtrai 4h para compensar o servidor UTC e manter-se no "dia anterior" se for de noite no Brasil
-    const today = subHours(new Date(), 4);
-    
-    const targetDate = addWeeks(today, weekOffset);
-    const startDate = startOfDay(startOfWeek(targetDate, { weekStartsOn: 1 }));
-    const endDate = endOfDay(endOfWeek(targetDate, { weekStartsOn: 1 }));
+            const items = await prisma.scheduleItem.findMany({
+                where: {
+                    userId: targetUserId,
+                    scheduledAt: {
+                        gte: startDate,
+                        lte: endDate,
+                    },
+                },
+                include: { media: true },
+                orderBy: [{ scheduledAt: "asc" }, { horario: "asc" }],
+            });
 
-    const scheduleItems = await prisma.scheduleItem.findMany({
-      where: {
-        userId: user.id,
-        scheduledAt: {
-          gte: startDate,
-          lte: endDate,
+            return {
+                items,
+                weekStart: startDate.toISOString(),
+                weekEnd: endDate.toISOString()
+            };
         },
-        // REMOVIDO: isCompleted: false
-        // Isso permite ver o que já foi assistido na semana
-      },
-      include: { media: true },
-      orderBy: [{ scheduledAt: "asc" }, { horario: "asc" }],
-    });
+        [`user-schedule-${userProfile.id}-${weekOffset}`], // Chave única por usuário E semana
+        {
+            revalidate: 3600, // Cache de 1 hora
+            // Usamos a tag do perfil do usuário. Assim, se ele adicionar um item (na rota POST),
+            // a tag 'user-profile-nome' é revalidada e TODAS as semanas cacheadas são limpas.
+            tags: [`user-profile-${username.toLowerCase()}`] 
+        }
+    );
 
-    return NextResponse.json({
-      items: scheduleItems,
-      weekStart: startDate.toISOString(),
-      weekEnd: endDate.toISOString(),
-    });
+    const data = await getCachedSchedule(userProfile.id, weekOffset);
+
+    return NextResponse.json(data);
 
   } catch (error) {
     console.error(`Erro ao buscar cronograma:`, error);

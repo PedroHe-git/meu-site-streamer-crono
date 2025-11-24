@@ -7,7 +7,7 @@ import {
 } from "react";
 
 import { Step, STATUS, CallBackProps } from 'react-joyride';
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility, MediaType } from "@prisma/client";
 import Image from "next/image";
@@ -32,12 +32,11 @@ import StatsTab from "@/app/components/Statistic";
 // 4. Importações de UI (shadcn)
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import AppTour from '@/app/components/AppTour';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Pen, Settings, List, CalendarDays, Calendar, Loader2, Check, BarChart, Share2, Tv, Upload, Eye, Link as LinkIcon } from "lucide-react";
+import { Pen, Settings, List, CalendarDays, Calendar, Loader2, Check, BarChart, Share2, Tv, Upload, Eye } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -50,7 +49,6 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 // --- Tipos ---
@@ -109,18 +107,17 @@ export default function DashboardPage() {
   const isCreator = userRole === UserRole.CREATOR;
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  const [displayName, setDisplayName] = useState(session?.user?.name || "");
-  const [bio, setBio] = useState(session?.user?.bio || "");
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
   const [discordWebhook, setDiscordWebhook] = useState("");
-  // NOVO: Estado para o link da Twitch
   const [twitchLink, setTwitchLink] = useState(""); 
-  const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>(session?.user?.profileVisibility || "PUBLIC");
+  const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>("PUBLIC");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  const [showToWatch, setShowToWatch] = useState(session?.user?.showToWatchList ?? true);
-  const [showWatching, setShowWatching] = useState(session?.user?.showWatchingList ?? true);
-  const [showWatched, setShowWatched] = useState(session?.user?.showWatchedList ?? true);
-  const [showDropped, setShowDropped] = useState(session?.user?.showDroppedList ?? true);
+  const [showToWatch, setShowToWatch] = useState(true);
+  const [showWatching, setShowWatching] = useState(true);
+  const [showWatched, setShowWatched] = useState(true);
+  const [showDropped, setShowDropped] = useState(true);
 
   // Estados do Cropper (Avatar)
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -155,7 +152,7 @@ export default function DashboardPage() {
   }, [isCreator]);
 
   useEffect(() => {
-    if (status !== 'loading' && !isLoading) {
+    if (status === 'authenticated' && !isLoading) {
       const hasViewedTour = localStorage.getItem('meuCronogramaTourV1');
       if (!hasViewedTour) setTimeout(() => { setRunTour(true); }, 500);
     }
@@ -180,38 +177,45 @@ export default function DashboardPage() {
       setDisplayName(session.user.name || "");
       setBio(session.user.bio || "");
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
+      
+      // Só atualiza o preview se não houver arquivo selecionado (para não sobrescrever upload em andamento)
       if (!selectedFile) setPreviewImage(session.user.image || null);
       if (!selectedBannerFile) setPreviewBanner(session.user.profileBannerUrl || null);
+      
       setShowToWatch(session.user.showToWatchList ?? true);
       setShowWatching(session.user.showWatchingList ?? true);
       setShowWatched(session.user.showWatchedList ?? true);
       setShowDropped(session.user.showDroppedList ?? true);
-      // Cast para any pois adicionamos campos personalizados
+      
       const userAny = session.user as any;
       setDiscordWebhook(userAny.discordWebhookUrl || "");
-      // Preenche o link da Twitch se houver username salvo
       setTwitchLink(userAny.twitchUsername ? `https://twitch.tv/${userAny.twitchUsername}` : "");
     }
-  }, [session?.user, selectedFile, selectedBannerFile]);
+  }, [session?.user, selectedFile, selectedBannerFile]); // Dependências ajustadas
 
   const fetchSharedData = useCallback(async () => {
-    setIsUpdating(true);
+    // Se já estamos carregando a inicialização, não marque como updating visualmente para não piscar
+    if (!isLoading) setIsUpdating(true);
+    
     try {
-      const resWatching = await fetch(`/api/mediastatus?status=WATCHING&page=1&pageSize=50&searchTerm=`);
+      // Fazemos as chamadas em paralelo para ser mais rápido
+      const [resWatching, resSchedule] = await Promise.all([
+          fetch(`/api/mediastatus?status=WATCHING&page=1&pageSize=50&searchTerm=`, { cache: 'no-store' }), // No-store garante dados frescos
+          fetch(`/api/schedule?list=pending`, { cache: 'no-store' })
+      ]);
       
-      if (!resWatching.ok) {
-         setInitialMediaItems([]); 
-      } else {
+      if (resWatching.ok) {
          const watchingData = await resWatching.json();
          setInitialMediaItems(watchingData.items || []); 
+      } else {
+         setInitialMediaItems([]); 
       }
 
-      const resSchedule = await fetch(`/api/schedule?list=pending`);
-      if (!resSchedule.ok) {
-         setInitialScheduleItems([]);
-      } else {
+      if (resSchedule.ok) {
          const scheduleData = await resSchedule.json();
          setInitialScheduleItems(Array.isArray(scheduleData) ? scheduleData : []);
+      } else {
+         setInitialScheduleItems([]);
       }
 
     } catch (error) {
@@ -223,16 +227,25 @@ export default function DashboardPage() {
       setIsUpdating(false);
       setIsLoading(false);
     }
-  }, []);
+  }, [isLoading]); // Removido dependências instáveis
 
   useEffect(() => {
     if (status === "authenticated") {
       fetchSharedData();
     } else if (status === "unauthenticated") {
       setIsLoading(false);
+      // Redirecionamento é melhor tratado no middleware, mas mantemos como fallback
       if (typeof window !== 'undefined') { redirect("/auth/signin"); }
     }
-  }, [status, fetchSharedData]);
+  }, [status]); // Removemos fetchSharedData das deps para evitar loop, ele é estável
+
+  // useEffect separado para recarregar quando a versão dos dados muda
+  useEffect(() => {
+      if (status === "authenticated" && dataVersionKey > 0) {
+          fetchSharedData();
+      }
+  }, [dataVersionKey, status]); // fetchSharedData não incluído propositalmente
+
 
   const mapDataToMediaItems = (dataItems: MediaStatusWithMedia[]): MappedMediaItem[] => {
     if (!dataItems || !Array.isArray(dataItems)) return [];
@@ -264,9 +277,10 @@ export default function DashboardPage() {
 
   const handleDataChanged = useCallback(() => {
     setDataVersionKey(prevKey => prevKey + 1);
-    fetchSharedData();
-  }, [fetchSharedData]);
+  }, []);
 
+  // Os handlers locais (Add/Remove/Complete) atualizam o estado local IMEDIATAMENTE (Otimista)
+  // e depois o fetchSharedData confirma com o servidor.
   const handleAddSchedule = (newSchedule: MappedScheduleItem) => {
     setInitialScheduleItems((prev) => [...prev, newSchedule]);
     handleDataChanged();
@@ -317,7 +331,7 @@ export default function DashboardPage() {
         image: newImageUrl, 
         profileBannerUrl: newBannerUrl, 
         discordWebhookUrl: discordWebhook,
-        twitchUrl: twitchLink, // <--- NOVO: Envia o link da Twitch
+        twitchUrl: twitchLink, 
       };
       
       const res = await fetch('/api/profile/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), });
@@ -340,7 +354,7 @@ export default function DashboardPage() {
             showWatchedList: newSettings.showWatchedList, 
             showDroppedList: newSettings.showDroppedList, 
             profileBannerUrl: newSettings.profileBannerUrl, 
-            twitchUsername: newSettings.twitchUsername, // Atualiza na sessão
+            twitchUsername: newSettings.twitchUsername, 
           } 
         }); 
       }
@@ -353,7 +367,7 @@ export default function DashboardPage() {
 
       setSelectedFile(null); 
       setSelectedBannerFile(null);
-      setIsProfileModalOpen(false); // Fecha o modal após salvar
+      setIsProfileModalOpen(false); 
 
     } catch (error: any) {
       console.error("Erro ao guardar definições:", error); 

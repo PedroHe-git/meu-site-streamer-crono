@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react"; // Adicionado useRef
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { CalendarDays, Loader2, User, Compass, Heart, ArrowRight, Tv } from "lucide-react"; // Adicionado ícone Tv
+import { CalendarDays, Loader2, User, Compass, Heart, ArrowRight, Tv } from "lucide-react"; 
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
-// Tipo de Dados
 type CreatorSummary = {
     id: string;
     username: string;
@@ -17,23 +16,17 @@ type CreatorSummary = {
     itemCount: number;
 };
 
-// --- Card de Resumo do Criador (Visual Melhorado) ---
 const CreatorCard = ({ creator }: { creator: CreatorSummary }) => {
     return (
         <Link href={`/${creator.username}`} className="block h-full">
             <Card className="h-full relative overflow-hidden border transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-primary/50 group cursor-pointer bg-card/50 backdrop-blur-sm">
-                
-                {/* Efeito de Fundo no Hover (Gradiente subtil) */}
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
                 <CardContent className="p-5 flex items-start gap-4 relative z-10">
-                    {/* Avatar com Borda Dinâmica */}
                     <div className="relative">
                         <Avatar className="h-14 w-14 border-2 border-background shadow-sm group-hover:border-primary transition-colors duration-300">
                             <AvatarImage src={creator.image || undefined} />
                             <AvatarFallback><User className="h-6 w-6 text-muted-foreground" /></AvatarFallback>
                         </Avatar>
-                        {/* Indicador Online (Simulado/Decorativo ou baseado na Twitch) */}
                         {creator.twitchUsername && (
                             <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5" title="Canal da Twitch vinculado">
                                 <div className="bg-[#9146FF] text-white p-1 rounded-full w-5 h-5 flex items-center justify-center">
@@ -53,7 +46,6 @@ const CreatorCard = ({ creator }: { creator: CreatorSummary }) => {
                         
                         <p className="text-xs text-muted-foreground mb-3">@{creator.username}</p>
                         
-                        {/* Badge de Contagem */}
                         <div className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-secondary/50 text-secondary-foreground px-2.5 py-1 rounded-md border border-transparent group-hover:border-primary/20 transition-colors">
                             <CalendarDays className="h-3.5 w-3.5 opacity-70" />
                             <span>
@@ -71,13 +63,18 @@ export default function HomeFeeds() {
   const [following, setFollowing] = useState<CreatorSummary[]>([]);
   const [discover, setDiscover] = useState<CreatorSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const fetchedRef = useRef(false); // Proteção contra duplo fetch em React 18 Strict Mode
 
   useEffect(() => {
+    if (fetchedRef.current) return; // Evita rodar duas vezes
+    fetchedRef.current = true;
+
     const loadData = async () => {
       try {
+        // Executa em paralelo
         const [resFollow, resDiscover] = await Promise.all([
-            fetch("/api/feed/following"),
-            fetch("/api/feed/discover")
+            fetch("/api/feed/following", { next: { revalidate: 60 } }), // Cache curto no cliente para following
+            fetch("/api/feed/discover", { next: { revalidate: 3600 } }) // Cache longo no cliente para discover
         ]);
         
         if (resFollow.ok) setFollowing(await resFollow.json());
@@ -115,7 +112,6 @@ export default function HomeFeeds() {
                     <p className="text-sm text-muted-foreground">Novidades de quem você segue</p>
                 </div>
             </div>
-            {/* Badge de contagem total (Opcional) */}
             {following.length > 0 && (
                 <Badge variant="outline" className="h-6">
                     Seguindo {following.length}
