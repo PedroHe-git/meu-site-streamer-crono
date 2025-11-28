@@ -1,5 +1,3 @@
-// app/[username]/page.tsx
-
 import { notFound } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -8,67 +6,36 @@ import ProfilePage from "@/app/components/profile/ProfilePage";
 import { unstable_cache } from "next/cache";
 import { ProfileVisibility } from "@prisma/client";
 import { startOfWeek, endOfWeek, addDays, startOfDay, endOfDay, subHours } from "date-fns";
-
-// 1. CORREÇÃO: Importar o nome correto da função
+// 1. IMPORTANTE: Importar a função do AI
 import { generateScheduleSummary } from "@/lib/ai"; 
 
+// --- CACHE 1: Perfil + Cronograma + AI (1 hora) ---
 const getCachedUserProfile = async (username: string) => {
   const normalizedUsername = decodeURIComponent(username).toLowerCase();
 
   const getProfileData = unstable_cache(
     async () => {
-      let user = await prisma.user.findFirst({
+      // 1. Buscar Usuário
+      const user = await prisma.user.findFirst({
         where: { 
-          username: { equals: normalizedUsername, mode: 'insensitive' }
+          username: {
+             equals: normalizedUsername,
+             mode: 'insensitive' 
+          }
         },
         include: {
-          _count: { select: { followers: true, following: true } }
+          _count: {
+            select: { followers: true, following: true }
+          }
         }
       });
 
       if (!user) return null;
 
-      const today = subHours(new Date(), 4);
-      const startOfCurrentWeek = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
-      const futureLimit = endOfDay(addDays(startOfCurrentWeek, 28));
-      
-      const scheduleItems = await prisma.scheduleItem.findMany({
-        where: {
-          userId: user.id,
-          scheduledAt: { gte: startOfCurrentWeek, lte: futureLimit }
-        },
-        include: { media: true },
-        orderBy: { scheduledAt: 'asc' },
-        take: 200
-      });
-
+      // 2. Buscar Status das Listas
       const mediaStatuses = await prisma.mediaStatus.findMany({
         where: { userId: user.id }
       });
-
-      // --- LÓGICA DO HYPE MAN (IA) ---
-      if (!user.aiSummary && scheduleItems.length > 0) {
-        try {
-          console.log("🤖 Hype Man: Gerando resumo para", user.username);
-          
-          // 2. CORREÇÃO: Usar o nome correto E a ordem correta dos parâmetros
-          // A sua função pede: (username, items)
-          const aiText = await generateScheduleSummary(user.username, scheduleItems);
-
-          if (aiText) {
-            user = await prisma.user.update({
-              where: { id: user.id },
-              data: { aiSummary: aiText },
-              include: {
-                _count: { select: { followers: true, following: true } }
-              }
-            });
-            console.log("✅ Hype Man: Resumo salvo com sucesso!");
-          }
-        } catch (error) {
-          console.error("❌ Erro ao gerar Hype Man:", error);
-        }
-      }
 
       const listCounts = {
         TO_WATCH: mediaStatuses.filter(i => i.status === 'TO_WATCH').length,
@@ -77,7 +44,43 @@ const getCachedUserProfile = async (username: string) => {
         DROPPED: mediaStatuses.filter(i => i.status === 'DROPPED').length,
       };
 
-      return { user, listCounts, scheduleItems };
+      // 3. Buscar Cronograma (Ajuste de Fuso)
+      const today = subHours(new Date(), 4);
+      const startOfCurrentWeek = startOfDay(startOfWeek(today, { weekStartsOn: 1 }));
+      const futureLimit = endOfDay(addDays(startOfCurrentWeek, 28));
+      
+      const scheduleItems = await prisma.scheduleItem.findMany({
+        where: {
+          userId: user.id,
+          scheduledAt: { 
+              gte: startOfCurrentWeek,
+              lte: futureLimit
+          }
+        },
+        include: { media: true },
+        orderBy: { scheduledAt: 'asc' },
+        take: 200
+      });
+
+      // 4. GERAR O HYPE MAN (AI) DENTRO DO CACHE
+      // Isso garante que a IA só é chamada 1 vez por hora, economizando API e tempo.
+      let aiSummary = null;
+      try {
+        // Filtramos apenas itens desta semana para o resumo
+        const thisWeekItems = scheduleItems.filter(item => {
+           const itemDate = new Date(item.scheduledAt);
+           const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+           return itemDate <= weekEnd;
+        });
+
+        if (thisWeekItems.length > 0) {
+           aiSummary = await generateScheduleSummary(user.username, thisWeekItems);
+        }
+      } catch (e) {
+        console.error("Erro ao gerar resumo AI:", e);
+      }
+
+      return { user, listCounts, scheduleItems, aiSummary };
     },
     [`user-profile-${normalizedUsername}`], 
     { revalidate: 3600, tags: [`user-profile-${normalizedUsername}`, 'user-profile'] } 
@@ -86,11 +89,17 @@ const getCachedUserProfile = async (username: string) => {
   return getProfileData();
 };
 
+// --- CACHE 2: Status de Seguidor (1 hora) ---
 const getCachedFollowStatus = async (followerId: string, followingId: string) => {
   return unstable_cache(
     async () => {
       const follow = await prisma.follows.findUnique({
-        where: { followerId_followingId: { followerId, followingId } }
+        where: {
+          followerId_followingId: {
+            followerId,
+            followingId
+          }
+        }
       });
       return !!follow;
     },
@@ -111,9 +120,13 @@ export default async function UserProfile({
 
   const cachedData = await getCachedUserProfile(params.username);
 
-  if (!cachedData || !cachedData.user) notFound();
+  if (!cachedData || !cachedData.user) {
+    notFound();
+  }
 
-  const { user, listCounts, scheduleItems } = cachedData;
+  // Agora extraímos também o aiSummary do cache
+  const { user, listCounts, scheduleItems, aiSummary } = cachedData;
+
   const isOwner = sessionUserId === user.id;
   
   let isFollowing = false;
@@ -148,7 +161,11 @@ export default async function UserProfile({
       } else {
           dateString = new Date().toISOString(); 
       }
-      return { ...item, scheduledAt: dateString };
+
+      return {
+          ...item,
+          scheduledAt: dateString,
+      };
   });
 
   return (
@@ -162,7 +179,7 @@ export default async function UserProfile({
       // @ts-ignore
       initialSchedule={serializedSchedule}
       initialWeekRange={formattedWeekRange}
-      aiSummary={user.aiSummary} 
+      aiSummary={aiSummary} // <--- Passando o resumo gerado
     />
   );
 }

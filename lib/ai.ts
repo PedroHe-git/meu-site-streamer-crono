@@ -4,7 +4,6 @@ import { ScheduleItem, Media } from "@prisma/client";
 
 type ScheduleItemWithMedia = ScheduleItem & { media: Media };
 
-// Função que obtém o modelo (mantém-se igual)
 function getModel() {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
@@ -12,17 +11,14 @@ function getModel() {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Usamos o modelo que funcionou para si
     return genAI.getGenerativeModel({
         model: "gemini-2.0-flash",
         generationConfig: {
-      temperature: 0.3, 
-    },
+            temperature: 0.4, // Aumentei levemente para ele ser mais criativo nos memes
+        },
     });
 }
 
-// [IMPORTANTE] Esta função já envia os dados corretos (Tipo e Ano)
-// Não precisa de alterá-la.
 function simplifySchedule(items: ScheduleItemWithMedia[]): string {
     if (!items || items.length === 0) {
         return "Nenhum item agendado para esta semana.";
@@ -34,7 +30,6 @@ function simplifySchedule(items: ScheduleItemWithMedia[]): string {
                 .toLocaleDateString("pt-PT", { weekday: "long", day: "2-digit" });
 
             const title = item.media.title;
-            // Os dados que a IA precisa:
             const mediaType = item.media.mediaType;
             const year = item.media.releaseYear;
 
@@ -53,8 +48,6 @@ function simplifySchedule(items: ScheduleItemWithMedia[]): string {
         .join("\n");
 }
 
-// --- [PROMPT ATUALIZADO] ---
-// Esta é a função principal com as novas regras
 export async function generateScheduleSummary(
     username: string,
     scheduleItems: ScheduleItemWithMedia[]
@@ -67,6 +60,8 @@ export async function generateScheduleSummary(
     try {
         const simplifiedData = simplifySchedule(scheduleItems);
 
+        // --- [MODIFICAÇÃO AQUI] ---
+        // Adicionada a regra 7 sobre Memes e Frases Famosas
         const prompt = `
       Você é o "Hype Man" (apresentador entusiasta) oficial do(a) streamer ${username}.
 A sua tarefa é escrever um resumo curto, animado e objetivo (3–5 frases) sobre o cronograma da semana ATUAL.
@@ -87,37 +82,34 @@ INSTRUÇÕES IMPORTANTES (SIGA EXATAMENTE):
 1. **Começo obrigatório:** O resumo deve começar mencionando o nome do(a) streamer em MAIÚSCULAS.  
    Exemplo: "Alerta de hype! ${username.toUpperCase()} preparou..."
 
-2. **Uso correto de “Tipo”:**  
-   Use o campo "Tipo" apenas para descrever o item, convertendo para português:
+2. **Uso correto de “Tipo”:** Use o campo "Tipo" apenas para descrever o item, convertendo para português:
    - Movie → "filme"
    - Anime → "anime"
    - Series → "série"
    - Game → "jogo"
    Não invente géneros. Apenas descreva com o "Tipo" fornecido.
-   Exemplos válidos:
-     - "o filme Duna (2021)"
-     - "o anime One Piece – Episódio 12"
 
-3. **Usar apenas os dados fornecidos:**  
-   Utilize SOMENTE: Título, Tipo, Ano, Temporada, Episódio, Dia.  
-   Não adicionar sinopse, prémios, contexto externo ou qualquer informação inventada.
+3. **Usar apenas os dados fornecidos:** Utilize SOMENTE: Título, Tipo, Ano, Temporada, Episódio, Dia.  
 
-4. **Variar itens:**  
-   O resumo deve mencionar pelo menos 1 ou 2 itens de dias diferentes.
+4. **Variar itens:** O resumo deve mencionar pelo menos 1 ou 2 itens de todos os dias diferentes.
 
-5. **Tom:**  
-   - Entusiasmado, leve e curto.  
+5. **Referências Épicas (NOVA REGRA):**
+   Se houver na lista algum título muito famoso ou icônico (ex: Dragon Ball, Star Wars, Vingadores, LOL, clássicos do cinema), você PODE inserir uma **frase de efeito ou meme curto** conhecido pelos fãs.
+   Exemplos: 
+   - Se for Dragon Ball: "É de mais de oito mil!"
+   - Se for Star Wars: "Que a força esteja com ele."
+   - Se for um jogo difícil: "Será que vai ter rage?"
+   *Importante: Use isso no máximo 1 vez e apenas se encaixar na frase.*
+
+6. **Tom:** - Entusiasmado, leve e curto.  
    - 3 a 5 frases apenas.  
-   - Sem exageros e sem inventar nada além dos dados.
 
-6. **Saída final:**  
-   Gere apenas o resumo final, sem explicações sobre as regras.
+7. **Saída final:** Gere apenas o resumo final.
 
 Cronograma da Semana (dados):
 ${simplifiedData}
 
-Gere agora o resumo em português, usando corretamente o gênero, deixando o nome do(a) streamer em MAIÚSCULAS, e seguindo TODAS as regras acima.
-
+Gere agora o resumo em português.
     `;
 
         const model = getModel();
@@ -126,9 +118,6 @@ Gere agora o resumo em português, usando corretamente o gênero, deixando o nom
         return result.response.text().trim();
     } catch (error) {
         console.error("Erro ao gerar resumo da IA:", error);
-        if (error instanceof Error) {
-            console.error("Detalhes:", error.message);
-        }
         return null;
     }
 }
