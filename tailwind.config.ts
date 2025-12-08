@@ -1,13 +1,15 @@
-// tailwind.config.ts
 import type { Config } from "tailwindcss";
-import path from 'path';
 
 const config: Config = {
     darkMode: ["class"],
+    // Mudança principal: Removemos path.join e __dirname
+    // Usamos caminhos relativos simples que funcionam melhor com Route Groups
     content: [
-    path.join(__dirname, "./app/**/*.{js,ts,jsx,tsx,mdx}"),
-    path.join(__dirname, "./components/**/*.{js,ts,jsx,tsx,mdx}"),
-  ],
+      "./pages/**/*.{ts,tsx}",
+      "./components/**/*.{ts,tsx}",
+      "./app/**/*.{ts,tsx}",
+      "./src/**/*.{ts,tsx}",
+    ],
   theme: {
   	extend: {
   		fontFamily: {
@@ -89,7 +91,7 @@ const config: Config = {
   },
   plugins: [
     require("@tailwindcss/forms"),
-      require("tailwindcss-animate")
-],
+    require("tailwindcss-animate")
+  ],
 };
 export default config;

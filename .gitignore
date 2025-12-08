@@ -42,3 +42,5 @@ pnpm-debug.log*
 
 # Miscellaneous
 *.swp
+
+/docker-compose.yml

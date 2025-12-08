@@ -2,36 +2,40 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
-import { revalidateTag } from "next/cache"; // <--- IMPORTANTE: Importe a função de revalidação
+import { revalidateTag, unstable_cache } from "next/cache"; 
 
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    return new NextResponse("Não autorizado", { status: 401 });
-  }
+  if (!session?.user?.id) return new NextResponse("Não autorizado", { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const listType = searchParams.get("list"); // 'pending' ou 'completed'
-
   const userId = session.user.id;
 
   try {
-    const scheduleItems = await prisma.scheduleItem.findMany({
-      where: {
-        userId: userId,
-        ...(listType === 'pending' ? { isCompleted: false } : {}),
-        ...(listType === 'completed' ? { isCompleted: true } : {}),
-      },
-      include: {
-        media: true,
-      },
-      orderBy: {
-        scheduledAt: 'asc',
-      },
-    });
+    // Cache da agenda do usuário logado
+    const getCachedSchedule = unstable_cache(
+        async () => {
+            return await prisma.scheduleItem.findMany({
+                where: {
+                  userId: userId,
+                  ...(listType === 'pending' ? { isCompleted: false } : {}),
+                  ...(listType === 'completed' ? { isCompleted: true } : {}),
+                },
+                include: { media: true },
+                orderBy: { scheduledAt: 'asc' },
+              });
+        },
+        [`schedule-${userId}-${listType || 'all'}`],
+        {
+            revalidate: 3600, // 1 hora
+            tags: [`dashboard-schedule-${userId}`] 
+        }
+    );
+
+    const scheduleItems = await getCachedSchedule();
 
     return NextResponse.json(scheduleItems);
   } catch (error) {
@@ -42,25 +46,19 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    return new NextResponse("Não autorizado", { status: 401 });
-  }
+  if (!session?.user?.id) return new NextResponse("Não autorizado", { status: 401 });
 
   try {
     const body = await request.json();
     const { mediaId, scheduledAt, horario, seasonNumber, episodeNumber, episodeNumberEnd } = body;
     const userId = session.user.id;
 
-    if (!mediaId || !scheduledAt) {
-      return new NextResponse("Dados inválidos", { status: 400 });
-    }
+    if (!mediaId || !scheduledAt) return new NextResponse("Dados inválidos", { status: 400 });
 
-    // Cria o item no banco
     const newScheduleItem = await prisma.scheduleItem.create({
       data: {
-        userId: userId,
-        mediaId: mediaId,
+        userId,
+        mediaId,
         scheduledAt: new Date(scheduledAt),
         horario: horario || null,
         seasonNumber: seasonNumber ? parseInt(seasonNumber) : null,
@@ -68,23 +66,21 @@ export async function POST(request: Request) {
         episodeNumberEnd: episodeNumberEnd ? parseInt(episodeNumberEnd) : null,
         isCompleted: false,
       },
-      include: { // Inclui a mídia para o retorno
-        media: true,
-      }
+      include: { media: true }
     });
 
-    // --- A LINHA MÁGICA DE REVALIDAÇÃO ---
-    // Isso invalida o cache da página de perfil público, forçando uma atualização na próxima visita.
-    // A tag 'user-profile-[username]' deve ser a mesma usada no unstable_cache em app/[username]/page.tsx
+    // INVALIDAÇÃO
+    revalidateTag(`dashboard-schedule-${userId}`);
     if (session.user.username) {
-       const tag = `user-profile-${session.user.username.toLowerCase()}`;
-       revalidateTag(tag); 
-       console.log(`Cache revalidado (POST) para: ${tag}`);
-    }
-    // -------------------------------------
+   const username = session.user.username.toLowerCase();
+   revalidateTag(`user-profile-${username}`);
+   
+   // --- ADICIONE ISTO ---
+   revalidateTag(`overlay-${username}`); 
+   // ---------------------
+}
 
     return NextResponse.json(newScheduleItem);
-
   } catch (error) {
     console.error("Erro ao criar agendamento:", error);
     return new NextResponse("Erro Interno", { status: 500 });
@@ -93,50 +89,30 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
     const session = await getServerSession(authOptions);
-  
-    if (!session?.user?.id) {
-      return new NextResponse("Não autorizado", { status: 401 });
-    }
-  
+    if (!session?.user?.id) return new NextResponse("Não autorizado", { status: 401 });
+    
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
-  
-    if (!id) {
-        return new NextResponse("ID faltando", { status: 400 });
-    }
-  
+
+    if (!id) return new NextResponse("ID faltando", { status: 400 });
+
     try {
-      // Primeiro verifica se o item existe e pertence ao usuário
-      const itemToDelete = await prisma.scheduleItem.findUnique({
-        where: { id: id },
-        select: { userId: true }
-      });
-
-      if (!itemToDelete) {
-          return new NextResponse("Item não encontrado", { status: 404 });
-      }
-
-      if (itemToDelete.userId !== session.user.id) {
+      const item = await prisma.scheduleItem.findUnique({ where: { id }});
+      if (!item || item.userId !== session.user.id) {
           return new NextResponse("Proibido", { status: 403 });
       }
 
-      await prisma.scheduleItem.delete({
-        where: {
-            id: id,
-        }
-      });
+      await prisma.scheduleItem.delete({ where: { id } });
 
-      // --- REVALIDAÇÃO TAMBÉM NA DELEÇÃO ---
+      // INVALIDAÇÃO
+      revalidateTag(`dashboard-schedule-${session.user.id}`);
       if (session.user.username) {
-        const tag = `user-profile-${session.user.username.toLowerCase()}`;
-        revalidateTag(tag);
-        console.log(`Cache revalidado (DELETE) para: ${tag}`);
+        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
       }
-      // -------------------------------------
   
       return NextResponse.json({ success: true });
-    } catch (error) {
-      console.error("Erro ao apagar agendamento:", error);
-      return new NextResponse("Erro Interno", { status: 500 });
+    } catch (error) { 
+        console.error("Erro ao apagar:", error);
+        return new NextResponse("Erro Interno", { status: 500 }); 
     }
 }

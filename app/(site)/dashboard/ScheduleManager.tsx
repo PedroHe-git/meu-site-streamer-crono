@@ -252,18 +252,23 @@ export default function ScheduleManager({
       const res = await fetch('/api/schedule/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scheduleItemId: id }), 
+          body: JSON.stringify({ scheduleId: id, isCompleted: true }), 
       });
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Falha ao completar (API):", errorData);
-        throw new Error('Falha ao completar');
+        const errorText = await res.text();
+        console.error("Falha ao completar (API):", errorText);
+        throw new Error(errorText || 'Falha ao completar');
       }
       
       onCompleteSchedule(id); 
       
     } catch (error: any) {
       console.error(error.message);
+      toast({
+        title: "Erro",
+        description: "Não foi possível concluir o item.",
+        variant: "destructive"
+      });
     } finally {
       setLoadingStates(prev => ({ ...prev, [key]: false }));
     }

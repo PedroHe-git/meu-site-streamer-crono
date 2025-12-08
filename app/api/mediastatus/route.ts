@@ -2,17 +2,16 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
-import { MediaType, MovieStatusType, Prisma } from "@prisma/client";
-import { revalidateTag } from "next/cache";
+import { MovieStatusType, Prisma } from "@prisma/client";
+import { revalidateTag, unstable_cache } from "next/cache";
 
 export const runtime = 'nodejs';
-export const revalidate = 0; 
 
 // --- FUNÇÃO POST (Adicionar Item) ---
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   
-  if (!session || !session.user || !session.user.id) {
+  if (!session?.user?.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
   
@@ -36,31 +35,20 @@ export async function POST(request: Request) {
       return new NextResponse(JSON.stringify({ error: "Dados em falta (status, title, mediaType)" }), { status: 400 });
     }
     
-    // Validação de ID obrigatório (exceto para 'OUTROS')
     if (mediaType !== 'OUTROS' && !tmdbId && !malId && !igdbId) {
-        return new NextResponse(JSON.stringify({ error: "ID (tmdbId, malId ou igdbId) é obrigatório para este tipo" }), { status: 400 });
+        return new NextResponse(JSON.stringify({ error: "ID é obrigatório para este tipo" }), { status: 400 });
     }
 
     // Lógica para Encontrar ou Criar Mídia
-    let media;
     let whereClause: any = { mediaType: mediaType };
     
-    if (mediaType === 'ANIME' && malId) {
-        whereClause.malId = Number(malId);
-    } else if ((mediaType === 'MOVIE' || mediaType === 'SERIES') && tmdbId) {
-        whereClause.tmdbId = Number(tmdbId);
-    } else if (mediaType === 'GAME' && igdbId) {
-        whereClause.igdbId = Number(igdbId);
-    } else if (mediaType === 'OUTROS') {
-        whereClause.title = title;
-    }
+    if (mediaType === 'ANIME' && malId) whereClause.malId = Number(malId);
+    else if ((mediaType === 'MOVIE' || mediaType === 'SERIES') && tmdbId) whereClause.tmdbId = Number(tmdbId);
+    else if (mediaType === 'GAME' && igdbId) whereClause.igdbId = Number(igdbId);
+    else if (mediaType === 'OUTROS') whereClause.title = title;
 
-    // Tenta encontrar
-    media = await prisma.media.findFirst({
-        where: whereClause,
-    });
+    let media = await prisma.media.findFirst({ where: whereClause });
 
-    // Se não existir, cria
     if (!media) {
       media = await prisma.media.create({
         data: {
@@ -74,7 +62,6 @@ export async function POST(request: Request) {
       });
     }
     
-    // Upsert no Status (Salva na lista do usuário)
     const mediaStatus = await prisma.mediaStatus.upsert({
       where: {
         userId_mediaId: {
@@ -99,21 +86,25 @@ export async function POST(request: Request) {
       },
     });
 
-    // Limpa o cache do perfil público
-    revalidateTag('user-profile');
+    // INVALIDAÇÃO DE CACHE
+    revalidateTag(`dashboard-lists-${userId}`); // Limpa lista do painel
+    revalidateTag(`user-stats-${userId}`);      // Limpa estatísticas
+    if (session.user.username) {
+        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`); // Limpa perfil público
+    }
 
     return NextResponse.json(mediaStatus);
   } catch (error) {
     console.error("[MEDIASTATUS_POST]", error);
-    return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
   }
 }
 
-// --- FUNÇÃO PUT (Mover Item / Atualizar) ---
+// --- FUNÇÃO PUT (Atualizar Item) ---
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   
-  if (!session || !session.user || !session.user.id) {
+  if (!session?.user?.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
   
@@ -121,28 +112,25 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, status, isWeekly } = body; // 'id' aqui é o ID do MediaStatus
+    const { id, status, isWeekly } = body; 
 
     if (!id) {
-      return new NextResponse(JSON.stringify({ error: "ID do MediaStatus em falta" }), { status: 400 });
+      return new NextResponse(JSON.stringify({ error: "ID faltando" }), { status: 400 });
     }
 
-    const mediaStatusToUpdate = await prisma.mediaStatus.findUnique({
-      where: { id: id },
+    const currentItem = await prisma.mediaStatus.findUnique({
+        where: { id },
+        select: { userId: true }
     });
 
-    if (!mediaStatusToUpdate || mediaStatusToUpdate.userId !== userId) {
-      return new NextResponse(JSON.stringify({ error: "Não autorizado a atualizar este item" }), { status: 403 });
+    if (!currentItem || currentItem.userId !== userId) {
+        return new NextResponse("Não autorizado", { status: 403 });
     }
 
     const updateData: any = {};
     if (status) {
       updateData.status = status;
-      if (status === 'WATCHED') {
-        updateData.watchedAt = new Date();
-      } else {
-        updateData.watchedAt = null; 
-      }
+      updateData.watchedAt = status === 'WATCHED' ? new Date() : null;
     }
     if (isWeekly !== undefined) updateData.isWeekly = isWeekly;
 
@@ -151,13 +139,17 @@ export async function PUT(request: Request) {
       data: updateData,
     });
 
-    // Limpa o cache do perfil público
-    revalidateTag('user-profile');
+    // INVALIDAÇÃO DE CACHE
+    revalidateTag(`dashboard-lists-${userId}`);
+    revalidateTag(`user-stats-${userId}`);
+    if (session.user.username) {
+        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
+    }
 
     return NextResponse.json(updatedMediaStatus);
   } catch (error) {
     console.error("[MEDIASTATUS_PUT]", error);
-    return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
   }
 }
 
@@ -165,30 +157,23 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
   
-  if (!session || !session.user || !session.user.id) {
+  if (!session?.user?.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
   
   const userId = session.user.id;
-
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id"); 
 
-  if (!id) {
-    return new NextResponse(JSON.stringify({ error: "ID do MediaStatus em falta na URL" }), { status: 400 });
-  }
+  if (!id) return new NextResponse("ID faltando", { status: 400 });
 
   try {
     const mediaStatus = await prisma.mediaStatus.findUnique({
-        where: { 
-            id: id, 
-            userId: userId 
-        },
+        where: { id: id, userId: userId },
         select: { mediaId: true }
     });
 
     if (mediaStatus) {
-        // Apaga agendamentos pendentes para esta mídia
         await prisma.scheduleItem.deleteMany({
             where: {
                 userId: userId,
@@ -198,88 +183,84 @@ export async function DELETE(request: Request) {
         });
     }
 
-    // Agora apaga o MediaStatus
     await prisma.mediaStatus.delete({
       where: { id: id, userId: userId }, 
     });
 
-    // Limpa o cache do perfil público
-    revalidateTag('user-profile');
+    // INVALIDAÇÃO DE CACHE
+    revalidateTag(`dashboard-lists-${userId}`);
+    revalidateTag(`user-stats-${userId}`);
+    revalidateTag(`dashboard-schedule-${userId}`); // Remove também da agenda
+    if (session.user.username) {
+        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
+    }
 
     return new NextResponse(null, { status: 204 }); 
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        return new NextResponse(JSON.stringify({ error: "Item não encontrado" }), { status: 404 });
-    }
     console.error("[MEDIASTATUS_DELETE]", error);
-    return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
   }
 }
 
-// --- FUNÇÃO GET (Listar Itens com Correção de Órfãos) ---
+// --- FUNÇÃO GET OTIMIZADA (Com Cache e Paginação no Banco) ---
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   
-  if (!session || !session.user || !session.user.id) {
+  if (!session?.user?.id) {
     return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   }
   
   const userId = session.user.id;
-
   const { searchParams } = new URL(request.url);
+  
   const status = searchParams.get("status") as MovieStatusType;
   const page = parseInt(searchParams.get("page") || "1", 10);
-  const pageSize = parseInt(searchParams.get("pageSize") || "500", 10);
+  const pageSize = parseInt(searchParams.get("pageSize") || "50", 10);
   const searchTerm = searchParams.get("searchTerm") || "";
 
-  if (!status) {
-    return new NextResponse(JSON.stringify({ error: "Status não fornecido" }), { status: 400 });
-  }
+  if (!status) return new NextResponse("Status não fornecido", { status: 400 });
 
   try {
-    // 1. Buscamos TODOS os itens do status
-    const allMediaStatus = await prisma.mediaStatus.findMany({
-        where: {
+    // Chave única para o cache baseada nos filtros
+    const cacheKey = `list-${userId}-${status}-${page}-${pageSize}-${searchTerm}`;
+
+    const getCachedList = unstable_cache(
+      async () => {
+        // Filtro direto no banco de dados
+        const whereClause: Prisma.MediaStatusWhereInput = {
             userId: userId,
             status: status,
-        },
-        include: {
-            media: true, 
-        },
-    });
+            media: {
+                title: searchTerm ? { contains: searchTerm, mode: 'insensitive' } : undefined
+            }
+        };
 
-    // 2. Filtro Robusto (JavaScript)
-    const filteredItems = allMediaStatus.filter(item => {
-        // Segurança contra itens órfãos (sem mídia associada)
-        if (!item.media || !item.media.title) {
-            return false; 
-        }
-        // Filtro de busca textual
-        if (searchTerm) {
-            return item.media.title.toLowerCase().includes(searchTerm.toLowerCase());
-        }
-        return true;
-    });
+        const [totalCount, items] = await Promise.all([
+            prisma.mediaStatus.count({ where: whereClause }),
+            prisma.mediaStatus.findMany({
+                where: whereClause,
+                take: pageSize,
+                skip: (page - 1) * pageSize,
+                include: { media: true },
+                orderBy: { media: { title: 'asc' } }
+            })
+        ]);
 
-    // 3. Ordenação Alfabética (JavaScript)
-    filteredItems.sort((a, b) => {
-        return (a.media.title || "").localeCompare(b.media.title || "");
-    });
+        return { items, totalCount, page, pageSize };
+      },
+      [cacheKey], 
+      {
+        revalidate: 3600, // Cache de 1 hora
+        tags: [`dashboard-lists-${userId}`] // Tag para invalidação
+      }
+    );
 
-    // 4. Paginação Manual
-    const totalCount = filteredItems.length;
-    const skip = (page - 1) * pageSize;
-    const paginatedItems = filteredItems.slice(skip, skip + pageSize);
+    const data = await getCachedList();
 
-    return NextResponse.json({
-      items: paginatedItems,
-      totalCount,
-      page,
-      pageSize,
-    });
+    return NextResponse.json(data);
     
   } catch (error) {
     console.error("[MEDIASTATUS_GET]", error);
-    return new NextResponse(JSON.stringify({ error: "Erro Interno do Servidor" }), { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
   }
 }

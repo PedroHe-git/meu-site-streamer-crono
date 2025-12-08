@@ -100,12 +100,13 @@ export default withAuth(
   }
 );
 
-export const config = { 
-    // O matcher define onde o middleware roda.
-    // Para o modo manutenção funcionar em TODO o site, precisamos pegar tudo.
-    // O regex abaixo diz: "Pegue tudo, MENOS arquivos estáticos, imagens e favicon".
-    // Removemos 'auth/signin' e 'auth/register' da exclusão para que eles TAMBÉM mostrem a tela de manutenção.
-    matcher: [
-        '/((?!_next/static|_next/image|favicon.ico).*)'
-    ] 
+export const config = {
+  // O matcher DEVE excluir arquivos estáticos (favicon, _next, imagens)
+  // Se não excluir, o middleware bloqueia o CSS e a página fica sem estilo.
+  matcher: [
+    "/dashboard/:path*",
+    "/profile/settings/:path*",
+    // A linha abaixo é o segredo: nega tudo que tem ponto (.) como .css, .png, etc
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)",
+  ],
 };

@@ -1,12 +1,15 @@
-// app/layout.tsx
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "./globals.css";
-import AuthProvider from "./components/AuthProvider";
-import Navbar from "./components/Navbar";
+// Caminho corrigido para o CSS global (sobe um nível)
+import "../globals.css";
+
+// Caminhos corrigidos para usar alias absoluto (@)
+import AuthProvider from "@/app/components/AuthProvider";
+import Navbar from "@/app/components/Navbar";
 import { ThemeProvider } from "@/app/components/theme-provider";
+import ChristmasSnow from "@/app/components/ChristmasSnow";
+
 import Script from "next/script";
-import ChristmasSnow from "@/app/components/ChristmasSnow"; // <--- IMPORTAR
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -48,7 +51,7 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            {/* Adiciona a Neve aqui, em cima de tudo */}
+            {/* Efeito de Neve */}
             <ChristmasSnow />
             
             <Navbar />

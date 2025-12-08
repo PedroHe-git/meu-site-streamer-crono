@@ -1,112 +1,102 @@
 import { NextResponse } from "next/server";
-// --- [IMPORTANTE] Usa imports do Next-Auth v4 ---
-import { getServerSession } from "next-auth/next";
-// --- [CORREÇÃO AQUI - Usa Alias] ---
+import prisma from "@/lib/prisma";
+import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
-// --- [FIM CORREÇÃO] ---
-import prisma from '@/lib/prisma';
-import { Prisma } from "@prisma/client";
-import { revalidateTag } from "next/cache"; // Importação necessária para o cache on-demand
-
-export const runtime = 'nodejs';
-
+import { revalidateTag } from "next/cache";
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions); // Usa authOptions v4 importado corretamente
-  if (!session?.user?.email) {
-    return new NextResponse("Não autorizado", { status: 401 });
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.id) {
+    return new NextResponse("Unauthorized", { status: 401 });
   }
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+    const { scheduleId, isCompleted } = await request.json();
+    const userId = session.user.id;
+
+    if (!scheduleId) {
+      return new NextResponse("Schedule ID is required", { status: 400 });
+    }
+
+    // 1. Atualiza o item do agendamento
+    const updatedItem = await prisma.scheduleItem.update({
+      where: { 
+        id: scheduleId,
+        userId: userId 
+      },
+      data: { isCompleted: isCompleted },
+      select: { mediaId: true } 
     });
-    if (!user) {
-      return new NextResponse("Usuário não encontrado", { status: 404 });
-    }
 
-    const body = await request.json();
-    const { scheduleItemId } = body;
+    const mediaId = updatedItem.mediaId;
 
-    if (!scheduleItemId) {
-      return new NextResponse(JSON.stringify({ error: "ID do agendamento faltando" }), { status: 400 });
-    }
+    // 2. Busca informações do MediaStatus (para saber se é SEMANAL)
+    const mediaStatusInfo = await prisma.mediaStatus.findUnique({
+        where: {
+            userId_mediaId: { userId, mediaId }
+        },
+        select: { isWeekly: true }
+    });
 
-    // Transação para garantir consistência
-    const result = await prisma.$transaction(async (tx) => {
+    const isWeekly = mediaStatusInfo?.isWeekly || false;
 
-      // 1. Encontra o agendamento E o status da mídia associada
-      const scheduleItem = await tx.scheduleItem.findUnique({
-        where: { id: scheduleItemId, userId: user.id, },
-        include: {
-           media: {
-             include: {
-               // Puxa o MediaStatus específico deste utilizador para esta mídia
-               mediaStatuses: { where: { userId: user.id } }
-             }
-           }
+    // 3. Lógica de Status
+    if (isCompleted) {
+      // Conta itens pendentes
+      const remainingItemsCount = await prisma.scheduleItem.count({
+        where: {
+          userId: userId,
+          mediaId: mediaId,
+          isCompleted: false,
         }
       });
-      if (!scheduleItem) { throw new Error("Item de agendamento não encontrado."); }
 
-      const mediaStatus = scheduleItem.media.mediaStatuses[0];
-      if (!mediaStatus) { throw new Error("Status da mídia correspondente não encontrado."); }
+      // LÓGICA CORRIGIDA:
+      // Se for Semanal (isWeekly === true) -> Mantém WATCHING sempre.
+      // Se não for Semanal -> Verifica se acabou os itens (count === 0).
+      let newStatus: 'WATCHED' | 'WATCHING' = 'WATCHING';
 
-      // 2. Prepara os dados para atualizar o MediaStatus
-      const mediaStatusUpdateData: Prisma.MediaStatusUpdateInput = {
-          // Atualiza o progresso SEMPRE
-          lastSeasonWatched: scheduleItem.seasonNumber,
-          lastEpisodeWatched: scheduleItem.episodeNumber,
-          lastEpisodeWatchedEnd: scheduleItem.episodeNumberEnd,
-      };
-
-      // 3. Decide o NOVO status baseado em isWeekly
-      if (mediaStatus.isWeekly) {
-         // Se for semanal, o status NÃO MUDA (continua WATCHING)
-         mediaStatusUpdateData.status = "WATCHING";
-      } else {
-         // Se NÃO for semanal, muda para WATCHED
-         mediaStatusUpdateData.status = "WATCHED";
-         mediaStatusUpdateData.watchedAt = new Date();
+      if (!isWeekly && remainingItemsCount === 0) {
+          newStatus = 'WATCHED';
       }
-
-      // 4. Atualiza o MediaStatus
-      const updatedMediaStatus = await tx.mediaStatus.update({
-        where: { id: mediaStatus.id }, // Usa o ID do MediaStatus encontrado
-        data: mediaStatusUpdateData,
-      });
-
-      // 5. Atualiza o ScheduleItem para concluído
-      await tx.scheduleItem.update({
-        where: { id: scheduleItem.id, },
-        data: { isCompleted: true } // Em vez de deletar, marcamos como completo
-      });
-
-      console.log(`Item ${mediaStatus.isWeekly ? 'semanal' : 'normal'} (${scheduleItem.id}) concluído.`);
       
-      // --- [MUDANÇA AQUI] ---
-      // Retornamos 'isWeekly' para o frontend saber qual mensagem mostrar.
-      return { updatedMediaStatus, itemWasCompleted: true, isWeekly: mediaStatus.isWeekly };
-    });
+      // Se for semanal, ou se sobraram itens, ele fica/continua como WATCHING.
 
-    // --- REVALIDAÇÃO DE CACHE ---
-    // Limpa o cache do perfil público para refletir a conclusão imediatamente
-    if (user.username) {
-       const tag = `user-profile-${user.username.toLowerCase()}`;
-       revalidateTag(tag);
-       console.log(`Cache revalidado (COMPLETE) para: ${tag}`);
+      await prisma.mediaStatus.update({
+        where: { userId_mediaId: { userId, mediaId } },
+        data: { 
+            status: newStatus,
+            // Só preenche a data de conclusão se realmente finalizou (WATCHED)
+            watchedAt: newStatus === 'WATCHED' ? new Date() : null 
+        }
+      });
+    } 
+    else {
+        // Se desmarcou, volta para WATCHING
+        await prisma.mediaStatus.update({
+            where: { userId_mediaId: { userId, mediaId } },
+            data: { status: 'WATCHING', watchedAt: null }
+        });
     }
 
-    // Retorna o resultado da transação
-    return NextResponse.json(result);
+    // Invalida caches
+    revalidateTag(`dashboard-schedule-${userId}`);
+    revalidateTag(`dashboard-lists-${userId}`);
+    revalidateTag(`user-stats-${userId}`);
+    if (session.user.username) {
+    const username = session.user.username.toLowerCase();
+    revalidateTag(`user-profile-${username}`);
+    
+    // --- ADICIONE ISTO ---
+    revalidateTag(`overlay-${username}`); // Atualiza o OBS instantaneamente
+    // ---------------------
+}
+
+    return NextResponse.json(updatedItem);
 
   } catch (error) {
-     console.error("Erro ao completar item:", error);
-     // Trata erros específicos (ex: item não encontrado)
-     if (error instanceof Error && (error.message.includes("não encontrado") || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025'))) {
-        return new NextResponse(JSON.stringify({ error: "Erro: Item de agendamento ou status não encontrado." }), { status: 404 });
-     }
-    // Erro genérico
-    return new NextResponse(JSON.stringify({ error: "Erro interno ao completar item" }), { status: 500 });
+    console.error("[SCHEDULE_COMPLETE]", error);
+    return new NextResponse("Internal Error", { status: 500 });
   }
 }

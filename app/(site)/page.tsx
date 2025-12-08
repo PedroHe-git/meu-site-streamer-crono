@@ -1,13 +1,15 @@
-// app/page.tsx
+// app/(site)/page.tsx
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
-import LandingPage from "./components/LandingPage";
-import HomeFeeds from "./components/HomeFeeds"; 
-import UserSearch from "./components/UserSearch";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { LayoutDashboard } from "lucide-react";
 import { UserRole } from "@prisma/client";
+
+// --- IMPORTAÇÕES CORRIGIDAS (Caminhos Absolutos) ---
+import LandingPage from "@/app/components/LandingPage";
+import HomeFeeds from "@/app/components/HomeFeeds"; 
+import UserSearch from "@/app/components/UserSearch";
+import { Button } from "@/components/ui/button";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
@@ -18,8 +20,6 @@ export default async function Home() {
   }
 
   // 2. Usuário Logado (Qualquer tipo) -> Vê o Feed
-  // NÃO colocamos nenhum redirect aqui. O Criador vê o feed igual a todos.
-  
   const firstName = session.user.name?.split(" ")[0] || session.user.username;
   const isCreator = session.user.role === UserRole.CREATOR;
 
@@ -41,7 +41,7 @@ export default async function Home() {
                   </div>
               </div>
               
-              {/* Botão Dashboard (Só aparece para Criadores, mas não força a ida) */}
+              {/* Botão Dashboard (Só aparece para Criadores) */}
               {isCreator && (
                 <div className="md:hidden mt-4 flex justify-center">
                     <Link href="/dashboard" className="w-full">
