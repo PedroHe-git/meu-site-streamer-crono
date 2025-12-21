@@ -1,31 +1,31 @@
-// app/(site)/cronograma/page.tsx
 import { Metadata } from 'next';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@prisma/client';
 import ScheduleSlider from '@/app/components/ScheduleSlider';
-import { startOfWeek } from 'date-fns'; // Importe isso
+import { startOfWeek } from 'date-fns'; 
 
 export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: 'Cronograma | Agenda Semanal',
-  description: 'Confira a programação completa de lives e jogos da semana.',
+  description: 'Confira a programação completa de lives e jogos.',
 };
 
 async function getSchedule() {
   const today = new Date();
   
-  // 👇 MUDANÇA: Pega a Segunda-feira desta semana (para mostrar a semana completa)
+  // Pega o início desta semana para garantir que o carrossel comece certo
   const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
   
-  // Pega até 4 semanas pra frente (para o slider ter conteúdo futuro)
+  // 👇 MUDANÇA: Buscamos 60 dias para frente (aprox. 8 semanas)
+  // Isso evita que o carrossel fique vazio ao clicar em "Próxima Semana"
   const futureDate = new Date(startOfCurrentWeek);
-  futureDate.setDate(startOfCurrentWeek.getDate() + 28);
+  futureDate.setDate(startOfCurrentWeek.getDate() + 60);
 
   const events = await prisma.scheduleItem.findMany({
     where: {
       scheduledAt: {
-        gte: startOfCurrentWeek, // Busca desde a segunda-feira
+        gte: startOfCurrentWeek, 
         lte: futureDate 
       },
       user: {
@@ -61,19 +61,18 @@ export default async function CronogramaPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-      <header className="bg-gradient-to-b from-gray-900 to-gray-950 py-12 border-b border-gray-800">
+      <header className="bg-gradient-to-b from-gray-900 to-gray-950 pt-28 pb-12 border-b border-gray-800">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-5xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
-            Agenda Semanal
+            Agenda de Lives
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            Acompanhe a nossa programação de Segunda a Domingo.
+            Saiba exatamente o que vamos jogar hoje e nas próximas semanas.
           </p>
         </div>
       </header>
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
-        {/* Passamos uma cópia limpa do objeto para evitar erro de Data do Server Component */}
         <ScheduleSlider events={JSON.parse(JSON.stringify(schedule))} />
       </main>
     </div>

@@ -7,7 +7,7 @@ export default function Navbar() {
   const { data: session, status } = useSession();
 
   return (
-    <nav className="flex justify-between p-4 bg-gray-800 text-white">
+    <nav className="sticky top-0 z-50 w-full bg-gray-900 border-b border-gray-800 ...">
       <Link href="/" className="font-bold text-xl">
         Minha Logo
       </Link>

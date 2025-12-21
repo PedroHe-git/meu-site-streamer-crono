@@ -1,16 +1,16 @@
 // app/(site)/layout.tsx
 import { Inter } from 'next/font/google';
 
-// 👇 CORREÇÃO: Usando caminhos absolutos baseados no seu tsconfig.json
 import '@/app/globals.css'; 
-import Navbar from '@/app/components/Navbar';
+// 👇 MUDANÇA: Usamos o Header do Portfolio como a navegação principal
+import Header from '@/app/components/portfolio/Header'; 
 import AuthContext from '@/app/context/AuthContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Meu Site Streamer',
-  description: 'Painel e Overlay para Streamers',
+  title: 'PedroHE | Streamer & Content Creator',
+  description: 'Acompanhe cronogramas, vídeos e novidades.',
 };
 
 export default function RootLayout({
@@ -19,16 +19,19 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR">
-      <body className={inter.className}>
+    <html lang="pt-BR" className="dark">
+      <body className={`${inter.className} bg-gray-950 text-gray-100`}>
         <AuthContext>
-          {/* A Navbar fica fixa no topo */}
-          <Navbar />
           
-          {/* O conteúdo da página (dashboard, login, etc) é renderizado aqui */}
-          <main className="min-h-screen bg-gray-100">
+          {/* Navegação Unificada */}
+          <Header />
+          
+          {/* Conteúdo Principal */}
+          {/* 'min-h-screen' garante que o rodapé fique lá embaixo */}
+          <main className="min-h-screen relative">
             {children}
           </main>
+          
         </AuthContext>
       </body>
     </html>

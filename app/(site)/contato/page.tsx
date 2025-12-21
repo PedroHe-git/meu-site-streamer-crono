@@ -1,5 +1,5 @@
 // app/(site)/contato/page.tsx
-import { Header } from "@/app/components/portfolio/Header";
+import  Header  from "@/app/components/portfolio/Header";
 import { Footer } from "@/app/components/portfolio/Footer";
 import { ContactSection } from "@/app/components/portfolio/ContactSection";
 

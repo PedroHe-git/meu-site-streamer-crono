@@ -1,23 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, Film, Lock, Pen, Loader2, Link as LinkIcon, Share2, Tv, Upload, Eye } from "lucide-react";
+import { Calendar, Film, Lock, Pen, Loader2, Sparkles } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import do Alert
+import { Button } from "@/components/ui/button";
 import FollowButton from "@/app/components/FollowButton";
 import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
-import PublicScheduleView from "@/app/components/PublicScheduleView";
 import UserListsClient from "@/app/components/UserListsClient";
+import ScheduleSlider from "@/app/components/ScheduleSlider"; // 👈 Novo Componente
 import Image from "next/image"; 
-import Link from "next/link";
-import { buttonVariants, Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { Media, MediaStatus, ScheduleItem, User as PrismaUser } from "@prisma/client";
+import { Media, ScheduleItem, User as PrismaUser } from "@prisma/client";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useToast } from "@/hooks/use-toast";
 
-// --- Tipos Atualizados ---
+// --- Tipos ---
 type ListCounts = {
   TO_WATCH: number;
   WATCHING: number;
@@ -43,8 +41,6 @@ type ProfilePageProps = {
   initialWeekRange: { start: string, end: string } | null;
   aiSummary: string | null; 
 };
-// --- Fim dos Tipos ---
-
 
 export default function ProfilePage({
   user,
@@ -54,7 +50,6 @@ export default function ProfilePage({
   activeTab = "cronograma",
   listCounts,
   initialSchedule,
-  initialWeekRange,
   aiSummary
 }: ProfilePageProps) {
 
@@ -68,7 +63,6 @@ export default function ProfilePage({
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
-  // Função para redirecionar ao Dashboard
   const handleEditProfile = () => {
       router.push("/dashboard");
   };
@@ -93,7 +87,6 @@ export default function ProfilePage({
       
       {/* Hero Section */}
       <div className="relative w-full h-[400px] md:h-[500px] overflow-hidden">
-        {/* Banner */}
         {user.profileBannerUrl ? (
           <Image
             src={user.profileBannerUrl}
@@ -107,18 +100,15 @@ export default function ProfilePage({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent"></div>
         
-        {/* Informações do Usuário */}
         <div className="absolute bottom-0 left-0 right-0 pb-8 pt-20 px-4">
             <div className="container mx-auto max-w-5xl flex flex-col md:flex-row items-end gap-6 md:gap-8">
                 
-                {/* Avatar + Status Live */}
                 <div className="relative flex-shrink-0">
                     <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-background shadow-xl ring-2 ring-border/20">
                         <AvatarImage src={user.image ?? undefined} alt={user.username} className="object-cover"/>
                         <AvatarFallback className="text-4xl bg-muted text-muted-foreground">{fallbackLetter}</AvatarFallback>
                     </Avatar>
                     
-                    {/* Indicador de Live (Desacoplado do Banco) */}
                     {user.twitchUsername && (
                         <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20">
                            <LiveStatusIndicator twitchChannel={user.twitchUsername} />
@@ -157,7 +147,6 @@ export default function ProfilePage({
                                   variant="outline" 
                                   size="sm"
                                   className="w-full md:w-auto bg-white/10 text-foreground border-white/20 hover:bg-white/20 backdrop-blur-md"
-                                  // Alterado para redirecionar para o Dashboard
                                   onClick={handleEditProfile}
                                 >
                                 <Pen className="h-4 w-4 mr-2" />
@@ -177,7 +166,7 @@ export default function ProfilePage({
         </div>
       </div>
 
-      {/* Conteúdo Principal (Abas) */}
+      {/* Conteúdo Principal */}
       <div className="container mx-auto max-w-5xl py-8 px-4">
         {!canViewProfile ? (
           <Card className="shadow-lg border-2 border-dashed">
@@ -227,12 +216,25 @@ export default function ProfilePage({
 
             <div className="animate-in fade-in duration-500 slide-in-from-bottom-4">
                 <TabsContent value="cronograma" className="mt-0 focus-visible:outline-none">
-                  <PublicScheduleView 
-                    username={user.username}
-                    initialSchedule={initialSchedule}
-                    initialWeekRange={initialWeekRange}
-                    initialAiSummary={aiSummary} 
+                  
+                  {/* ALERTA DE IA (Movido para cá) */}
+                  {aiSummary && (
+                    <Alert className="mb-6 border-purple-500/30 bg-purple-500/10 text-purple-200 shadow-sm">
+                      <Sparkles className="h-4 w-4 text-purple-400" />
+                      <AlertTitle className="flex items-center gap-2 font-bold">
+                         Destaques da IA <span className="animate-pulse">✨</span>
+                      </AlertTitle>
+                      <AlertDescription className="text-purple-300">
+                        {aiSummary}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* NOVO SLIDER DE CRONOGRAMA */}
+                  <ScheduleSlider 
+                    events={initialSchedule || []} 
                   />
+
                 </TabsContent>
 
                 <TabsContent value="listas" className="mt-0 focus-visible:outline-none">

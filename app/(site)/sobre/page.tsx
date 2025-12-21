@@ -1,5 +1,5 @@
 // app/(site)/sobre/page.tsx
-import { Header } from "@/app/components/portfolio/Header";
+import  Header  from "@/app/components/portfolio/Header";
 import { Footer } from "@/app/components/portfolio/Footer";
 import { AboutSection } from "@/app/components/portfolio/AboutSection";
 import { BrandLogos } from "@/app/components/portfolio/BrandLogos";
