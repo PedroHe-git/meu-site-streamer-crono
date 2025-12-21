@@ -1,5 +1,5 @@
 // app/(site)/dashboard/layout.tsx
-import { Navbar } from "@/app/components/Navbar"; // A Navbar antiga do sistema
+import  Navbar  from "@/app/components/Navbar"; // A Navbar antiga do sistema
 
 export default function DashboardLayout({
   children,

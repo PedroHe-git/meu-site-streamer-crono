@@ -1,26 +1,34 @@
-import "@/app/globals.css";
-import { Inter } from "next/font/google";
-import AuthProvider from "@/app/components/AuthProvider"; // Importando o provedor
+// app/layout.tsx
+import '@/app/globals.css';
+import { Inter } from 'next/font/google'; 
+import Navbar from '@/app/components/Navbar'; 
+import AuthContext from '@/app/context/AuthContext'; 
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: "PedroHE | Portfólio & Cronograma",
-  description: "Site oficial e portfólio do Streamer PedroHE",
+  title: 'Meu App Next.js',
+  description: 'Criado com NextAuth',
 };
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR" className="scroll-smooth">
-      <body className={`${inter.className} antialiased min-h-screen bg-background text-foreground`}>
-        {/* O AuthProvider DEVE ficar dentro do body para envolver todo o app */}
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+    <html lang="pt-BR">
+      <body className={inter.className}>
+        {/* Envolvemos tudo com o AuthContext */}
+        <AuthContext>
+          
+          <Navbar /> {/* Agora a Navbar pode usar useSession() */}
+          
+          <main>
+            {children}
+          </main>
+          
+        </AuthContext>
       </body>
     </html>
   );
