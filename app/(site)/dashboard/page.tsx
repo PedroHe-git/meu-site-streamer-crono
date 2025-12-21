@@ -1,11 +1,10 @@
 "use client";
 
-// Importações...
 import {
   useState, useEffect, useCallback, useMemo, useRef,
   ChangeEvent, SyntheticEvent
 } from "react";
-import { useRouter } from "next/navigation"; // 👈 IMPORTANTE: ADICIONE ISSO
+import { useRouter } from "next/navigation";
 import { Step, STATUS, CallBackProps } from 'react-joyride';
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
@@ -33,7 +32,6 @@ import { Textarea } from "@/components/ui/textarea";
 import AppTour from '@/app/components/AppTour';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-// 👇 IMPORTANTE: Adicione Handshake aqui na lista de ícones
 import { Pen, Settings, List, CalendarDays, Calendar, Loader2, Check, BarChart, Share2, Tv, Upload, Eye, Handshake } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -49,19 +47,47 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 
-// ... (Mantenha os Tipos e constantes de Tour iguais) ...
+// --- Tipos ---
 type MediaStatusWithMedia = MediaStatus & { media: Media; };
 type ScheduleItemWithMedia = ScheduleItem & { media: Media; };
 type StatusKey = "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
-// ... (Todo o resto dos tipos e constantes) ...
+
+type MappedMediaItem = {
+  id: string;
+  userId: string;
+  mediaId: string;
+  title: string;
+  mediaType: MediaType;
+  posterPath: string;
+  status: StatusKey;
+  isWeekly?: boolean;
+  lastSeason?: number;
+  lastEpisode?: number;
+  tmdbId: number | null;
+  malId: number | null;
+  episodes?: number;
+  seasons?: number;
+  media: Media;
+};
+
+type MappedScheduleItem = ScheduleItemWithMedia & {
+  scheduledAt: Date;
+};
+
+// --- Passos do Tour ---
+const STEP_PERFIL: Step = { target: '#btn-editar-perfil', content: 'Clique aqui para personalizar seu avatar, banner, bio e vincular suas redes (Twitch/Discord).', placement: 'bottom', };
+const STEP_LISTAS: Step = { target: '#tour-step-2-listas-busca', content: 'Este é o seu painel principal. Pesquise filmes, animes, séries ou adicione manualmente, e organize-as em listas.', placement: 'top', };
+const STEP_AGENDA: Step = { target: '#tour-step-3-agenda', content: 'Organize seus episódios com o Gerir Agendamento! Escolha o item, defina a data e pronto!', placement: 'top', };
+const STEP_CALENDARIO: Step = { target: '#tour-step-4-calendario', content: 'Aqui tem uma visão completa do seu cronograma.', placement: 'top', };
+
+function centerAspectCrop(mediaWidth: number, mediaHeight: number, aspect: number): Crop {
+  return centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, mediaWidth, mediaHeight), mediaWidth, mediaHeight);
+}
 
 export default function DashboardPage() {
-  const router = useRouter(); // 👈 Inicializa o router
+  const router = useRouter(); 
   const { data: session, status, update: updateSession } = useSession();
   const { toast } = useToast();
-  
-  // ... (Mantenha todos os estados iguais até o return) ...
-  // (Copie tudo igual até chegar no JSX abaixo)
 
   // Estados de Dados
   const [initialMediaItems, setInitialMediaItems] = useState<MediaStatusWithMedia[]>([]);
@@ -117,12 +143,8 @@ export default function DashboardPage() {
   const [runTour, setRunTour] = useState(false);
   const tourSteps = useMemo(() => {
     const dynamicSteps: Step[] = [];
-    if (isCreator) dynamicSteps.push({ target: '#btn-editar-perfil', content: 'Clique aqui para personalizar seu avatar, banner, bio e vincular suas redes (Twitch/Discord).', placement: 'bottom', });
-    dynamicSteps.push(
-        { target: '#tour-step-2-listas-busca', content: 'Este é o seu painel principal. Pesquise filmes, animes, séries ou adicione manualmente, e organize-as em listas.', placement: 'top', },
-        { target: '#tour-step-3-agenda', content: 'Organize seus episódios com o Gerir Agendamento! Escolha o item, defina a data e pronto!', placement: 'top', },
-        { target: '#tour-step-4-calendario', content: 'Aqui tem uma visão completa do seu cronograma.', placement: 'top', }
-    );
+    if (isCreator) dynamicSteps.push(STEP_PERFIL);
+    dynamicSteps.push(STEP_LISTAS, STEP_AGENDA, STEP_CALENDARIO);
     return dynamicSteps;
   }, [isCreator]);
 
@@ -200,16 +222,31 @@ export default function DashboardPage() {
       if (status === "authenticated" && dataVersionKey > 0) fetchSharedData();
   }, [dataVersionKey, status]); 
 
+  // --- FUNÇÕES DE MAPEAMENTO CORRIGIDAS ---
   const mapDataToMediaItems = (dataItems: MediaStatusWithMedia[]): MappedMediaItem[] => {
     if (!dataItems || !Array.isArray(dataItems)) return [];
     return dataItems.map((item) => ({
-      ...item, id: item.id, userId: item.userId, mediaId: item.media.id, title: item.media.title, mediaType: item.media.mediaType, posterPath: item.media.posterPath || "", tmdbId: item.media.tmdbId, malId: item.media.malId, media: item.media, episodes: item.media.episodes || 0, seasons: item.media.seasons || 0,
+      ...item, 
+      id: item.id, 
+      userId: item.userId, 
+      mediaId: item.media.id, 
+      title: item.media.title, 
+      mediaType: item.media.mediaType, 
+      posterPath: item.media.posterPath || "", 
+      tmdbId: item.media.tmdbId, 
+      malId: item.media.malId, 
+      media: item.media,
+      // 👇 CORREÇÃO: Definimos como 0 pois não existem no banco "Media"
+      episodes: 0, 
+      seasons: 0,
     }));
   };
+
   const mapDataToScheduleItems = (dataItems: ScheduleItemWithMedia[]): MappedScheduleItem[] => {
     if (!dataItems || !Array.isArray(dataItems)) return [];
     return dataItems.map((item) => ({ ...item, scheduledAt: new Date(item.scheduledAt) }));
   };
+
   const mediaItems = useMemo(() => mapDataToMediaItems(initialMediaItems), [initialMediaItems]);
   const scheduleItems = useMemo(() => mapDataToScheduleItems(initialScheduleItems), [initialScheduleItems]);
   const handleDataChanged = useCallback(() => { setDataVersionKey(prevKey => prevKey + 1); }, []);
@@ -267,8 +304,6 @@ export default function DashboardPage() {
       {/* Modal de Configurações */}
       <Dialog open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          {/* ... (Conteúdo do Modal igual ao anterior) ... */}
-          {/* Copie o modal anterior inteiro aqui, não mudou nada dentro dele */}
            <DialogHeader>
             <DialogTitle>Configurações do Perfil</DialogTitle>
             <DialogDescription>Personalize sua página pública e integrações.</DialogDescription>

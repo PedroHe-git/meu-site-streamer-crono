@@ -5,8 +5,21 @@ import SocialCarousel from "@/app/components/SocialCarousel"; // Importa o compo
 export default async function SocialPage() {
   
   // 1. Busca os dados no servidor (Rápido e Cacheado)
-  const ytItems = await getSocialItems("YOUTUBE");
-  const instaItems = await getSocialItems("INSTAGRAM");
+  const rawYtItems = await getSocialItems("YOUTUBE");
+  const rawInstaItems = await getSocialItems("INSTAGRAM");
+
+  // 2. Função auxiliar para corrigir os tipos (String -> "YOUTUBE" | "INSTAGRAM" e null -> "")
+  const formatItems = (items: any[]) => items.map((item) => ({
+    id: item.id,
+    platform: item.platform as "YOUTUBE" | "INSTAGRAM", // Força o tipo correto
+    title: item.title || "Sem título", // Garante que não seja null
+    imageUrl: item.imageUrl,
+    linkUrl: item.linkUrl,
+    subtitle: item.subtitle || "", // Garante que não seja null
+  }));
+
+  const ytItems = formatItems(rawYtItems);
+  const instaItems = formatItems(rawInstaItems);
 
   return (
     <main className="min-h-screen bg-[#050505] text-white pt-24 pb-10 flex flex-col items-center justify-center relative overflow-hidden">
@@ -25,7 +38,7 @@ export default async function SocialPage() {
           <p className="text-gray-400">Últimos lançamentos e bastidores.</p>
         </div>
 
-        {/* 2. Passa os dados para o componente interativo */}
+        {/* 3. Passa os dados formatados para o componente interativo */}
         <SocialCarousel ytItems={ytItems} instaItems={instaItems} />
         
       </div>
