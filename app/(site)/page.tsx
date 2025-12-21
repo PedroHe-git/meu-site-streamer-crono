@@ -7,6 +7,8 @@ import { CalendarDays, PlaySquare } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 import LiveStatusIndicator from "@/app/components/LiveStatusIndicator";
+import { VideoCarousel } from "@/app/components/portfolio/VideoCarousel";
+import { SocialFeed } from "@/app/components/portfolio/SocialFeed";
 
 export const revalidate = 3600;
 
@@ -72,8 +74,13 @@ export default async function Home() {
                </Button>
                
                <Button size="lg" variant="outline" asChild className="gap-2 border-gray-700 bg-gray-900/80 hover:bg-gray-800 text-gray-200 h-14 px-8 text-lg hover:border-purple-500/50 transition-colors">
-                 <Link href="/historico">
+                 <Link href="/redes">
                    <PlaySquare className="w-6 h-6"/> Últimos Vídeos
+                 </Link>
+               </Button>
+               <Button size="lg" variant="outline" asChild className="gap-2 border-gray-700 bg-gray-900/80 hover:bg-gray-800 text-gray-200 h-14 px-8 text-lg hover:border-purple-500/50 transition-colors">
+                 <Link href="/historico">
+                   <PlaySquare className="w-6 h-6"/> VODs
                  </Link>
                </Button>
             </div>

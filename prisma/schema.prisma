@@ -56,6 +56,7 @@ model User {
   aiSummary      String?   @db.Text
 
   socialItems SocialItem[]
+  sponsors       Sponsor[]
 
   // --- Campos de Personalização ---
   bio              String? @db.Text // Mantido
@@ -215,4 +216,20 @@ model SocialItem {
   createdAt DateTime @default(now())
 
   @@map("social_items")
+}
+
+model Sponsor {
+  id          String   @id @default(cuid())
+  name        String
+  category    String?  // Ex: "Hardware", "Energético"
+  imageUrl    String   // Link da Logo
+  linkUrl     String?  // Link para o site do patrocinador
+  description String?  // Frase de efeito ou cupom
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@map("sponsors")
 }

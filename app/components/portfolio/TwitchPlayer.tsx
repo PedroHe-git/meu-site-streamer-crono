@@ -1,112 +1,154 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
-import { PlayCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2, Twitch, Play, Users, Gamepad2 } from "lucide-react"; // Adicionei ícones novos
+import { Button } from "@/components/ui/button";
 
 interface TwitchPlayerProps {
-  channel?: string;
-  offlineImage?: string | null; // Nova prop para a imagem
+  channel: string;
+  offlineImage?: string | null;
 }
 
-export function TwitchPlayer({ channel, offlineImage }: TwitchPlayerProps) {
-  const embedRef = useRef<HTMLDivElement>(null);
-  const [isLive, setIsLive] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
-  
-  const targetChannel = channel || process.env.NEXT_PUBLIC_TWITCH_CHANNEL || "monstercat";
+type StreamInfo = {
+  isLive: boolean;
+  thumbnail: string | null;
+  title: string | null;
+  game: string | null;
+  viewers: number;
+};
 
-  // 1. Verifica se está ao vivo para decidir o que mostrar
+export function TwitchPlayer({ channel, offlineImage }: TwitchPlayerProps) {
+  const [loading, setLoading] = useState(true);
+  const [streamInfo, setStreamInfo] = useState<StreamInfo>({
+    isLive: false,
+    thumbnail: null,
+    title: null,
+    game: null,
+    viewers: 0
+  });
+
+  // Verifica status da live a cada 60s
   useEffect(() => {
-    const checkStatus = async () => {
+    const checkLiveStatus = async () => {
       try {
-        const res = await fetch(`/api/twitch/status?channel=${targetChannel}`);
+        const res = await fetch(`/api/twitch/status?channel=${channel}`);
         const data = await res.json();
-        setIsLive(data.isLive);
+        setStreamInfo({
+            isLive: data.isLive,
+            thumbnail: data.thumbnail, // A API já trata o {width}x{height}
+            title: data.title,
+            game: data.game,
+            viewers: data.viewers
+        });
       } catch (error) {
-        console.error("Erro ao verificar live:", error);
+        console.error("Erro ao verificar status:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    checkStatus();
-  }, [targetChannel]);
+    checkLiveStatus();
+    const interval = setInterval(checkLiveStatus, 60000);
+    return () => clearInterval(interval);
+  }, [channel]);
 
-  // 2. Carrega o Player da Twitch (Só se estiver LIVE ou se não tiver imagem de capa)
-  useEffect(() => {
-    if (loading) return; // Espera verificar o status
-    
-    // Se estiver OFFLINE e tiver imagem, NÃO carrega o player (mostra a imagem)
-    if (!isLive && offlineImage) return;
+  if (!channel) return null;
 
-    if (!embedRef.current) return;
+  // URL para redirecionar
+  const twitchUrl = `https://twitch.tv/${channel}`;
 
-    embedRef.current.innerHTML = ""; // Limpa anterior
-
-    const script = document.createElement("script");
-    script.src = "https://embed.twitch.tv/embed/v1.js";
-    script.async = true;
-    document.body.appendChild(script);
-
-    script.onload = () => {
-      // @ts-ignore
-      if (window.Twitch && window.Twitch.Embed) {
-        // @ts-ignore
-        new window.Twitch.Embed(embedRef.current, {
-          width: "100%",
-          height: "100%",
-          channel: targetChannel,
-          layout: "video",
-          autoplay: true,
-          muted: true,
-          parent: ["localhost", "meucronograma.live", "vercel.app"],
-        });
-      }
-    };
-
-    return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-    };
-  }, [targetChannel, isLive, loading, offlineImage]);
+  // Imagem de fundo: Prioridade para Thumbnail da Live > Banner Offline > Cor sólida
+  const bgImage = streamInfo.isLive && streamInfo.thumbnail 
+    ? streamInfo.thumbnail 
+    : (offlineImage || "");
 
   return (
-    <div className="w-full h-full min-h-[400px] bg-black relative group">
+    <div className="w-full h-full relative group bg-gray-950 overflow-hidden">
       
-      {/* CENÁRIO A: Está OFFLINE e temos uma imagem de capa configurada.
-         Mostramos a imagem com um botão ou texto.
-      */}
-      {!loading && !isLive && offlineImage ? (
-        <div className="absolute inset-0 z-10">
-           <Image 
-             src={offlineImage} 
-             alt="Canal Offline" 
-             fill 
-             className="object-cover opacity-60 group-hover:opacity-40 transition-opacity"
-           />
-           <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-              <div className="bg-black/50 p-4 rounded-full backdrop-blur-sm mb-4">
-                 <PlayCircle className="w-12 h-12 text-gray-400" />
-              </div>
-              <h3 className="text-2xl font-bold">O Streamer está Offline</h3>
-              <p className="text-gray-300 mt-2">Confira o Cronograma para a próxima live!</p>
-              
-              {/* Botão opcional para forçar o player (ex: ver chat/vods) */}
-              <button 
-                onClick={() => setIsLive(true)} // Truque: Força o estado para "Live" para carregar o player
-                className="mt-6 text-sm underline text-purple-400 hover:text-purple-300 cursor-pointer"
-              >
-                Acessar Chat ou Reprises
-              </button>
-           </div>
+      {/* 1. IMAGEM DE FUNDO (Com Blur) */}
+      {bgImage && (
+        <div className="absolute inset-0 z-0">
+            <img 
+                src={bgImage} 
+                alt="Background" 
+                className={`w-full h-full object-cover transition-all duration-700 
+                    ${streamInfo.isLive ? "scale-105 blur-sm brightness-50" : "opacity-50 grayscale"} 
+                `}
+            />
         </div>
-      ) : (
-        /* CENÁRIO B: Está AO VIVO (ou sem capa) -> Mostra o Player Normal */
-        <div ref={embedRef} className="w-full h-full absolute inset-0" />
       )}
 
+      {/* 2. LOADING STATE */}
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-950 z-20">
+          <Loader2 className="w-10 h-10 text-purple-500 animate-spin" />
+        </div>
+      )}
+
+      {/* 3. CONTEÚDO (Overlay) */}
+      {!loading && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
+            
+            {/* Ícone Pulsante se estiver AO VIVO */}
+            {streamInfo.isLive ? (
+                <div className="mb-6 relative">
+                    <span className="absolute -inset-1 rounded-full bg-red-600 opacity-75 animate-ping"></span>
+                    <div className="relative bg-red-600 text-white px-4 py-1 rounded-full font-bold text-sm tracking-wider flex items-center gap-2 shadow-xl border border-red-400">
+                        <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                        AO VIVO AGORA
+                    </div>
+                </div>
+            ) : (
+                <Twitch className="w-16 h-16 text-gray-400 mb-4 opacity-50" />
+            )}
+
+            {/* Título e Jogo */}
+            <h3 className="text-2xl md:text-3xl font-black text-white mb-2 drop-shadow-lg max-w-2xl leading-tight">
+                {streamInfo.isLive ? (streamInfo.title || "Transmissão ao Vivo") : "Offline no Momento"}
+            </h3>
+            
+            {streamInfo.isLive && streamInfo.game && (
+                <p className="text-purple-300 font-medium mb-1 flex items-center gap-2 bg-black/40 px-3 py-1 rounded-lg backdrop-blur-md">
+                    <Gamepad2 className="w-4 h-4" /> Jogando {streamInfo.game}
+                </p>
+            )}
+
+            {streamInfo.isLive && (
+                <p className="text-gray-300 text-sm mb-8 flex items-center gap-1">
+                    <Users className="w-4 h-4" /> {streamInfo.viewers} pessoas assistindo
+                </p>
+            )}
+
+            {!streamInfo.isLive && (
+                <p className="text-gray-400 mb-8 max-w-md">
+                    Confira o cronograma para saber quando será a próxima live!
+                </p>
+            )}
+
+            {/* BOTÃO DE AÇÃO */}
+            <Button 
+                size="lg" 
+                className={`
+                    h-14 px-8 text-lg font-bold shadow-2xl transition-all hover:scale-105
+                    ${streamInfo.isLive 
+                        ? "bg-purple-600 hover:bg-purple-700 text-white border-2 border-purple-400/20" 
+                        : "bg-transparent border-2 border-gray-600 text-gray-300 hover:bg-white/10"
+                    }
+                `} 
+                asChild
+            >
+                <a href={twitchUrl} target="_blank" rel="noopener noreferrer">
+                    {streamInfo.isLive ? (
+                        <>
+                            <Play className="w-6 h-6 mr-2 fill-current" /> Assistir na Twitch
+                        </>
+                    ) : (
+                        "Visitar Canal"
+                    )}
+                </a>
+            </Button>
+        </div>
+      )}
     </div>
   );
 }

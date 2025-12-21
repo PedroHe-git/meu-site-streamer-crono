@@ -1,74 +1,172 @@
-import { Metadata } from 'next';
-import { VideoCarousel } from '@/app/components/portfolio/VideoCarousel'; // 👈 O YouTube que estava no histórico
-import { SocialFeed } from '@/app/components/portfolio/SocialFeed';     // 👈 O Instagram/Social
 
-export const metadata: Metadata = {
-  title: 'Redes Sociais | Acompanhe Tudo',
-  description: 'Vídeos novos no YouTube e fotos exclusivas no Instagram.',
+import { getSocialItems } from "@/lib/data"; // Cache
+import { useEffect, useState } from "react";
+import { Youtube, Instagram, ChevronLeft, ChevronRight, ExternalLink, Play, Heart } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import SocialCarousel from "@/components/SocialCarousel";
+
+type SocialItem = {
+  id: string;
+  platform: "YOUTUBE" | "INSTAGRAM";
+  title: string;
+  imageUrl: string;
+  linkUrl: string;
+  subtitle: string;
 };
 
-export default function RedesPage() {
+export default async function SocialPage() {
+  // Busca dados no servidor (Cache)
+  const ytItems = await getSocialItems("YOUTUBE");
+  const instaItems = await getSocialItems("INSTAGRAM");
+
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 pb-20">
+    <main className="min-h-screen bg-[#050505] text-white pt-24 pb-10 flex flex-col items-center justify-center relative overflow-hidden">
       
-      {/* Cabeçalho da Página */}
-      <header className="py-16 text-center bg-gradient-to-b from-gray-900 to-gray-950 border-b border-gray-800">
-        <div className="container mx-auto px-4">
-          <h1 className="text-4xl md:text-6xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-purple-600">
-            Conecte-se Comigo
-          </h1>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Não perca nenhum conteúdo! Inscreva-se no canal e siga no Instagram para bastidores.
-          </p>
-        </div>
-      </header>
+      {/* Luzes de Fundo (Ambiente) */}
+      <div className="absolute top-1/4 left-0 w-[600px] h-[600px] bg-purple-900/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-pink-900/10 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="container mx-auto px-4 space-y-24 mt-12">
+      <div className="container mx-auto px-4 relative z-10 max-w-7xl h-full flex flex-col">
         
-        {/* --- SEÇÃO 1: YOUTUBE --- */}
-        <section id="youtube" className="scroll-mt-24">
-          <div className="flex items-center gap-3 mb-8 justify-center md:justify-start">
-            <div className="bg-red-600 text-white p-3 rounded-full shadow-lg shadow-red-600/20">
-              <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-            </div>
-            <h2 className="text-3xl font-bold text-white">Últimos Vídeos</h2>
-          </div>
+        {/* Cabeçalho Compacto */}
+        <div className="text-center mb-8 md:mb-12">
+          <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-2">
+            Acompanhe o <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-purple-600">Conteúdo</span>
+          </h1>
+          <p className="text-gray-400">Últimos lançamentos e bastidores.</p>
+        </div>
+
+        {/* --- ÁREA LADO A LADO --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full max-w-6xl mx-auto flex-1 items-center">
           
-          {/* Componente do YouTube */}
-          <VideoCarousel />
-          
-          <div className="text-center mt-8">
-            <a 
-              href="https://youtube.com/@mahcetou" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full transition-all hover:scale-105"
-            >
-              Ver Canal Completo
-            </a>
-          </div>
-        </section>
-
-        {/* Divisor Visual */}
-        <div className="h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent opacity-50" />
-
-        {/* --- SEÇÃO 2: INSTAGRAM --- */}
-        <section id="instagram" className="scroll-mt-24">
-          <div className="flex items-center gap-3 mb-8 justify-center md:justify-start">
-            <div className="bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 text-white p-3 rounded-full shadow-lg shadow-purple-500/20">
-              <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772 4.902 4.902 0 011.772-1.153c.636-.247 1.363-.416 2.427-.465 1.067-.047 1.407-.06 3.808-.06zm0 1.832c-2.386 0-2.685.01-3.625.053-.921.042-1.42.196-1.774.333a2.9 2.9 0 00-1.077.702 2.9 2.9 0 00-.702 1.077c-.137.354-.291.853-.333 1.774-.043.94-.053 1.239-.053 3.625s.01 2.685.053 3.625c.042.921.196 1.42.333 1.774.204.53.484.972.932 1.42.448.448.89.728 1.42.932.354.137.853.291 1.774.333.94.043 1.239.053 3.625.053s2.685-.01 3.625-.053c.921-.042 1.42-.196 1.774-.333a2.9 2.9 0 001.077-.702 2.9 2.9 0 00.702-1.077c.137-.354.291-.853.333-1.774.043-.94.053-1.239.053-3.625s-.01-2.685-.053-3.625c-.042-.921-.196-1.42-.333-1.774a2.9 2.9 0 00-.702-1.077 2.9 2.9 0 00-1.077-.702c-.354-.137-.853-.291-1.774-.333-.94-.043-1.239-.053-3.625-.053zm0 4.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9zm0 1.832a2.668 2.668 0 110 5.336 2.668 2.668 0 010-5.336zm5.25-3.832a1.096 1.096 0 100 2.192 1.096 1.096 0 000-2.192z" clipRule="evenodd" /></svg>
+          {/* =======================
+              LADO ESQUERDO: YOUTUBE
+             ======================= */}
+          <div className="relative group w-full aspect-video lg:aspect-[16/10] bg-gray-900/30 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-sm shadow-2xl">
+            
+            {/* Header do Card */}
+            <div className="absolute top-6 left-6 z-20 flex items-center gap-3">
+               <div className="bg-red-600 p-2 rounded-lg text-white shadow-lg shadow-red-900/20">
+                  <Youtube className="w-6 h-6" />
+               </div>
+               <div>
+                  <h2 className="font-bold text-lg leading-none">YouTube</h2>
+                  <p className="text-xs text-red-200/70">Vídeos Longos & Shorts</p>
+               </div>
             </div>
-            <h2 className="text-3xl font-bold text-white">Feed do Instagram</h2>
+
+            {/* Conteúdo do Slide */}
+            {ytItems.length > 0 ? (
+               <div className="relative w-full h-full">
+                  {/* Imagem de Fundo */}
+                  <img 
+                    src={ytItems[ytIndex].imageUrl} 
+                    alt={ytItems[ytIndex].title}
+                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+
+                  {/* Texto e Play */}
+                  <div className="absolute bottom-0 left-0 p-8 w-full z-20">
+                     <span className="inline-block bg-red-600/90 text-white text-[10px] font-bold px-2 py-1 rounded mb-2 uppercase tracking-wide">
+                        Assista Agora
+                     </span>
+                     <h3 className="text-2xl md:text-3xl font-bold text-white mb-2 line-clamp-2">
+                        {ytItems[ytIndex].title}
+                     </h3>
+                     <div className="flex items-center gap-4">
+                        <Button className="bg-white text-black hover:bg-gray-200 rounded-full font-bold px-6" asChild>
+                           <a href={ytItems[ytIndex].linkUrl} target="_blank">
+                              <Play className="w-4 h-4 mr-2 fill-black" /> Ver Vídeo
+                           </a>
+                        </Button>
+                        <p className="text-sm text-gray-300">{ytItems[ytIndex].subtitle}</p>
+                     </div>
+                  </div>
+
+                  {/* Botões de Navegação (Só aparecem se tiver mais de 1 item) */}
+                  {ytItems.length > 1 && (
+                    <>
+                      <button onClick={() => prevSlide("YT")} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-30">
+                        <ChevronLeft className="w-6 h-6" />
+                      </button>
+                      <button onClick={() => nextSlide("YT")} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-30">
+                        <ChevronRight className="w-6 h-6" />
+                      </button>
+                    </>
+                  )}
+               </div>
+            ) : (
+               <div className="flex items-center justify-center h-full text-gray-500">
+                  <p>Nenhum vídeo cadastrado.</p>
+               </div>
+            )}
           </div>
 
-          {/* Componente do Instagram */}
-          <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800">
-             <SocialFeed />
+          {/* =======================
+              LADO DIREITO: INSTAGRAM
+             ======================= */}
+          <div className="relative group w-full aspect-[4/5] lg:aspect-[16/10] bg-gray-900/30 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-sm shadow-2xl">
+            
+             {/* Header do Card */}
+             <div className="absolute top-6 left-6 z-20 flex items-center gap-3">
+               <div className="bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 p-2 rounded-lg text-white shadow-lg">
+                  <Instagram className="w-6 h-6" />
+               </div>
+               <div>
+                  <h2 className="font-bold text-lg leading-none">Instagram</h2>
+                  <p className="text-xs text-pink-200/70">Daily & Lifestyle</p>
+               </div>
+            </div>
+
+            {/* Conteúdo do Slide */}
+            {instaItems.length > 0 ? (
+               <div className="relative w-full h-full">
+                  {/* Imagem de Fundo */}
+                  <img 
+                    src={instaItems[instaIndex].imageUrl} 
+                    alt={instaItems[instaIndex].title}
+                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+
+                  {/* Texto e Ação */}
+                  <div className="absolute bottom-0 left-0 p-8 w-full z-20">
+                     <div className="flex items-center gap-2 mb-3 text-pink-400">
+                        <Heart className="w-5 h-5 fill-pink-500" />
+                        <span className="text-sm font-medium">{instaItems[instaIndex].subtitle || "Confira no feed"}</span>
+                     </div>
+                     <h3 className="text-xl md:text-2xl font-bold text-white mb-4 line-clamp-2">
+                        {instaItems[instaIndex].title}
+                     </h3>
+                     <Button variant="outline" className="border-white/20 text-white hover:bg-white hover:text-black rounded-full px-6" asChild>
+                        <a href={instaItems[instaIndex].linkUrl} target="_blank">
+                           Ver Postagem <ExternalLink className="w-4 h-4 ml-2" />
+                        </a>
+                     </Button>
+                  </div>
+
+                  {/* Botões de Navegação */}
+                  {instaItems.length > 1 && (
+                    <>
+                      <button onClick={() => prevSlide("INSTA")} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-pink-600 transition-colors z-30">
+                        <ChevronLeft className="w-6 h-6" />
+                      </button>
+                      <button onClick={() => nextSlide("INSTA")} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-pink-600 transition-colors z-30">
+                        <ChevronRight className="w-6 h-6" />
+                      </button>
+                    </>
+                  )}
+               </div>
+            ) : (
+               <div className="flex items-center justify-center h-full text-gray-500">
+                  <p>Nenhum post cadastrado.</p>
+               </div>
+            )}
           </div>
 
-        </section>
-
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

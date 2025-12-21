@@ -25,9 +25,10 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { name: "Início", href: "/" },
+  { name: "Sobre", href: "/sobre" },
   { name: "Cronograma", href: "/cronograma" },
   { name: "VODS | Assistidos", href: "/historico" },
-  { name: "Sobre", href: "/sobre" },
+  { name: "Patrocinios", href: "/patrocinio" },
   { name: "Redes", href: "/redes" },
   { name: "Contato", href: "/contato" },
 ];
@@ -66,9 +67,9 @@ export default function Header() {
           className="flex items-center gap-2 font-bold text-xl hover:opacity-80 transition-opacity text-white"
         >
           <div className="h-8 w-8 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center text-white shadow-lg">
-            P
+            M
           </div>
-          <span>PedroHE</span>
+          <span>MahMoojen</span>
         </Link>
 
         {/* MENU DESKTOP */}
