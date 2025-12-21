@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button"
+import { PlayCircle, Youtube, Loader2 } from "lucide-react";
 import {
   Carousel,
   CarouselContent,
@@ -10,138 +11,105 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 
-// Definição do Tipo
-type Video = {
-  id: string; // <-- Verifique se está como 'string' (antes era 'number')
-  title: string;
-  thumbnail: string;
-  views: string;
-  duration: string;
+type SocialItem = {
+  id: string;
+  title: string | null;
+  imageUrl: string;
+  subtitle: string | null;
+  linkUrl: string;
 };
 
-// Dados de exemplo para carregar
-const loadingVideos: Video[] = Array(3).fill({
-  id: "loader", // <-- Mude para string "loader"
-  title: "Carregando...",
-  thumbnail: "",
-  views: "...",
-  duration: "...",
-});
-
 export function VideoCarousel() {
-  // Crie o estado para os vídeos
-  const [videos, setVideos] = useState<Video[]>(loadingVideos);
+  const [videos, setVideos] = useState<SocialItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Use useEffect para buscar os dados da NOSSA API
   useEffect(() => {
     const fetchVideos = async () => {
       try {
-        const response = await fetch("/api/youtube");
-        if (!response.ok) {
-          throw new Error("Falha ao buscar vídeos do servidor");
+        const response = await fetch("/api/social?platform=YOUTUBE");
+        if (response.ok) {
+          const data = await response.json();
+          setVideos(data);
         }
-        const data: Video[] = await response.json();
-        setVideos(data);
       } catch (error) {
-        console.error("Erro ao buscar vídeos:", error);
-        setVideos([]); 
+        console.error("Erro ao carregar vídeos:", error);
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchVideos();
-  }, []); 
+  }, []);
 
-  // O RESTANTE DO ARQUIVO CONTINUA EXATAMENTE IGUAL...
-  // (Renderização do Carousel, JSX, etc.)
-  // ...
+  if (!isLoading && videos.length === 0) return null;
+
   return (
-    <section id="videos" className="py-16 bg-gray-50">
+    <section id="videos" className="py-20 bg-white">
       <div className="container mx-auto px-4">
-        <h2 className="text-center mb-8">Últimos vídeos</h2>
-        <div className="max-w-6xl mx-auto">
-          <Carousel
-            opts={{
-              align: "start",
-              loop: videos.length > 3,
-            }}
-            className="w-full"
-          >
-            <CarouselContent className="-ml-4">
-              {(isLoading ? loadingVideos : videos).map((video, index) => (
-                <CarouselItem
-                  key={isLoading ? `loader-${index}` : video.id}
-                  className="pl-4 md:basis-1/2 lg:basis-1/3"
-                >
-                  <div className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer group h-full">
-                    {isLoading ? (
-                      // Skeleton (placeholder de carregamento)
-                      <div className="animate-pulse">
-                        <div className="aspect-video bg-gray-200"></div>
-                        <div className="p-4">
-                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                          <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-                        </div>
-                      </div>
-                    ) : (
-                      // Conteúdo real do card
+        
+        <div className="flex flex-col items-center justify-center mb-12 text-center">
+            <div className="p-3 bg-red-100 rounded-full text-red-600 mb-4">
+                <Youtube className="w-8 h-8" />
+            </div>
+            <h2 className="text-4xl font-black text-gray-900 mb-2">Destaques do Canal</h2>
+            <p className="text-gray-500">Vídeos novos toda semana.</p>
+        </div>
+
+        <div className="max-w-7xl mx-auto relative px-8">
+          {isLoading ? (
+             <div className="flex justify-center p-12"><Loader2 className="animate-spin text-red-500" /></div>
+          ) : (
+            <Carousel
+              opts={{ align: "start", loop: videos.length > 3 }}
+              className="w-full"
+            >
+              <CarouselContent className="-ml-4">
+                {videos.map((video) => (
+                  <CarouselItem key={video.id} className="pl-4 md:basis-1/2 lg:basis-1/3">
+                    <div className="bg-white rounded-xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full flex flex-col group">
                       <a
-                        href={`https://www.youtube.com/watch?v=${video.id}`}
+                        href={video.linkUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="h-full flex flex-col"
+                        className="block relative aspect-video overflow-hidden bg-gray-900"
                       >
-                        <div className="relative aspect-video overflow-hidden">
-                          <img
-                            src={video.thumbnail}
-                            alt={video.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="h-16 w-16 rounded-full bg-red-600 flex items-center justify-center">
-                              <svg
-                                className="h-8 w-8 text-white ml-1"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M8 5v14l11-7z" />
-                              </svg>
-                            </div>
-                          </div>
-                          <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded">
-                            {video.duration} {/* <-- Agora vai exibir o tempo real */}
-                          </div>
+                        <img
+                          src={video.imageUrl}
+                          alt={video.title || "Vídeo"}
+                          className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-black/20 backdrop-blur-[2px]">
+                           <div className="bg-red-600 text-white rounded-full p-3 shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                              <PlayCircle className="w-8 h-8 fill-current" />
+                           </div>
                         </div>
-                        <div className="p-4 flex flex-col flex-grow">
-                          <h3 className="mb-2 line-clamp-2 flex-grow">{video.title}</h3>
-                          <p className="text-sm text-gray-600 mt-auto">
-                            {video.views} visualizações {/* <-- Agora vai exibir as views reais */}
-                          </p>
-                        </div>
+                        {video.subtitle && (
+                          <div className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] font-bold px-2 py-1 rounded">
+                              {video.subtitle}
+                          </div>
+                        )}
                       </a>
-                    )}
-                  </div>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            <CarouselPrevious className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 hidden md:flex rounded-full bg-white shadow-lg" />
-            <CarouselNext className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 hidden md:flex rounded-full bg-white shadow-lg" />
-          </Carousel>
+                      
+                      <div className="p-5 flex flex-col flex-grow">
+                        <h3 className="font-bold text-gray-800 line-clamp-2 mb-2 group-hover:text-red-600 transition-colors">
+                          <a href={video.linkUrl} target="_blank">{video.title || "Sem título"}</a>
+                        </h3>
+                      </div>
+                    </div>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              
+              <CarouselPrevious className="border-gray-200 hover:bg-red-50 hover:text-red-600" />
+              <CarouselNext className="border-gray-200 hover:bg-red-50 hover:text-red-600" />
+            </Carousel>
+          )}
 
-          <div className="text-center mt-8">
-            <a href="https://www.youtube.com/@mahcetou"
-            target="_blank"
-            rel="noopener noreferrer"
-            >
-            <Button variant="outline" size="lg" className="gap-2">
-              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-              </svg>
-              Ver Todos os Vídeos
+          <div className="text-center mt-12">
+            <Button variant="outline" size="lg" className="border-red-200 text-red-600 hover:bg-red-50" asChild>
+                <a href="https://www.youtube.com/@mahcetou" target="_blank">
+                    Inscrever-se no Canal
+                </a>
             </Button>
-            </a>
           </div>
         </div>
       </div>

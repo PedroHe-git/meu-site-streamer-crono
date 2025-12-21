@@ -1,7 +1,7 @@
 import  Header  from "@/app/components/portfolio/Header";
 import { Footer } from "@/app/components/portfolio/Footer";
 import  AboutSection  from "@/app/components/portfolio/AboutSection";
-import { BrandLogos } from "@/app/components/portfolio/BrandLogos"; // Se ainda usar
+import BrandLogos from "@/app/components/portfolio/BrandLogos"; // Se ainda usar
 import { prisma } from "@/lib/prisma";
 import { UserRole } from "@prisma/client";
 

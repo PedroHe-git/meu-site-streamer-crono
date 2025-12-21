@@ -14,7 +14,6 @@ datasource db {
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
-
 // --- ENUMS (Nível Superior) ---
 enum MovieStatusType {
   TO_WATCH
@@ -41,6 +40,7 @@ enum UserRole {
   CREATOR
   VISITOR
 }
+
 // --- FIM ENUMS ---
 
 // --- MODELO USER (Simplificado + @map) ---
@@ -49,20 +49,22 @@ model User {
   name           String?
   email          String?   @unique
   emailVerified  DateTime? @map("email_verified") // Mapeado
-  image          String?   // Campo do Avatar (ainda presente)
+  image          String? // Campo do Avatar (ainda presente)
   hashedPassword String?
   username       String    @unique
   role           UserRole  @default(VISITOR)
-  aiSummary     String?   @db.Text
+  aiSummary      String?   @db.Text
+
+  socialItems SocialItem[]
 
   // --- Campos de Personalização ---
-  bio              String?   @db.Text // Mantido
+  bio              String? @db.Text // Mantido
   profileBannerUrl String?
-  
-  profileVisibility ProfileVisibility @default(PUBLIC)
-  twitchUsername   String?           @unique
 
-  discordWebhookUrl String?  @map("discord_webhook_url")
+  profileVisibility ProfileVisibility @default(PUBLIC)
+  twitchUsername    String?           @unique
+
+  discordWebhookUrl String? @map("discord_webhook_url")
 
   // Relações
   accounts      Account[]
@@ -70,16 +72,17 @@ model User {
   mediaStatuses MediaStatus[]
   scheduleItems ScheduleItem[]
 
-  showToWatchList   Boolean   @default(true)
-  showWatchingList  Boolean   @default(true)
-  showWatchedList   Boolean   @default(true)
-  showDroppedList   Boolean   @default(true)
+  showToWatchList  Boolean @default(true)
+  showWatchingList Boolean @default(true)
+  showWatchedList  Boolean @default(true)
+  showDroppedList  Boolean @default(true)
 
-  following     Follows[] @relation("Following")
-  followers     Follows[] @relation("Followers")
+  following Follows[] @relation("Following")
+  followers Follows[] @relation("Followers")
 
-  @@map("users") 
+  @@map("users")
 }
+
 // --- FIM USER ---
 
 // --- SEUS MODELOS (Sem mudanças) ---
@@ -94,39 +97,41 @@ model Media {
   releaseYear   Int?
   mediaStatuses MediaStatus[]
   scheduleItems ScheduleItem[]
+
   @@unique([mediaType, tmdbId])
   @@unique([mediaType, malId])
   @@unique([mediaType, igdbId])
 }
 
 model MediaStatus {
-  id                  String          @id @default(cuid())
-  status              MovieStatusType
-  userId              String
-  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mediaId             String
-  media               Media           @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  lastSeasonWatched   Int?
-  lastEpisodeWatched  Int?
+  id                    String          @id @default(cuid())
+  status                MovieStatusType
+  userId                String
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId               String
+  media                 Media           @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  lastSeasonWatched     Int?
+  lastEpisodeWatched    Int?
   lastEpisodeWatchedEnd Int?
-  isWeekly            Boolean         @default(false)
+  isWeekly              Boolean         @default(false)
+  rating                Int? // (Bônus: Se você implementar a funcionalidade de nota)
+  watchedAt             DateTime? // <-- O CAMPO-CHAVE PARA OS GRÁFICOS
+
   @@unique([userId, mediaId])
-  rating              Int?     // (Bônus: Se você implementar a funcionalidade de nota)
-  watchedAt           DateTime? // <-- O CAMPO-CHAVE PARA OS GRÁFICOS
 }
 
 model ScheduleItem {
-  id                String    @id @default(cuid())
-  scheduledAt       DateTime
-  horario           String?
-  seasonNumber      Int?
-  episodeNumber     Int?
-  episodeNumberEnd  Int?
-  userId            String
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mediaId           String
-  media             Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  isCompleted       Boolean   @default(false)
+  id               String   @id @default(cuid())
+  scheduledAt      DateTime
+  horario          String?
+  seasonNumber     Int?
+  episodeNumber    Int?
+  episodeNumberEnd Int?
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaId          String
+  media            Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  isCompleted      Boolean  @default(false)
 }
 
 model Follows {
@@ -134,10 +139,10 @@ model Follows {
   followingId String
 
   // Define a relação para o "seguidor" (quem segue)
-  follower    User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  follower User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
 
   // Define a relação para o "seguido" (quem é seguido)
-  following   User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
 
   // Garante que um utilizador não pode seguir o mesmo criador duas vezes
   @@id([followerId, followingId])
@@ -158,7 +163,8 @@ model Account {
   scope             String?
   id_token          String? @db.Text
   session_state     String?
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([provider, providerAccountId])
   @@map("accounts")
 }
@@ -169,6 +175,7 @@ model Session {
   userId       String   @map("user_id")
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("sessions")
 }
 
@@ -176,16 +183,36 @@ model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
+
   @@unique([identifier, token])
   @@map("verification_tokens")
 }
+
 // --- FIM MODELOS NEXT-AUTH V4 ---
 
 model PasswordResetToken {
   // Usamos o token como o ID para buscas rápidas e garantia de unicidade
-  token      String   @id @unique
-  email      String   // O email do usuário que solicitou o reset
-  expires    DateTime // A data/hora que o token expira
+  token   String   @id @unique
+  email   String // O email do usuário que solicitou o reset
+  expires DateTime // A data/hora que o token expira
 
   @@map("password_reset_tokens")
+}
+
+model SocialItem {
+  id       String @id @default(cuid())
+  platform String // Vamos usar "YOUTUBE" ou "INSTAGRAM"
+
+  imageUrl String // Link da Imagem de Capa/Thumbnail
+  linkUrl  String // Link para onde vai ao clicar (Vídeo ou Post)
+
+  title    String? // Título do vídeo ou Legenda do post
+  subtitle String? // Ex: "10k views" ou "❤️ Curtiu"
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("social_items")
 }
