@@ -9,7 +9,7 @@ import AuthContext from '@/app/context/AuthContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'PedroHE | Streamer & Content Creator',
+  title: 'MahMoojen HUB',
   description: 'Acompanhe cronogramas, vídeos e novidades.',
 };
 
