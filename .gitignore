@@ -1,46 +1,33 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# Dependencies
+# Dependências (O mais pesado)
 /node_modules
 /.pnp
 .pnp.js
 
-# Testing
-/coverage
-
-# Next.js build output
-/.next
-/out
-
-# Production build artifacts
+# Builds e Cache (Gerado automaticamente)
+/.next/
+/out/
 /build
+/.cache
 
-# dotenv environment variables file
-.env*.local
+# Banco de Dados Local (Não enviar)
+/prisma/migrations/migration_lock.toml
+*.db
+*.sqlite
+postgres_data/
+docker-compose.yml 
+
+# Variáveis de Ambiente (SEGURANÇA: NUNCA ENVIE ISSO)
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Prisma Client output (geralmente dentro de node_modules, mas por segurança)
-/node_modules/.prisma/client
-
-# Mac OS folder attributes
+# Arquivos de Sistema
 .DS_Store
+Thumbs.db
 
 # Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-
-# Editor directories and files
-.idea
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-*.sublime-workspace
-
-# Miscellaneous
-*.swp
-
-/docker-compose.yml

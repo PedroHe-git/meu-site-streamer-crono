@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: meucronograma_db
+    restart: always
+    environment:
+      POSTGRES_USER: usuario_teste
+      POSTGRES_PASSWORD: senha_teste
+      POSTGRES_DB: cronograma_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Opcional: Interface gráfica para ver o banco (PgAdmin)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: meucronograma_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:

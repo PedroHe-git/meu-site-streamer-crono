@@ -1,62 +1,25 @@
-import type { Metadata } from "next";
+import "@/app/globals.css";
 import { Inter } from "next/font/google";
-// Caminho corrigido para o CSS global (sobe um nível)
-import "../globals.css";
-
-// Caminhos corrigidos para usar alias absoluto (@)
-import AuthProvider from "@/app/components/AuthProvider";
-import Navbar from "@/app/components/Navbar";
-import { ThemeProvider } from "@/app/components/theme-provider";
-import ChristmasSnow from "@/app/components/ChristmasSnow";
-
-import Script from "next/script";
+import AuthProvider from "@/app/components/AuthProvider"; // Importando o provedor
 
 const inter = Inter({ subsets: ["latin"] });
 
-export const metadata: Metadata = {
-  title: "Meu Cronograma",
-  description: "Organize seus filmes, séries e animes.",
+export const metadata = {
+  title: "PedroHE | Portfólio & Cronograma",
+  description: "Site oficial e portfólio do Streamer PedroHE",
 };
-
-const clarityId = process.env.NEXT_PUBLIC_CLARITY_ID;
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <head>
-        {clarityId && process.env.NODE_ENV === "production" && (
-          <Script
-            id="microsoft-clarity"
-            strategy="afterInteractive"
-            dangerouslySetInnerHTML={{
-              __html: `(function(c,l,a,r,i,t,y){
-                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-              })(window, document, "clarity", "script", "${clarityId}");`,
-            }}
-          />
-        )}
-      </head>
-
-      <body className={`${inter.className} bg-background text-foreground`}>
+    <html lang="pt-BR" className="scroll-smooth">
+      <body className={`${inter.className} antialiased min-h-screen bg-background text-foreground`}>
+        {/* O AuthProvider DEVE ficar dentro do body para envolver todo o app */}
         <AuthProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            {/* Efeito de Neve */}
-            <ChristmasSnow />
-            
-            <Navbar />
-            <main>{children}</main>
-          </ThemeProvider>
+          {children}
         </AuthProvider>
       </body>
     </html>
