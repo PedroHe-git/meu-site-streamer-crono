@@ -6,19 +6,20 @@ import path from 'path';
 const cspValue = [
   "default-src 'self';",
 
-  "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.clarity.ms https://scripts.clarity.ms *.vercel-insights.com;",
+  // 1. ADICIONADO: embed.twitch.tv e player.twitch.tv para carregar o script do player
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://embed.twitch.tv https://player.twitch.tv https://www.clarity.ms https://scripts.clarity.ms *.vercel-insights.com;",
 
   "style-src 'self' 'unsafe-inline' fonts.googleapis.com;",
 
-  // --- [ATUALIZADO]: Adicionado 's4.anilist.co' para as capas da AniList ---
-  "img-src 'self' data: blob: image.tmdb.org cdn.myanimelist.net i.imgur.com images.igdb.com s4.anilist.co https://www.clarity.ms https://c.clarity.ms c.bing.com *.public.blob.vercel-storage.com;",
+  // 2. ADICIONADO: static-cdn.jtvnw.net para imagens da Twitch (thumbnails/avatar)
+  "img-src 'self' data: blob: image.tmdb.org cdn.myanimelist.net i.imgur.com images.igdb.com s4.anilist.co https://static-cdn.jtvnw.net https://*.twitch.tv https://www.clarity.ms https://c.clarity.ms c.bing.com *.public.blob.vercel-storage.com;",
 
   "font-src 'self' fonts.gstatic.com;",
 
-  // --- [ATUALIZADO]: Adicionei 'graphql.anilist.co' para a API funcionar ---
   "connect-src 'self' *.neon.tech api.jikan.moe graphql.anilist.co https://www.clarity.ms https://scripts.clarity.ms https://c.clarity.ms https://i.clarity.ms https://n.clarity.ms vitals.vercel-insights.com *.public.blob.vercel-storage.com;",
 
-  "frame-src 'self';",
+  // 3. ADICIONADO: player.twitch.tv e www.twitch.tv para permitir o iframe do vídeo
+  "frame-src 'self' https://player.twitch.tv https://www.twitch.tv https://embed.twitch.tv;",
 ].join(' ');
 
 const securityHeaders = [
@@ -44,7 +45,6 @@ const securityHeaders = [
   }
 ];
 
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -69,7 +69,6 @@ const nextConfig = {
         hostname: "images.igdb.com",
         pathname: "/igdb/image/upload/**",
       },
-      // --- [NOVO]: Configuração para AniList ---
       {
         protocol: "https",
         hostname: "s4.anilist.co",
@@ -78,6 +77,12 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "*.public.blob.vercel-storage.com",
+        pathname: "/**",
+      },
+      // ADICIONADO: Para garantir que avatares da Twitch funcionem no componente Image do Next.js
+      {
+        protocol: "https",
+        hostname: "static-cdn.jtvnw.net",
         pathname: "/**",
       },
     ],

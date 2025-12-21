@@ -1,140 +1,112 @@
-"use client"; // <--- Isso é essencial!
+"use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { PlayCircle } from "lucide-react";
 
-// Um tipo para ajudar o TypeScript a entender os dados
-type StreamStatus = {
-  isLive: boolean;
-  gameName?: string;
-  title?: string;
-  viewerCount?: number;
-};
+interface TwitchPlayerProps {
+  channel?: string;
+  offlineImage?: string | null; // Nova prop para a imagem
+}
 
-export function TwitchPlayer() {
-  // 1. Estados para guardar os dados e o status de carregamento
-  const [status, setStatus] = useState<StreamStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function TwitchPlayer({ channel, offlineImage }: TwitchPlayerProps) {
+  const embedRef = useRef<HTMLDivElement>(null);
+  const [isLive, setIsLive] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
+  
+  const targetChannel = channel || process.env.NEXT_PUBLIC_TWITCH_CHANNEL || "monstercat";
 
-  // 2. Efeito para buscar os dados quando o componente carregar
+  // 1. Verifica se está ao vivo para decidir o que mostrar
   useEffect(() => {
-    // Busca os dados da NOSSA API Route
-    fetch("/api/twitch-status")
-      .then((res) => res.json())
-      .then((data: StreamStatus) => {
-        setStatus(data);
-      })
-      .catch((err) => {
-        console.error("Erro ao buscar status da Twitch:", err);
-        setStatus({ isLive: false }); // Assume offline em caso de erro
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, []); // O array vazio [] faz isso rodar apenas uma vez no cliente
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`/api/twitch/status?channel=${targetChannel}`);
+        const data = await res.json();
+        setIsLive(data.isLive);
+      } catch (error) {
+        console.error("Erro ao verificar live:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // 3. Função auxiliar para renderizar o conteúdo
-  const renderContent = () => {
-    // 3a. Mostra um placeholder enquanto carrega
-    if (isLoading) {
-      return (
-        <div className="text-center">
-          <p className="text-gray-400">Verificando status da live...</p>
-        </div>
-      );
-    }
+    checkStatus();
+  }, [targetChannel]);
 
-    // 3b. Mostra o banner "AO VIVO"
-    if (status && status.isLive) {
-      return (
-        <a
-          href={`https://twitch.tv/${process.env.NEXT_PUBLIC_TWITCH_CHANNEL_NAME || 'twitch'}`} // Você pode por seu canal direto aqui também
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block text-center hover:opacity-90 transition-opacity p-8"
-        >
-          <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-1 rounded-md text-sm font-bold animate-pulse">
-            AO VIVO
-          </div>
-          <h3 className="text-white text-xl md:text-2xl font-bold mb-2 px-10">
-            {status.title || "Estamos ao vivo!"}
-          </h3>
-          <p className="text-purple-300 text-lg">
-            {status.gameName || "Vem assistir!"}
-          </p>
-          <p className="text-gray-400 text-sm mt-4">
-            {status.viewerCount ? `${status.viewerCount} espectadores` : ""}
-          </p>
-          <div className="mt-6 inline-flex items-center justify-center h-16 w-16 rounded-full bg-purple-600">
-            <svg
-              className="h-8 w-8 text-white ml-1"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </div>
-          <p className="text-white mt-2 font-semibold">Clique para assistir</p>
-        </a>
-      );
-    }
+  // 2. Carrega o Player da Twitch (Só se estiver LIVE ou se não tiver imagem de capa)
+  useEffect(() => {
+    if (loading) return; // Espera verificar o status
+    
+    // Se estiver OFFLINE e tiver imagem, NÃO carrega o player (mostra a imagem)
+    if (!isLive && offlineImage) return;
 
-    // 3c. Mostra o banner "OFFLINE"
-    return (
-      <div className="text-center p-8">
-        <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-gray-700 mb-4">
-          <svg
-            className="h-10 w-10 text-gray-400"
-            fill="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z" />
-          </svg>
-        </div>
-        <p className="text-gray-400 mb-2 text-xl font-bold">Offline</p>
-        <p className="text-gray-500 text-sm">
-          Acompanhe a agenda ou siga nas redes para saber da próxima live!
-        </p>
-      </div>
-    );
-  };
+    if (!embedRef.current) return;
+
+    embedRef.current.innerHTML = ""; // Limpa anterior
+
+    const script = document.createElement("script");
+    script.src = "https://embed.twitch.tv/embed/v1.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    script.onload = () => {
+      // @ts-ignore
+      if (window.Twitch && window.Twitch.Embed) {
+        // @ts-ignore
+        new window.Twitch.Embed(embedRef.current, {
+          width: "100%",
+          height: "100%",
+          channel: targetChannel,
+          layout: "video",
+          autoplay: true,
+          muted: true,
+          parent: ["localhost", "meucronograma.live", "vercel.app"],
+        });
+      }
+    };
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, [targetChannel, isLive, loading, offlineImage]);
 
   return (
-    <section id="inicio" className="py-16 bg-white">
-      <div className="container mx-auto px-4">
-        <h2 className="text-center mb-8 font-medium">Transmissão Atual</h2>
-        <div className="max-w-5xl mx-auto">
-          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-purple-600 via-pink-600 to-purple-800 p-1">
-            <div className="bg-black rounded-xl overflow-hidden">
-              <div className="aspect-video bg-gradient-to-br from-gray-900 to-black flex items-center justify-center relative">
-                {/* O conteúdo dinâmico será renderizado aqui */}
-                {renderContent()}
+    <div className="w-full h-full min-h-[400px] bg-black relative group">
+      
+      {/* CENÁRIO A: Está OFFLINE e temos uma imagem de capa configurada.
+         Mostramos a imagem com um botão ou texto.
+      */}
+      {!loading && !isLive && offlineImage ? (
+        <div className="absolute inset-0 z-10">
+           <Image 
+             src={offlineImage} 
+             alt="Canal Offline" 
+             fill 
+             className="object-cover opacity-60 group-hover:opacity-40 transition-opacity"
+           />
+           <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+              <div className="bg-black/50 p-4 rounded-full backdrop-blur-sm mb-4">
+                 <PlayCircle className="w-12 h-12 text-gray-400" />
               </div>
-            </div>
-          </div>
-          <div className="mt-4 text-center">
-            <p className="text-gray-700 text-sm font-medium">
-              {status && status.isLive
-                ? ` Ao vivo agora!`
-                : (
-                  <>
-                    Lives todos os dias da semana <br />
-                    (Acesse cronograma completo{" "}
-                    <a
-                      href="https://www.meucronograma.live/mahmoojen"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-500 hover:underline"
-                    >
-                      aqui
-                    </a>
-
-                    )
-                  </>
-                )}
-            </p>
-          </div>
+              <h3 className="text-2xl font-bold">O Streamer está Offline</h3>
+              <p className="text-gray-300 mt-2">Confira o Cronograma para a próxima live!</p>
+              
+              {/* Botão opcional para forçar o player (ex: ver chat/vods) */}
+              <button 
+                onClick={() => setIsLive(true)} // Truque: Força o estado para "Live" para carregar o player
+                className="mt-6 text-sm underline text-purple-400 hover:text-purple-300 cursor-pointer"
+              >
+                Acessar Chat ou Reprises
+              </button>
+           </div>
         </div>
-      </div>
-    </section>
+      ) : (
+        /* CENÁRIO B: Está AO VIVO (ou sem capa) -> Mostra o Player Normal */
+        <div ref={embedRef} className="w-full h-full absolute inset-0" />
+      )}
+
+    </div>
   );
 }

@@ -1,185 +1,174 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Media, MediaStatus } from "@prisma/client";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Film } from "lucide-react";
-import { ImageWithFallback } from "@/components/ui/image-with-fallback";
+import { Loader2, Trash2, Edit, Search, X } from "lucide-react";
+import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
-// --- [CONFIGURAÇÃO] ---
-// Defina quantos itens por página você quer mostrar
-const PAGE_SIZE = 5;
-// --- [FIM DA CONFIGURAÇÃO] ---
-
-// Tipos
-type MediaStatusWithMedia = MediaStatus & { media: Media };
-
-type PaginatedListProps = {
+interface PaginatedListProps {
   username: string;
   status: "TO_WATCH" | "WATCHING" | "WATCHED" | "DROPPED";
-  searchTerm: string; 
-};
+  isOwner: boolean;
+  isCompact?: boolean;
+  itemsPerPage?: number; // <--- NOVA PROP
+}
 
-export default function PaginatedList({ username, status, searchTerm }: PaginatedListProps) {
-  const [items, setItems] = useState<MediaStatusWithMedia[]>([]);
+export default function PaginatedList({ 
+  username, 
+  status, 
+  isOwner, 
+  isCompact = false,
+  itemsPerPage = 12 // Valor padrão se não for informado
+}: PaginatedListProps) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  // --- [INÍCIO DAS MUDANÇAS] ---
-  // Reintroduzimos o estado da página e da contagem total
   const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  // --- [FIM DAS MUDANÇAS] ---
+  const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  // Usamos 'useCallback' para memorizar a função de busca
-  const fetchItems = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        status: status,
-        page: page.toString(),
-        pageSize: PAGE_SIZE.toString(), // Usa o nosso limite
-        searchTerm: searchTerm, 
-      });
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-      const res = await fetch(
-        `/api/users/${username}/lists?${params.toString()}`
-      );
-      if (!res.ok) {
-        throw new Error("Falha ao carregar a lista.");
+  useEffect(() => {
+    const fetchItems = async () => {
+      setLoading(true);
+      try {
+        // Usa o itemsPerPage que veio da prop
+        const res = await fetch(
+          `/api/users/${username}/lists?status=${status}&page=${page}&limit=${itemsPerPage}&search=${encodeURIComponent(debouncedSearch)}`
+        );
+        
+        if (!res.ok) throw new Error("Erro ao buscar lista");
+        
+        const data = await res.json();
+        setItems(data.items);
+        setTotalPages(data.totalPages);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
       }
-      const data = await res.json();
-      setItems(data.items);
-      setTotalCount(data.totalCount); // Armazena a contagem total
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [username, status, page, searchTerm]); // Depende da página e da busca
+    };
+    fetchItems();
+  }, [username, status, page, isCompact, debouncedSearch, itemsPerPage]); // Adicionado itemsPerPage na dependência
 
-  // useEffect que busca os dados
-  useEffect(() => {
-    // Adiciona um debounce para a pesquisa
-    const delayDebounce = setTimeout(() => {
-      fetchItems();
-    }, 300); 
-
-    return () => clearTimeout(delayDebounce); 
-  }, [fetchItems]); // Dispara sempre que o fetchItems (e as suas dependências) mudar
-
-  // --- [NOVO] ---
-  // useEffect que RESETA a página para 1 quando o 'searchTerm' muda
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm]);
-  // --- [FIM NOVO] ---
-
-  // Lógica de Paginação
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-
-  const handlePreviousPage = () => {
-    setPage((p) => Math.max(1, p - 1));
-  };
-
-  const handleNextPage = () => {
-    setPage((p) => Math.min(totalPages, p + 1));
-  };
-  // --- [FIM DA LÓGICA DE PAGINAÇÃO] ---
-
-
-  const getTypeBadge = (type: string) => {
-    switch (type) {
-      case "MOVIE": return "Filme";
-      case "SERIES": return "Série";
-      case "ANIME": return "Anime";
-      default: return "Outro";
-    }
-  };
-
-  if (isLoading && items.length === 0) { // Mostra o spinner grande só na carga inicial
-    return (
-      <div className="flex justify-center items-center min-h-[200px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center p-8 text-red-600">
-        <p>{error}</p>
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="text-center p-12 text-muted-foreground">
-        <Film className="h-12 w-12 mx-auto mb-4 opacity-30" />
-        {searchTerm ? (
-          <p>Nenhum item encontrado para &quot;{searchTerm}&quot;.</p>
-        ) : (
-          <p>Nenhum item encontrado nesta lista.</p>
-        )}
-      </div>
-    );
-  }
+  // ... (função handleDelete igual)
 
   return (
-    <div className="space-y-4">
-      {/* Lista de Itens (com indicador de loading) */}
-      <div className={`space-y-3 ${isLoading ? 'opacity-50' : ''}`}>
-        {items.map((item) => (
-          <Card key={item.id} className="flex gap-4 p-4 shadow-sm">
-            <ImageWithFallback
-              src={item.media.posterPath} 
-              alt={item.media.title}
-              width={80}
-              height={120}
-              className="rounded-md object-cover"
-            />
-            <div className="flex-1">
-              <h3 className="text-lg font-bold">{item.media.title}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant="outline">{getTypeBadge(item.media.mediaType)}</Badge>
-                {item.media.releaseYear && (
-                  <Badge variant="secondary">{item.media.releaseYear}</Badge>
-                )}
-              </div>
-            </div>
-          </Card>
-        ))}
+    <div className="space-y-6">
+      
+      {/* BARRA DE PESQUISA */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+        <Input 
+          placeholder="Pesquisar..." 
+          className="pl-10 bg-gray-950/50 border-gray-800 text-white placeholder:text-gray-600 focus:border-purple-500 rounded-xl"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && (
+          <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
-      {/* --- [MUDANÇA] --- */}
-      {/* Adicionamos os botões de Paginação */}
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center pt-4">
-          <Button
-            variant="outline"
-            onClick={handlePreviousPage}
-            disabled={page === 1 || isLoading}
-          >
-            Anterior
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Página {page} de {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            onClick={handleNextPage}
-            disabled={page === totalPages || isLoading}
-          >
-            Próxima
-          </Button>
+      {loading && (
+        <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-purple-500" /></div>
+      )}
+
+      {!loading && items.length === 0 && (
+        <div className="text-center py-8 text-gray-500 border border-dashed border-gray-800 rounded-xl bg-gray-900/20 text-sm">
+          {search ? "Nada encontrado." : "Lista vazia."}
         </div>
       )}
-      {/* --- [FIM DA MUDANÇA] --- */}
+
+      {/* GRID DE ITENS */}
+      {!loading && items.length > 0 && (
+        <div className={cn(
+          "grid gap-3",
+          // Ajuste de colunas para o layout dividido (meia tela)
+          isCompact 
+            ? "grid-cols-3 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5" 
+            : "grid-cols-1 sm:grid-cols-2"
+        )}>
+          {items.map((item) => (
+            <Card 
+              key={item.id} 
+              className={cn(
+                "overflow-hidden group relative border-gray-800 bg-gray-900 hover:border-gray-600 transition-all flex flex-col",
+                isCompact ? "border-0 bg-transparent shadow-none" : ""
+              )}
+            >
+              <div className={cn(
+                "relative w-full overflow-hidden rounded-lg bg-gray-800 shadow-md", 
+                isCompact ? "aspect-[2/3]" : "aspect-video"
+              )}>
+                {item.media.posterPath ? (
+                  <Image
+                    src={item.media.posterPath.startsWith('http') ? item.media.posterPath : `https://image.tmdb.org/t/p/w300${item.media.posterPath}`}
+                    alt={item.media.title}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    sizes="200px"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-[10px] text-gray-600">Sem Capa</div>
+                )}
+                
+                {/* Nota no cantinho */}
+                {item.rating && isCompact && (
+                   <div className="absolute top-1 right-1 bg-black/70 text-yellow-400 text-[10px] font-bold px-1.5 rounded backdrop-blur-sm">
+                      {item.rating}
+                   </div>
+                )}
+              </div>
+
+              {/* Título e Info */}
+              <div className={cn("pt-2", isCompact ? "text-center" : "p-3")}>
+                <h4 
+                  className={cn(
+                    "font-medium text-gray-300 group-hover:text-white transition-colors",
+                    isCompact ? "text-xs line-clamp-1" : "text-sm line-clamp-1"
+                  )} 
+                  title={item.media.title}
+                >
+                  {item.media.title}
+                </h4>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* PAGINAÇÃO COMPACTA */}
+      {!loading && totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 pt-2 border-t border-gray-800/50">
+           <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="h-8 w-8 p-0 rounded-full hover:bg-gray-800">
+              &lt;
+           </Button>
+           <span className="text-xs text-gray-500 font-mono">
+              {page}/{totalPages}
+           </span>
+           <Button variant="ghost" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="h-8 w-8 p-0 rounded-full hover:bg-gray-800">
+              &gt;
+           </Button>
+        </div>
+      )}
     </div>
   );
 }
