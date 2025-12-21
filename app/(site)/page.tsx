@@ -1,5 +1,5 @@
 import  Header  from "@/app/components/portfolio/Header";
-import { Footer } from "@/app/components/portfolio/Footer";
+import  Footer  from "@/app/components/portfolio/Footer";
 import { TwitchPlayer } from "@/app/components/portfolio/TwitchPlayer";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";

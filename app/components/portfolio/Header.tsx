@@ -38,7 +38,6 @@ export default function Header() {
   const pathname = usePathname();
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // Detecta rolagem para mudar a cor do fundo
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
@@ -47,8 +46,11 @@ export default function Header() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Lógica para definir se o header deve ter fundo sólido
-  // Tem fundo se: Rolou a tela OU não está na Home
+  // 🔴 CORREÇÃO CRÍTICA: Esconde este Header se estiver no Dashboard
+  if (pathname?.startsWith("/dashboard")) {
+    return null;
+  }
+
   const shouldShowBackground = isScrolled || pathname !== "/";
 
   return (
@@ -61,7 +63,6 @@ export default function Header() {
       )}
     >
       <div className="container mx-auto px-4 flex items-center justify-between">
-        {/* LOGO */}
         <Link 
           href="/" 
           className="flex items-center gap-2 font-bold text-xl hover:opacity-80 transition-opacity text-white"
@@ -72,7 +73,6 @@ export default function Header() {
           <span>MahMoojen</span>
         </Link>
 
-        {/* MENU DESKTOP */}
         <nav className="hidden md:flex items-center gap-6">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
@@ -97,12 +97,10 @@ export default function Header() {
           })}
         </nav>
 
-        {/* ÁREA DE AUTH (Login/Dashboard) */}
         <div className="hidden md:flex items-center gap-4">
           {status === 'loading' ? (
-            <div className="w-8 h-8 rounded-full bg-gray-800 animate-pulse" />
+            <div className="w-8 h-8" />
           ) : session ? (
-            // --- USUÁRIO LOGADO (Dropdown) ---
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full hover:bg-gray-800">
@@ -144,18 +142,9 @@ export default function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
-            // --- USUÁRIO DESLOGADO ---
-            <Button 
-              onClick={() => signIn()} 
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full px-6"
-            >
-              Entrar
-            </Button>
-          )}
+          ) : null}
         </div>
 
-        {/* MENU MOBILE */}
         <div className="md:hidden text-white">
           <Sheet>
             <SheetTrigger asChild>
@@ -207,14 +196,7 @@ export default function Header() {
                         Sair
                       </Button>
                     </div>
-                  ) : (
-                    <Button 
-                      onClick={() => signIn()} 
-                      className="w-full bg-purple-600 hover:bg-purple-700 font-bold"
-                    >
-                      Entrar na Conta
-                    </Button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </SheetContent>

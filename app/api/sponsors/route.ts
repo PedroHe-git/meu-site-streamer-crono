@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/authOptions"; // Ajuste se seu caminho for diferente
+import { authOptions } from "@/lib/authOptions";
 import { UserRole } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 
@@ -17,7 +17,7 @@ export async function GET() {
   }
 }
 
-// POST: Cria novo patrocinador (Só Admin)
+// POST: Cria novo patrocinador
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -29,9 +29,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, category, imageUrl, linkUrl, description } = body;
 
-    // Pega o ID do usuário logado
     const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
-
     if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
 
     const newSponsor = await prisma.sponsor.create({
@@ -45,9 +43,8 @@ export async function POST(request: Request) {
       }
     });
 
-    await prisma.sponsor.create({ ... });
-    revalidateTag('sponsors'); // Limpa cache de parceiros
-    return NextResponse.json(newSponsor);
+    // Limpa o cache para o site atualizar instantaneamente
+    revalidateTag('sponsors'); 
 
     return NextResponse.json(newSponsor);
   } catch (error) {
@@ -55,7 +52,7 @@ export async function POST(request: Request) {
   }
 }
 
-// DELETE: Remove patrocinador (Só Admin)
+// DELETE: Remove patrocinador
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -71,12 +68,11 @@ export async function DELETE(request: Request) {
 
     await prisma.sponsor.delete({ where: { id } });
 
+    // Limpa o cache
+    revalidateTag('sponsors');
+
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: "Erro ao deletar" }, { status: 500 });
   }
-
-  await prisma.sponsor.delete({ ... });
-    revalidateTag('sponsors');
-    return NextResponse.json({ success: true });
 }

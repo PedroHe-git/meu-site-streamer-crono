@@ -41,7 +41,7 @@ export default withAuth(
       default-src 'self';
       script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.youtube.com https://player.twitch.tv https://*.twitch.tv;
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-      img-src 'self' blob: data: https: https://*.googleusercontent.com https://image.tmdb.org https://i.ytimg.com https://yt3.ggpht.com https://*.cdninstagram.com https://*.fbcdn.net https://*.fna.fbcdn.net https://static-cdn.jtvnw.net https://*.twitch.tv https://*.vercel-storage.com;
+      img-src 'self' blob: data: https: https://*.googleusercontent.com https://image.tmdb.org https://i.ytimg.com https://yt3.ggpht.com https://*.cdninstagram.com https://*.fbcdn.net https://*.fna.fbcdn.net https://static-cdn.jtvnw.net https://*.twitch.tv https://*.vercel-storage.com https://wsrv.nl;
       font-src 'self' data: https://fonts.gstatic.com;
       object-src 'none';
       base-uri 'self';

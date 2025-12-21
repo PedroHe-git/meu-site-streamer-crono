@@ -3,7 +3,7 @@ import { getSponsors } from "@/lib/data";
 import { Handshake, Mail, ExternalLink, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+
 
 type Sponsor = {
   id: string;
