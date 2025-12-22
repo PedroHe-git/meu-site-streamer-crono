@@ -3,28 +3,41 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions"; 
 import { UserRole } from "@prisma/client";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache"; // 👈 Importar unstable_cache
 
-// --- GET: Busca os itens (Público) ---
+// --- GET: Busca os itens (Agora com Cache Inteligente) ---
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const platform = searchParams.get("platform"); 
+  const platform = searchParams.get("platform"); // "YOUTUBE" ou "INSTAGRAM"
 
   try {
-    const creator = await prisma.user.findFirst({
-      where: { role: UserRole.CREATOR },
-    });
+    // Função de busca envolvida em cache
+    const getCachedSocialItems = unstable_cache(
+      async () => {
+        // Busca o ID do criador
+        const creator = await prisma.user.findFirst({
+          where: { role: UserRole.CREATOR },
+        });
 
-    if (!creator) return NextResponse.json([], { status: 404 });
+        if (!creator) return [];
 
-    const items = await prisma.socialItem.findMany({
-      where: {
-        userId: creator.id,
-        platform: platform ? platform.toUpperCase() : undefined
+        return await prisma.socialItem.findMany({
+          where: {
+            userId: creator.id,
+            platform: platform ? platform.toUpperCase() : undefined
+          },
+          orderBy: { createdAt: 'desc' }, 
+          take: 6 
+        });
       },
-      orderBy: { createdAt: 'desc' }, 
-      take: 6 
-    });
+      [`social-items-${platform || 'all'}`], // Chave única do cache
+      {
+        revalidate: 3600, // Atualiza a cada 1 hora no máximo
+        tags: ['social']  // Tag para limpar cache quando adicionar/remover itens
+      }
+    );
+
+    const items = await getCachedSocialItems();
 
     return NextResponse.json(items);
   } catch (error) {
@@ -32,11 +45,10 @@ export async function GET(request: Request) {
   }
 }
 
-// --- POST: Cria um novo item (Só Creator) ---
+// --- POST: Cria um novo item (Sem Cache - Direto no Banco) ---
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
-  // 👇 TRAVA DE SEGURANÇA
   if (!session || session.user.role !== UserRole.CREATOR) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
@@ -60,6 +72,7 @@ export async function POST(request: Request) {
       }
     });
 
+    // Limpa o cache para mostrar o item novo na hora
     revalidateTag('social');
 
     return NextResponse.json(newItem);
@@ -69,11 +82,10 @@ export async function POST(request: Request) {
   }
 }
 
-// --- DELETE: Remove um item (Só Creator) ---
+// --- DELETE: Remove um item ---
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
 
-  // 👇 TRAVA DE SEGURANÇA
   if (!session || session.user.role !== UserRole.CREATOR) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
@@ -88,6 +100,7 @@ export async function DELETE(request: Request) {
       where: { id }
     });
 
+    // Limpa o cache
     revalidateTag('social');
 
     return NextResponse.json({ success: true });

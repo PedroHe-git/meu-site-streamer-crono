@@ -3,23 +3,35 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 import { UserRole } from "@prisma/client";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache"; // 👈 Importar unstable_cache
 
-export const dynamic = 'force-dynamic';
+// ATENÇÃO: Removemos a linha 'export const dynamic = force-dynamic' para permitir o cache.
 
-// GET: Busca todos os patrocinadores
+// --- GET: Busca Patrocinadores (Com Cache Longo) ---
 export async function GET() {
   try {
-    const sponsors = await prisma.sponsor.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
+    const getCachedSponsors = unstable_cache(
+      async () => {
+        return await prisma.sponsor.findMany({
+          orderBy: { createdAt: 'desc' }
+        });
+      },
+      ['sponsors-list'], // Chave única
+      {
+        revalidate: 86400, // 24 Horas de cache (economiza muito banco)
+        tags: ['sponsors'] // Tag para invalidar quando você alterar
+      }
+    );
+
+    const sponsors = await getCachedSponsors();
+    
     return NextResponse.json(sponsors);
   } catch (error) {
     return NextResponse.json({ error: "Erro ao buscar patrocinadores" }, { status: 500 });
   }
 }
 
-// POST: Cria novo patrocinador
+// --- POST: Cria novo patrocinador ---
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
@@ -45,7 +57,7 @@ export async function POST(request: Request) {
       }
     });
 
-    // Limpa o cache para o site atualizar instantaneamente
+    // Limpa o cache imediatamente
     revalidateTag('sponsors'); 
 
     return NextResponse.json(newSponsor);
@@ -54,7 +66,7 @@ export async function POST(request: Request) {
   }
 }
 
-// DELETE: Remove patrocinador
+// --- DELETE: Remove patrocinador ---
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
 
