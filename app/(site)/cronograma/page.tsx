@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import ScheduleSlider from "@/app/components/ScheduleSlider"; // Verifique se o caminho está correto
+import ScheduleSlider from "@/app/components/ScheduleSlider";
 import { Metadata } from "next";
+import { startOfWeek, subWeeks } from "date-fns"; // Adicione esta importação
 
-export const revalidate = 60; // Atualiza a cada 60 segundos
+export const revalidate = 60; 
 
 export const metadata: Metadata = {
   title: "Cronograma | MahMoojen",
@@ -11,15 +12,20 @@ export const metadata: Metadata = {
 
 async function getSchedule() {
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Zera o horário para pegar o dia todo
 
-  // 1. Busca os dados no Banco
+  // [CORREÇÃO]: Define o início da busca para o começo da semana atual (Segunda-feira)
+  // Isso garante que se hoje for Quarta, os itens de Seg/Ter ainda apareçam na grade.
+  const startDate = startOfWeek(today, { weekStartsOn: 1 }); // 1 = Segunda-feira
+  
+  // (Opcional) Se quiser que o botão "Semana Anterior" funcione por 1 semana,
+  // você pode usar: const startDate = subWeeks(startOfWeek(today, { weekStartsOn: 1 }), 1);
+
   const rawItems = await prisma.scheduleItem.findMany({
     where: {
       scheduledAt: {
-        gte: today, // Apenas itens de hoje em diante
+        gte: startDate, // Busca do início da semana em diante
       },
-      // REMOVIDO: user: { role: "CREATOR" } -> Agora pega de qualquer usuário (você)
+      // user: { role: "CREATOR" } // Pode manter comentado se for site de usuário único
     },
     include: {
       media: true,
@@ -30,9 +36,6 @@ async function getSchedule() {
     },
   });
 
-  // 2. TRUQUE DE SERIALIZAÇÃO:
-  // Converte objetos Date para string para não quebrar o componente do Cliente.
-  // Isso resolve o erro: "Only plain objects can be passed to Client Components"
   return JSON.parse(JSON.stringify(rawItems));
 }
 
@@ -51,18 +54,8 @@ export default async function CronogramaPage() {
           </p>
         </div>
 
-        {scheduleItems.length > 0 ? (
-          <ScheduleSlider items={scheduleItems} />
-        ) : (
-          <div className="text-center py-20 bg-gray-900/30 rounded-2xl border border-gray-800">
-            <p className="text-gray-500 text-xl">
-              Nenhum agendamento encontrado para os próximos dias.
-            </p>
-            <p className="text-gray-600 text-sm mt-2">
-              Fique de olho nas redes sociais para avisos de última hora!
-            </p>
-          </div>
-        )}
+        {/* Verifica se há itens OU se estamos visualizando a semana atual vazia */}
+        <ScheduleSlider items={scheduleItems} />
       </div>
     </main>
   );

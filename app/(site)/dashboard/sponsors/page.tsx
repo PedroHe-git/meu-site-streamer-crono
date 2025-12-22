@@ -32,7 +32,7 @@ export default function SponsorsDashboard() {
 
   const fetchSponsors = async () => {
     try {
-      const res = await fetch("/api/sponsors");
+      const res = await fetch("/api/sponsors", { cache: "no-store" });
       const data = await res.json();
       setSponsors(data);
     } catch (error) {

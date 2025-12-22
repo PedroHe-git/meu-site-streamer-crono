@@ -51,7 +51,7 @@ export default function Header() {
     return null;
   }
 
-  const shouldShowBackground = isScrolled || pathname !== "/";
+  const shouldShowBackground = true;
 
   return (
     <header
@@ -124,12 +124,6 @@ export default function Header() {
                   <Link href="/dashboard">
                     <LayoutDashboard className="mr-2 h-4 w-4" />
                     <span>Painel Admin</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="focus:bg-gray-800 focus:text-white cursor-pointer">
-                  <Link href="/profile/settings">
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Meu Perfil</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-gray-800" />

@@ -11,7 +11,7 @@ const settingsSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(50, "Nome muito longo"),
   
   bio: z.string()
-    .max(200, "A bio deve ter no máximo 200 caracteres")
+    .max(1000, "A bio deve ter no máximo 1000 caracteres")
     .nullable()
     .optional(),
     
@@ -44,6 +44,10 @@ const settingsSchema = z.object({
   showWatchingList: z.boolean(),
   showWatchedList: z.boolean(),
   showDroppedList: z.boolean(),
+
+  statFollowers: z.string().max(15).optional().nullable(),
+  statMedia: z.string().max(15).optional().nullable(),
+  statRegion: z.string().max(15).optional().nullable(),
 });
 
 export async function PUT(request: Request) {
@@ -80,6 +84,9 @@ export async function PUT(request: Request) {
         showWatchingList: data.showWatchingList,
         showWatchedList: data.showWatchedList,
         showDroppedList: data.showDroppedList,
+        statFollowers: data.statFollowers,
+        statMedia: data.statMedia,
+        statRegion: data.statRegion,
       },
     });
 

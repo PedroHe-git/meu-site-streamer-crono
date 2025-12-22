@@ -58,6 +58,10 @@ model User {
   socialItems SocialItem[]
   sponsors       Sponsor[]
 
+  statFollowers    String?  
+  statMedia        String?  
+  statRegion       String?  
+
   // --- Campos de Personalização ---
   bio              String? @db.Text // Mantido
   profileBannerUrl String?

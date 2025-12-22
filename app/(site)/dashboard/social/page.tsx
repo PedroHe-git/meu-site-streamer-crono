@@ -34,8 +34,8 @@ export default function SocialDashboard() {
   const fetchItems = async () => {
     setLoading(true);
     try {
-      const resYt = await fetch("/api/social?platform=YOUTUBE");
-      const resInsta = await fetch("/api/social?platform=INSTAGRAM");
+      const resYt = await fetch("/api/social?platform=YOUTUBE", { cache: "no-store" });
+      const resInsta = await fetch("/api/social?platform=INSTAGRAM", { cache: "no-store" });
       const dataYt = await resYt.json();
       const dataInsta = await resInsta.json();
       setItems([...(Array.isArray(dataYt) ? dataYt : []), ...(Array.isArray(dataInsta) ? dataInsta : [])]);

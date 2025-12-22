@@ -5,6 +5,8 @@ import { authOptions } from "@/lib/authOptions";
 import { UserRole } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 
+export const dynamic = 'force-dynamic';
+
 // GET: Busca todos os patrocinadores
 export async function GET() {
   try {

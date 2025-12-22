@@ -1,8 +1,16 @@
-"use client"; // Importante: Componente de Cliente
+"use client";
 
-import { useState } from "react";
-import { Youtube, Instagram, ChevronLeft, ChevronRight, ExternalLink, Play, Heart } from "lucide-react";
+import Image from "next/image";
+import { Youtube, Instagram, Play, ExternalLink, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 
 type SocialItem = {
   id: string;
@@ -19,149 +27,126 @@ interface SocialCarouselProps {
 }
 
 export default function SocialCarousel({ ytItems, instaItems }: SocialCarouselProps) {
-  const [ytIndex, setYtIndex] = useState(0);
-  const [instaIndex, setInstaIndex] = useState(0);
-
-  // Navegação
-  const nextSlide = (platform: "YT" | "INSTA") => {
-    if (platform === "YT") {
-      setYtIndex((prev) => (prev === ytItems.length - 1 ? 0 : prev + 1));
-    } else {
-      setInstaIndex((prev) => (prev === instaItems.length - 1 ? 0 : prev + 1));
-    }
-  };
-
-  const prevSlide = (platform: "YT" | "INSTA") => {
-    if (platform === "YT") {
-      setYtIndex((prev) => (prev === 0 ? ytItems.length - 1 : prev - 1));
-    } else {
-      setInstaIndex((prev) => (prev === 0 ? instaItems.length - 1 : prev - 1));
-    }
-  };
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full max-w-6xl mx-auto flex-1 items-center">
-          
+    <div className="w-full space-y-16 pb-20">
+      
       {/* =======================
-          LADO ESQUERDO: YOUTUBE
+          SEÇÃO YOUTUBE
           ======================= */}
-      <div className="relative group w-full aspect-video lg:aspect-[16/10] bg-gray-900/30 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-sm shadow-2xl">
-        
-        {/* Header do Card */}
-        <div className="absolute top-6 left-6 z-20 flex items-center gap-3">
-            <div className="bg-red-600 p-2 rounded-lg text-white shadow-lg shadow-red-900/20">
-              <Youtube className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="font-bold text-lg leading-none">YouTube</h2>
-              <p className="text-xs text-red-200/70">Vídeos Longos & Shorts</p>
-            </div>
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 px-2">
+          <div className="bg-red-600 p-2 rounded-lg text-white shadow-lg shadow-red-900/20">
+            <Youtube className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="font-bold text-2xl text-white">YouTube</h2>
+            <p className="text-sm text-gray-400">Vídeos recentes e destaques</p>
+          </div>
         </div>
 
-        {/* Conteúdo do Slide */}
         {ytItems.length > 0 ? (
-            <div className="relative w-full h-full">
-              {/* Imagem de Fundo */}
-              <img 
-                src={ytItems[ytIndex].imageUrl} 
-                alt={ytItems[ytIndex].title}
-                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-
-              {/* Texto e Play */}
-              <div className="absolute bottom-0 left-0 p-8 w-full z-20">
-                  <span className="inline-block bg-red-600/90 text-white text-[10px] font-bold px-2 py-1 rounded mb-2 uppercase tracking-wide">
-                    Assista Agora
-                  </span>
-                  <h3 className="text-2xl md:text-3xl font-bold text-white mb-2 line-clamp-2">
-                    {ytItems[ytIndex].title}
-                  </h3>
-                  <div className="flex items-center gap-4">
-                    <Button className="bg-white text-black hover:bg-gray-200 rounded-full font-bold px-6" asChild>
-                        <a href={ytItems[ytIndex].linkUrl} target="_blank">
-                          <Play className="w-4 h-4 mr-2 fill-black" /> Ver Vídeo
-                        </a>
-                    </Button>
-                    <p className="text-sm text-gray-300">{ytItems[ytIndex].subtitle}</p>
-                  </div>
-              </div>
-
-              {/* Botões de Navegação */}
-              {ytItems.length > 1 && (
-                <>
-                  <button onClick={() => prevSlide("YT")} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-30">
-                    <ChevronLeft className="w-6 h-6" />
-                  </button>
-                  <button onClick={() => nextSlide("YT")} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-red-600 transition-colors z-30">
-                    <ChevronRight className="w-6 h-6" />
-                  </button>
-                </>
-              )}
+          <Carousel
+            opts={{ align: "start", loop: true }}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-4">
+              {ytItems.map((item) => (
+                // Basis-1/1 (Mobile), 1/2 (Tablet), 1/3 (Desktop)
+                <CarouselItem key={item.id} className="pl-4 basis-full md:basis-1/2 lg:basis-1/3">
+                  <a href={item.linkUrl} target="_blank" rel="noopener noreferrer" className="group block h-full">
+                    <Card className="bg-gray-900/50 border-gray-800 overflow-hidden hover:border-red-500/50 transition-all duration-300 h-full group-hover:-translate-y-1">
+                      <div className="relative aspect-video">
+                        <img
+                          src={item.imageUrl}
+                          alt={item.title}                         
+                          className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
+                            <Play className="w-5 h-5 text-white ml-1" />
+                          </div>
+                        </div>
+                      </div>
+                      <CardContent className="p-4 space-y-2">
+                        <h3 className="font-bold text-white line-clamp-2 group-hover:text-red-400 transition-colors">
+                          {item.title}
+                        </h3>
+                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                          {item.subtitle || "Assista Agora"}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </a>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <div className="hidden md:block">
+                <CarouselPrevious className="bg-gray-900 border-gray-700 text-white hover:bg-red-600 hover:border-red-600" />
+                <CarouselNext className="bg-gray-900 border-gray-700 text-white hover:bg-red-600 hover:border-red-600" />
             </div>
+          </Carousel>
         ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <p>Nenhum vídeo cadastrado.</p>
-            </div>
+          <div className="p-8 border border-dashed border-gray-800 rounded-xl text-center text-gray-500">
+            Nenhum vídeo encontrado.
+          </div>
         )}
       </div>
 
       {/* =======================
-          LADO DIREITO: INSTAGRAM
+          SEÇÃO INSTAGRAM
           ======================= */}
-      <div className="relative group w-full aspect-[4/5] lg:aspect-[16/10] bg-gray-900/30 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-sm shadow-2xl">
-        
-          {/* Header do Card */}
-          <div className="absolute top-6 left-6 z-20 flex items-center gap-3">
-            <div className="bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 p-2 rounded-lg text-white shadow-lg">
-              <Instagram className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="font-bold text-lg leading-none">Instagram</h2>
-              <p className="text-xs text-pink-200/70">Daily & Lifestyle</p>
-            </div>
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 px-2">
+          <div className="bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 p-2 rounded-lg text-white shadow-lg">
+            <Instagram className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="font-bold text-2xl text-white">Instagram</h2>
+            <p className="text-sm text-gray-400">Fotos, Reels e Stories</p>
+          </div>
         </div>
 
-        {/* Conteúdo do Slide */}
         {instaItems.length > 0 ? (
-            <div className="relative w-full h-full">
-              <img 
-                src={instaItems[instaIndex].imageUrl} 
-                alt={instaItems[instaIndex].title}
-                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-
-              <div className="absolute bottom-0 left-0 p-8 w-full z-20">
-                  <div className="flex items-center gap-2 mb-3 text-pink-400">
-                    <Heart className="w-5 h-5 fill-pink-500" />
-                    <span className="text-sm font-medium">{instaItems[instaIndex].subtitle || "Confira no feed"}</span>
-                  </div>
-                  <h3 className="text-xl md:text-2xl font-bold text-white mb-4 line-clamp-2">
-                    {instaItems[instaIndex].title}
-                  </h3>
-                  <Button variant="outline" className="border-white/20 text-white hover:bg-white hover:text-black rounded-full px-6" asChild>
-                    <a href={instaItems[instaIndex].linkUrl} target="_blank">
-                        Ver Postagem <ExternalLink className="w-4 h-4 ml-2" />
-                    </a>
-                  </Button>
-              </div>
-
-              {instaItems.length > 1 && (
-                <>
-                  <button onClick={() => prevSlide("INSTA")} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-pink-600 transition-colors z-30">
-                    <ChevronLeft className="w-6 h-6" />
-                  </button>
-                  <button onClick={() => nextSlide("INSTA")} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-pink-600 transition-colors z-30">
-                    <ChevronRight className="w-6 h-6" />
-                  </button>
-                </>
-              )}
+          <Carousel
+            opts={{ align: "start", loop: true }}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-4">
+              {instaItems.map((item) => (
+                // Basis-1/2 (Mobile), 1/3 (Tablet), 1/4 (Desktop) - Menor pois são fotos verticais/quadradas
+                <CarouselItem key={item.id} className="pl-4 basis-1/2 md:basis-1/3 lg:basis-1/4 xl:basis-1/5">
+                  <a href={item.linkUrl} target="_blank" rel="noopener noreferrer" className="group block h-full">
+                    <div className="relative aspect-[4/5] rounded-xl overflow-hidden bg-gray-900 border border-gray-800 hover:border-pink-500/50 transition-all duration-300 shadow-lg">
+                      <img
+                        src={item.imageUrl}
+                        alt={item.title}
+                        className="object-cover group-hover:scale-110 transition-transform duration-700"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
+                      
+                      <div className="absolute bottom-0 left-0 p-4 w-full transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                        <div className="flex items-center gap-2 text-pink-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold">
+                           <Heart className="w-3 h-3 fill-current" /> 
+                           <span>Ver Post</span>
+                        </div>
+                        <p className="text-sm text-white font-medium line-clamp-2 leading-snug">
+                            {item.title}
+                        </p>
+                      </div>
+                    </div>
+                  </a>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <div className="hidden md:block">
+                <CarouselPrevious className="bg-gray-900 border-gray-700 text-white hover:bg-pink-600 hover:border-pink-600" />
+                <CarouselNext className="bg-gray-900 border-gray-700 text-white hover:bg-pink-600 hover:border-pink-600" />
             </div>
+          </Carousel>
         ) : (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <p>Nenhum post cadastrado.</p>
-            </div>
+          <div className="p-8 border border-dashed border-gray-800 rounded-xl text-center text-gray-500">
+            Nenhum post encontrado.
+          </div>
         )}
       </div>
 

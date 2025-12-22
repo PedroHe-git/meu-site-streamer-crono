@@ -6,16 +6,23 @@ import { Badge } from "@/components/ui/badge";
 import TwitchPlayer from "@/app/components/portfolio/TwitchPlayer";
 import Header from "@/app/components/portfolio/Header";
 import Footer from "@/app/components/portfolio/Footer";
-import { getTwitchStatus } from "@/lib/twitch"; // 👈 Importamos a nova função
+import { getTwitchStatus } from "@/lib/twitch";
+import { prisma } from "@/lib/prisma"; // 👈 Importação do Prisma adicionada
 
-// Cache da página inteira por 60 segundos para não estourar limite da Twitch
+// Cache da página inteira por 60 segundos
 export const revalidate = 60;
 
 export default async function HomePage() {
-  // Chamamos a função diretamente (sem fetch interno)
+  // 1. Busca os dados da Live na Twitch API
   const { isLive, viewer_count, title, game_name } = await getTwitchStatus();
   
-  const TWITCH_USERNAME = "MahMoojen"; 
+  // 2. Busca o perfil do CRIADOR no banco de dados para pegar os Stats personalizados
+  const creator = await prisma.user.findFirst({
+    where: { role: "CREATOR" }
+  });
+
+  // Usa o usuário do banco ou fallback para "MahMoojen"
+  const TWITCH_USERNAME = creator?.twitchUsername || "MahMoojen"; 
 
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-purple-500/30 flex flex-col">
@@ -36,6 +43,8 @@ export default async function HomePage() {
             
             {/* Texto (Esquerda) */}
             <div className="flex-1 text-center lg:text-left space-y-6">
+              
+              {/* Badge de Status da Live */}
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
                 <span className={`relative flex h-3 w-3`}>
                   {isLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
@@ -49,13 +58,12 @@ export default async function HomePage() {
               <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[1.1]">
                 BEM VINDO AO <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 animate-gradient-x">
-                  MAHMOOJEN
+                  {creator?.name?.toUpperCase() || "MAHMOOJEN"}
                 </span>
               </h1>
 
               <p className="text-lg md:text-xl text-gray-400 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                Gameplay de alta qualidade, resenha e momentos épicos. 
-                Junte-se à comunidade mais caótica e divertida da Twitch.
+                {creator?.bio || "Gameplay de alta qualidade, resenha e momentos épicos. Junte-se à comunidade mais caótica e divertida da Twitch."}
               </p>
 
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-4">
@@ -71,18 +79,18 @@ export default async function HomePage() {
                 </Button>
               </div>
 
-              {/* Stats Rápidos */}
+              {/* Stats Rápidos (DADOS DO BANCO) */}
               <div className="flex items-center justify-center lg:justify-start gap-8 pt-8 border-t border-white/5">
                 <div>
-                  <p className="text-2xl font-bold text-white">65K+</p>
+                  <p className="text-2xl font-bold text-white">{creator?.statFollowers || "0"}</p>
                   <p className="text-xs text-gray-500 uppercase tracking-widest">Seguidores</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">1,2k+</p>
+                  <p className="text-2xl font-bold text-white">{creator?.statMedia || "0"}</p>
                   <p className="text-xs text-gray-500 uppercase tracking-widest">Mídias Assistidas</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">BR</p>
+                  <p className="text-2xl font-bold text-white">{creator?.statRegion || "BR"}</p>
                   <p className="text-xs text-gray-500 uppercase tracking-widest">Região</p>
                 </div>
               </div>
@@ -122,7 +130,7 @@ export default async function HomePage() {
                   <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-[90%] bg-gray-900/90 backdrop-blur-md border border-white/10 rounded-xl p-4 flex items-center justify-between shadow-xl z-20">
                     <div className="flex flex-col">
                       <span className="text-xs text-purple-400 font-bold uppercase tracking-wider">{game_name || "Ao Vivo"}</span>
-                      <span className="text-sm font-medium text-white line-clamp-1">{title || "Stream da MahMoojen"}</span>
+                      <span className="text-sm font-medium text-white line-clamp-1">{title || `Stream da ${creator?.name || "MahMoojen"}`}</span>
                     </div>
                     <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/20 flex gap-2 shrink-0">
                        <Radio className="w-3 h-3" /> {viewer_count || 0}

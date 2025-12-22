@@ -27,15 +27,16 @@ export default async function SocialPage() {
       <div className="absolute top-1/4 left-0 w-[600px] h-[600px] bg-purple-900/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-pink-900/10 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="container mx-auto px-4 relative z-10 max-w-7xl h-full flex flex-col">
-        <div className="text-center mb-8 md:mb-12">
-          <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-2">
-            Acompanhe o <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-purple-600">Conteúdo</span>
+      <div className="container mx-auto px-4 relative z-10 w-full flex flex-col">
+        <div className="text-center mb-16">
+          <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-4">
+            Feed de <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-purple-600">Conteúdo</span>
           </h1>
-          <p className="text-gray-400">Últimos lançamentos e bastidores.</p>
+          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+            Não perca nada! Os últimos vídeos do YouTube e atualizações do Instagram em um só lugar.
+          </p>
         </div>
 
-        {/* Componente Client-Side que cuida da interatividade */}
         <SocialCarousel ytItems={ytItems} instaItems={instaItems} />
       </div>
     </main>
