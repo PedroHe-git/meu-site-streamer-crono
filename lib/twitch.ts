@@ -1,3 +1,6 @@
+
+import { unstable_cache } from "next/cache";
+
 export async function getTwitchStatus() {
   const CLIENT_ID = process.env.TWITCH_CLIENT_ID;
   const CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
