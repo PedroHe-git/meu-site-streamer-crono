@@ -1,6 +1,7 @@
 // app/(site)/layout.tsx
 import { Inter } from 'next/font/google';
 import { Analytics } from "@vercel/analytics/react";
+import Clarity from "@/app/components/Clarity";
 
 import '@/app/globals.css'; 
 // 👇 MUDANÇA: Usamos o Header do Portfolio como a navegação principal
@@ -32,6 +33,7 @@ export default function RootLayout({
           <main className="min-h-screen relative">
             {children}
             <Analytics />
+            <Clarity />
           </main>
           
         </AuthContext>
