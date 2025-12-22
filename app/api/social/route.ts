@@ -5,13 +5,12 @@ import { authOptions } from "@/lib/authOptions";
 import { UserRole } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 
-// --- GET: Busca os itens para mostrar no site ---
+// --- GET: Busca os itens (Público) ---
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const platform = searchParams.get("platform"); // "YOUTUBE" ou "INSTAGRAM"
+  const platform = searchParams.get("platform"); 
 
   try {
-    // Busca o ID do criador (Dono)
     const creator = await prisma.user.findFirst({
       where: { role: UserRole.CREATOR },
     });
@@ -23,8 +22,8 @@ export async function GET(request: Request) {
         userId: creator.id,
         platform: platform ? platform.toUpperCase() : undefined
       },
-      orderBy: { createdAt: 'desc' }, // Mais recentes primeiro
-      take: 6 // Limite de segurança
+      orderBy: { createdAt: 'desc' }, 
+      take: 6 
     });
 
     return NextResponse.json(items);
@@ -33,11 +32,11 @@ export async function GET(request: Request) {
   }
 }
 
-// --- POST: Cria um novo item (Só Admin/Creator) ---
+// --- POST: Cria um novo item (Só Creator) ---
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
-  // Verifica se quem está tentando salvar é o Criador
+  // 👇 TRAVA DE SEGURANÇA
   if (!session || session.user.role !== UserRole.CREATOR) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
@@ -46,7 +45,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { platform, imageUrl, linkUrl, title, subtitle } = body;
 
-    // Busca o ID do usuário no banco para conectar
     const user = await prisma.user.findUnique({ where: { email: session.user.email! } });
 
     if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
@@ -71,10 +69,11 @@ export async function POST(request: Request) {
   }
 }
 
-// --- DELETE: Remove um item (Só Admin/Creator) ---
+// --- DELETE: Remove um item (Só Creator) ---
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
 
+  // 👇 TRAVA DE SEGURANÇA
   if (!session || session.user.role !== UserRole.CREATOR) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
