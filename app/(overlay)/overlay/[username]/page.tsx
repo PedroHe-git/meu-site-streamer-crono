@@ -1,28 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ImageWithFallback } from "@/components/ui/image-with-fallback"; 
+import Image from "next/image"; // 👈 Usando o componente padrão
 
 export default function OverlayPage({ params }: { params: { username: string } }) {
   const [data, setData] = useState<any>(null);
 
-  const fetchData = async () => {
-    try {
-      const res = await fetch(`/api/users/${params.username}/overlay`);
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-      }
-    } catch (error) {
-      console.error("Erro no overlay", error);
-    }
-  };
-
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 5000); 
-    return () => clearInterval(interval);
-  }, [params.username]);
+    // 1. Definir a função DENTRO do useEffect resolve o aviso de dependência
+    const fetchData = async () => {
+      try {
+        const res = await fetch(`/api/users/${params.username}/overlay`);
+        if (res.ok) {
+          const json = await res.json();
+          setData(json);
+        }
+      } catch (error) {
+        console.error("Erro no overlay", error);
+      }
+    };
+
+    fetchData(); // Chama imediatamente
+    const interval = setInterval(fetchData, 5000); // Atualiza a cada 5 segundos
+
+    return () => clearInterval(interval); // Limpa ao sair
+  }, [params.username]); // 👈 Agora a dependência está correta
 
   if (!data || !data.current) return null;
 
@@ -38,13 +40,20 @@ export default function OverlayPage({ params }: { params: { username: string } }
         
         {/* Poster Grande */}
         <div className="relative h-60 w-40 flex-shrink-0 bg-gray-800 rounded-xl overflow-hidden shadow-lg">
-             <ImageWithFallback
-               src={media.posterPath} 
-               alt={media.title}
-               width={300} // Resolução mais alta para não pixelizar
-               height={450}
-               className="object-cover w-full h-full"
-             />
+             {/* 2. Imagem Otimizada e Segura */}
+             {media.posterPath ? (
+               <Image
+                 src={media.posterPath} 
+                 alt={media.title}
+                 fill
+                 className="object-cover"
+                 unoptimized={true} // 👈 Evita erros de domínio/bloqueio
+               />
+             ) : (
+               <div className="w-full h-full bg-gray-700 flex items-center justify-center opacity-50">
+                 No Image
+               </div>
+             )}
         </div>
 
         {/* Textos Grandes */}

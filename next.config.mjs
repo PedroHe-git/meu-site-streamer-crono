@@ -88,6 +88,18 @@ const nextConfig = {
         hostname: "img.youtube.com",
         pathname: "/vi/**",
       },
+      { protocol: "https", hostname: "i.ytimg.com" },      // YouTube Thumbs
+      { protocol: "https", hostname: "yt3.ggpht.com" },    // YouTube Avatar
+      { protocol: "https", hostname: "m.media-amazon.com" }, // Amazon
+      { protocol: "https", hostname: "images-na.ssl-images-amazon.com" }, // Amazon Antigo
+      { protocol: "https", hostname: "static-cdn.jtvnw.net" }, // Twitch
+      { protocol: "https", hostname: "cdn.discordapp.com" },   // Discord
+      { protocol: "https", hostname: "pbs.twimg.com" },        // Twitter
+      { protocol: "https", hostname: "scontent.cdninstagram.com" }, // Instagram
+      { protocol: "https", hostname: "scontent-gru1-1.cdninstagram.com" }, // Insta BR 1
+      { protocol: "https", hostname: "scontent-gru2-1.cdninstagram.com" }, // Insta BR 2
+      // Adicione este abaixo para garantir (scontent geral)
+      { protocol: "https", hostname: "*.cdninstagram.com" },
     ],
   },
 

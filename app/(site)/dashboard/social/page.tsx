@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image"; // 👈 1. Importado
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,14 +51,13 @@ export default function SocialDashboard() {
     fetchItems();
   }, []);
 
-  // --- FUNÇÃO MÁGICA ATUALIZADA (YouTube + Instagram) ---
   const handleLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const link = e.target.value;
     setFormData(prev => ({ ...prev, linkUrl: link }));
 
     if (!link) return;
 
-    // 1. Lógica do YouTube (Capa em Alta Qualidade)
+    // 1. YouTube
     if (formData.platform === "YOUTUBE") {
       try {
         const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
@@ -73,21 +73,17 @@ export default function SocialDashboard() {
       } catch (err) {}
     }
 
-    // 2. Lógica do Instagram (Truque do /media)
+    // 2. Instagram
     if (formData.platform === "INSTAGRAM") {
       try {
-        // Aceita links de Post (p), Reel (reel) ou TV
-        // Ex: https://www.instagram.com/p/DA_xyz123/
         const instaRegex = /(?:instagram\.com\/(?:p|reel|tv)\/)([\w\-]+)/;
         const match = link.match(instaRegex);
         
         if (match && match[1]) {
           const postId = match[1];
-          // Monta a URL mágica que redireciona para a imagem
           const magicUrl = `https://wsrv.nl/?url=instagram.com/p/${postId}/media/?size=l`;
-          
           setFormData(prev => ({ ...prev, imageUrl: magicUrl }));
-      toast({ title: "Link gerado com proxy (Mais estável) 🛡️" });
+          toast({ title: "Link gerado com proxy (Mais estável) 🛡️" });
         }
       } catch (err) {}
     }
@@ -148,7 +144,7 @@ export default function SocialDashboard() {
                     variant={formData.platform === "YOUTUBE" ? "default" : "outline"}
                     className={formData.platform === "YOUTUBE" ? "bg-red-600 hover:bg-red-700 text-white" : ""}
                     onClick={() => {
-                        setFormData({ ...formData, platform: "YOUTUBE", imageUrl: "" }); // Limpa imagem ao trocar
+                        setFormData({ ...formData, platform: "YOUTUBE", imageUrl: "" });
                     }}
                   >
                     <Youtube className="w-4 h-4 mr-2" /> YouTube
@@ -158,7 +154,7 @@ export default function SocialDashboard() {
                     variant={formData.platform === "INSTAGRAM" ? "default" : "outline"}
                     className={formData.platform === "INSTAGRAM" ? "bg-pink-600 hover:bg-pink-700 text-white" : ""}
                     onClick={() => {
-                        setFormData({ ...formData, platform: "INSTAGRAM", imageUrl: "" }); // Limpa imagem ao trocar
+                        setFormData({ ...formData, platform: "INSTAGRAM", imageUrl: "" });
                     }}
                   >
                     <Instagram className="w-4 h-4 mr-2" /> Instagram
@@ -204,7 +200,7 @@ export default function SocialDashboard() {
                 />
                 <p className="text-[10px] text-gray-500 mt-1">
                     {formData.platform === "INSTAGRAM" 
-                        ? "Se a imagem do Insta não carregar, clique com botão direito na foto original > Copiar Endereço da Imagem."
+                        ? "Se a imagem não carregar, use o link do wsrv.nl ou imgur."
                         : "Detectado automaticamente do YouTube."}
                 </p>
               </div>
@@ -239,9 +235,17 @@ export default function SocialDashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {items.filter(i => i.platform === platform).map((item) => (
                     <Card key={item.id} className="overflow-hidden group hover:shadow-md transition-shadow dark:bg-gray-900 dark:border-gray-800">
+                      
+                      {/* 2. CORREÇÃO DA IMAGEM AQUI 👇 */}
                       <div className="relative aspect-video bg-gray-100 dark:bg-gray-800">
                         {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
+                          <Image
+                            src={item.imageUrl}
+                            alt={item.title}
+                            fill
+                            className="object-cover"
+                            unoptimized={true} // 👈 Previne erros
+                          />
                         ) : (
                            <div className="flex items-center justify-center h-full text-gray-400">Sem imagem</div>
                         )}
@@ -251,6 +255,7 @@ export default function SocialDashboard() {
                            </Button>
                         </div>
                       </div>
+
                       <div className="p-4">
                         <h4 className="font-bold line-clamp-1 dark:text-gray-100" title={item.title}>{item.title}</h4>
                         <div className="flex justify-between items-center mt-2 text-sm text-gray-500">

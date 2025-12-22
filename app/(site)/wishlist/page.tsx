@@ -59,9 +59,9 @@ export default async function WishlistPage() {
             </div>
 
             <div className="flex-1 text-center md:text-left space-y-4">
-              <h2 className="text-2xl font-bold text-white">Envie um "Loot" Épico</h2>
+              <h2 className="text-2xl font-bold text-white">Envie um &quot;Loot&quot; Épico</h2>
               <p className="text-gray-400 text-sm md:text-base">
-                Ao escolher um item na Amazon, ele chega direto aqui na "Caverna". <br></br>
+                Ao escolher um item na Amazon, ele chega direto aqui na &quot;Caverna&quot;. <br></br>
                 Que será aberto em live!
               </p>
               

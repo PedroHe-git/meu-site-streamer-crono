@@ -1,8 +1,10 @@
 "use client";
 
-import { Youtube, Instagram, Play, ExternalLink, Heart, Zap, Tv, Video, ArrowUpRight } from "lucide-react";
+import { useRef } from "react"; // 👈 Importar useRef
+import { Youtube, Instagram, Play, ArrowUpRight, Zap, Tv, Video, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import Image from "next/image"; 
+import Autoplay from "embla-carousel-autoplay"; // 👈 Importar o plugin
 import {
   Carousel,
   CarouselContent,
@@ -12,7 +14,6 @@ import {
 } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 
-// --- TIPOS ---
 type SocialItem = {
   id: string;
   title: string;
@@ -41,7 +42,11 @@ export default function SocialCarousel({
   instaProfileUrl 
 }: SocialCarouselProps) {
 
-  // Configuração visual avançada dos canais
+  // 👇 Configuração do Autoplay (4000ms = 4 segundos)
+  const plugin = useRef(
+    Autoplay({ delay: 4000, stopOnInteraction: true })
+  );
+
   const getChannelStyle = (type: string) => {
     switch (type) {
       case "MAIN": return { 
@@ -72,7 +77,6 @@ export default function SocialCarousel({
     }
   };
 
-  // Ícone por tipo
   const getIcon = (type: string) => {
     switch (type) {
         case "MAIN": return <Youtube className="w-5 h-5" />;
@@ -86,14 +90,9 @@ export default function SocialCarousel({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full max-w-7xl mx-auto items-start">
       
-      {/* =================================================
-          COLUNA ESQUERDA: YOUTUBE (Vidro + Neon)
-          ================================================= */}
+      {/* ESQUERDA: YOUTUBE */}
       <div className="flex flex-col gap-6 h-full">
-        
-        {/* Bloco 1: Header e Canais */}
         <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-            {/* Efeito de Fundo */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-red-600/5 blur-[80px] rounded-full pointer-events-none" />
 
             <div className="flex items-center gap-4 mb-6 relative z-10">
@@ -106,7 +105,6 @@ export default function SocialCarousel({
                 </div>
             </div>
 
-            {/* Grid de Canais */}
             {youtubeChannels.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
                     {youtubeChannels.map((channel, idx) => {
@@ -146,38 +144,48 @@ export default function SocialCarousel({
             )}
         </div>
 
-        {/* Bloco 2: Vídeos Recentes */}
         <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 shadow-2xl flex-1 flex flex-col">
             <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                     <span className="w-1 h-5 bg-red-600 rounded-full inline-block" />
                     Últimos Vídeos
                 </h3>
-                {ytItems.length > 0 && (
-                    <div className="flex gap-2">
-                        {/* Botões do Carousel (Controlados via ref se necessário, ou usamos os internos) */}
-                    </div>
-                )}
             </div>
 
             {ytItems.length > 0 ? (
-                <Carousel opts={{ align: "start", loop: true }} className="w-full mt-auto">
+                // 👇 AQUI APLICAMOS O PLUGIN E OS EVENTOS DE MOUSE
+                <Carousel 
+                    opts={{ align: "start", loop: true }} 
+                    plugins={[plugin.current]}
+                    className="w-full mt-auto"
+                    onMouseEnter={plugin.current.stop}
+                    onMouseLeave={plugin.current.reset}
+                >
                     <CarouselContent className="-ml-4">
                     {ytItems.map((item) => (
                         <CarouselItem key={item.id} className="pl-4 basis-11/12 sm:basis-1/2">
                         <a href={item.linkUrl} target="_blank" className="group block h-full">
                             <div className="bg-gray-900/50 border border-white/5 rounded-xl overflow-hidden hover:border-red-500/30 transition-all duration-300 h-full hover:-translate-y-1 hover:shadow-lg hover:shadow-red-900/10">
                                 <div className="relative aspect-video">
-                                    <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500" />
+                                    {item.imageUrl ? (
+                                      <Image 
+                                        src={item.imageUrl} 
+                                        alt={item.title} 
+                                        fill 
+                                        unoptimized={true}
+                                        sizes="(max-width: 768px) 100vw, 50vw"
+                                        className="object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500" 
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full bg-gray-800" />
+                                    )}
                                     
-                                    {/* Play Overlay */}
                                     <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
                                         <div className="w-10 h-10 bg-red-600/90 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm scale-90 opacity-80 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300">
                                             <Play className="w-4 h-4 text-white ml-0.5 fill-white" />
                                         </div>
                                     </div>
                                     
-                                    {/* Badge de Duração (Simulado ou se tiver no futuro) */}
                                     <div className="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-bold text-white">
                                         VÍDEO
                                     </div>
@@ -208,15 +216,11 @@ export default function SocialCarousel({
         </div>
       </div>
 
-      {/* =================================================
-          COLUNA DIREITA: INSTAGRAM (Estilo Mobile App)
-          ================================================= */}
+      {/* DIREITA: INSTAGRAM */}
       <div className="h-full bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 shadow-2xl relative overflow-hidden flex flex-col">
         
-        {/* Background Decorativo */}
         <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-b from-purple-900/5 via-transparent to-transparent pointer-events-none" />
 
-        {/* Header Insta */}
         <div className="flex items-center justify-between mb-8 relative z-10">
             <div className="flex items-center gap-4">
                 <div className="relative p-[2px] bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 rounded-full">
@@ -234,19 +238,27 @@ export default function SocialCarousel({
             </Button>
         </div>
 
-        {/* Carousel Vertical (Posts) */}
         <div className="flex-1 relative z-10">
              {instaItems.length > 0 ? (
                 <Carousel opts={{ align: "start", loop: true }} className="w-full">
                     <CarouselContent className="-ml-3">
                     {instaItems.map((item) => (
-                        // Ajustado para mostrar mais itens e parecer uma galeria
                         <CarouselItem key={item.id} className="pl-3 basis-1/2 sm:basis-1/3">
                         <a href={item.linkUrl} target="_blank" className="group block h-full">
                             <div className="relative aspect-[4/5] rounded-xl overflow-hidden bg-gray-900 border border-white/5 hover:border-pink-500/40 transition-all duration-300">
-                                <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                {item.imageUrl ? (
+                                  <Image 
+                                    src={item.imageUrl} 
+                                    alt={item.title} 
+                                    fill 
+                                    unoptimized={true} 
+                                    sizes="(max-width: 768px) 50vw, 33vw"
+                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gray-800" />
+                                )}
                                 
-                                {/* Overlay Escuro no Hover */}
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center">
                                     <Heart className="w-6 h-6 text-white fill-white mb-2 animate-bounce" />
                                     <p className="text-[10px] text-gray-300 font-medium line-clamp-2">
@@ -272,7 +284,6 @@ export default function SocialCarousel({
             )}
         </div>
 
-        {/* Footer do Card Insta */}
         <div className="mt-8 pt-4 border-t border-white/5 text-center">
             <p className="text-xs text-gray-500">
                 Acompanhe os stories para atualizações diárias.

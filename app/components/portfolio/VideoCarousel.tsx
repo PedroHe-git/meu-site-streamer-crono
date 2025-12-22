@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button"
 import { PlayCircle, Youtube, Loader2 } from "lucide-react";
+import Image from "next/image"; 
 import {
   Carousel,
   CarouselContent,
@@ -72,11 +73,19 @@ export function VideoCarousel() {
                         rel="noopener noreferrer"
                         className="block relative aspect-video overflow-hidden bg-gray-900"
                       >
-                        <img
-                          src={video.imageUrl}
-                          alt={video.title || "Vídeo"}
-                          className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
-                        />
+                        {video.imageUrl ? (
+                          <Image
+                            src={video.imageUrl}
+                            alt={video.title || "Vídeo"}
+                            fill
+                            unoptimized={true} // 👈 FIX
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            className="object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-200" />
+                        )}
+
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-black/20 backdrop-blur-[2px]">
                            <div className="bg-red-600 text-white rounded-full p-3 shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
                               <PlayCircle className="w-8 h-8 fill-current" />

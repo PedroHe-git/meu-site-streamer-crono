@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image"; // 👈 1. Importado
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trash2, Plus, ExternalLink, Handshake } from "lucide-react";
+import { Trash2, Plus, Handshake, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Sponsor = {
@@ -119,24 +120,37 @@ export default function SponsorsDashboard() {
         {/* Lista */}
         <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-4">
           {sponsors.map((sponsor) => (
-            <Card key={sponsor.id} className="dark:bg-gray-900 dark:border-gray-800 relative group overflow-hidden">
-               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => handleDelete(sponsor.id)}>
+            <Card key={sponsor.id} className="dark:bg-gray-900 dark:border-gray-800 relative group overflow-hidden hover:border-purple-500/50 transition-colors">
+               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <Button variant="destructive" size="icon" className="h-8 w-8 shadow-sm" onClick={() => handleDelete(sponsor.id)}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
                </div>
+               
                <CardContent className="p-6 flex flex-col items-center text-center">
-                  <div className="w-20 h-20 mb-4 bg-white/5 rounded-full flex items-center justify-center p-2">
-                     <img src={sponsor.imageUrl} alt={sponsor.name} className="max-w-full max-h-full object-contain" />
+                  {/* 2. Container da Imagem com o componente Next/Image */}
+                  <div className="relative w-24 h-24 mb-4 bg-white/5 rounded-full flex items-center justify-center p-4 overflow-hidden border border-white/10">
+                     {sponsor.imageUrl ? (
+                        <Image 
+                            src={sponsor.imageUrl} 
+                            alt={sponsor.name} 
+                            fill
+                            className="object-contain p-2"
+                            unoptimized={true} // 👈 Previne erros de domínio e warnings
+                        />
+                     ) : (
+                        <ImageIcon className="w-8 h-8 text-gray-600" />
+                     )}
                   </div>
+                  
                   <h3 className="font-bold text-lg dark:text-white">{sponsor.name}</h3>
                   <span className="text-xs text-purple-400 font-mono mb-2">{sponsor.category}</span>
-                  <p className="text-sm text-gray-400">{sponsor.description}</p>
+                  <p className="text-sm text-gray-400 line-clamp-2">{sponsor.description}</p>
                </CardContent>
             </Card>
           ))}
           {sponsors.length === 0 && !loading && (
-            <div className="col-span-full py-12 text-center text-gray-500 border border-dashed rounded-lg">
+            <div className="col-span-full py-12 text-center text-gray-500 border border-dashed rounded-lg bg-gray-50 dark:bg-gray-900/50">
               Nenhum patrocinador cadastrado.
             </div>
           )}

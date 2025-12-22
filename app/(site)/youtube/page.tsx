@@ -4,6 +4,7 @@ import { Youtube, ExternalLink, Play, Tv, Video, Zap, ArrowRight } from "lucide-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Image from "next/image"; 
 
 export const revalidate = 60;
 
@@ -19,7 +20,6 @@ export default async function YoutubePage() {
     subtitle: item.subtitle || "Assista agora",
   }));
 
-  // Separamos o Principal dos Secundários
   const mainChannel = {
     url: creator?.youtubeMainUrl,
     label: "Mah",
@@ -54,17 +54,15 @@ export default async function YoutubePage() {
       iconColor: "text-blue-500",
       desc: "Cortes da live MahMoojen"
     },
-  ].filter(c => c.url); // Remove os vazios
+  ].filter(c => c.url);
 
   return (
     <main className="min-h-screen bg-[#050505] text-white pt-24 pb-20 overflow-x-hidden">
       
-      {/* Background Decorativo */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] bg-red-600/5 blur-[120px] pointer-events-none" />
 
       <div className="container mx-auto px-4 relative z-10 max-w-7xl">
         
-        {/* --- TÍTULO DA PÁGINA --- */}
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2">
             Meus <span className="text-red-600">Canais</span>
@@ -72,10 +70,8 @@ export default async function YoutubePage() {
           <p className="text-gray-400">Inscreva-se em todos para não perder nada.</p>
         </div>
 
-        {/* --- 1. DESTAQUE: CANAL PRINCIPAL (HERO) --- */}
         {mainChannel.url && (
           <div className="relative w-full rounded-3xl overflow-hidden border border-red-500/20 mb-8 group">
-            {/* Gradiente de Fundo */}
             <div className={`absolute inset-0 bg-gradient-to-br ${mainChannel.color} opacity-20 group-hover:opacity-30 transition-opacity duration-500`} />
             <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay" />
             
@@ -110,7 +106,6 @@ export default async function YoutubePage() {
           </div>
         )}
 
-        {/* --- 2. GRID: CANAIS SECUNDÁRIOS --- */}
         {subChannels.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-20">
             {subChannels.map((channel, idx) => (
@@ -137,7 +132,6 @@ export default async function YoutubePage() {
           </div>
         )}
 
-        {/* --- 3. FEED DE VÍDEOS --- */}
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div className="flex items-center gap-3 mb-6">
             <div className="h-8 w-1 bg-red-600 rounded-full" />
@@ -154,13 +148,24 @@ export default async function YoutubePage() {
                   className="group block"
                 >
                   <Card className="bg-gray-900 border-gray-800 overflow-hidden hover:border-red-500/50 hover:shadow-[0_0_30px_-5px_rgba(220,38,38,0.2)] transition-all duration-300 h-full">
-                    {/* Thumbnail */}
-                    <div className="relative aspect-video overflow-hidden">
-                      <img
-                        src={video.imageUrl}
-                        alt={video.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                      />
+                    
+                    {/* Thumbnail Corrigida e Otimizada */}
+                    <div className="relative aspect-video overflow-hidden bg-gray-900">
+                      {video.imageUrl ? (
+                          <Image
+                            src={video.imageUrl}
+                            alt={video.title}
+                            fill
+                            unoptimized={true} // 👈 FIX: Previne erro de domínio
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            className="object-cover group-hover:scale-105 transition-transform duration-700"
+                          />
+                      ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Play className="w-10 h-10 text-gray-700" />
+                          </div>
+                      )}
+                      
                       <div className="absolute inset-0 bg-black/40 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 duration-300">
                         <div className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center shadow-lg transform scale-50 group-hover:scale-100 transition-all duration-300">
                           <Play className="w-6 h-6 text-white ml-1 fill-white" />
@@ -168,7 +173,6 @@ export default async function YoutubePage() {
                       </div>
                     </div>
                     
-                    {/* Info */}
                     <CardContent className="p-5 relative">
                       <div className="absolute top-0 right-0 -mt-3 mr-4">
                          <Badge className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-lg">New</Badge>

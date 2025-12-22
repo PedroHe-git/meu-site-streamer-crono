@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility, MediaType } from "@prisma/client";
-import Image from "next/image";
+import Image from "next/image"; // 👈 Importado
 import { Input } from "@/components/ui/input";
 
 import ReactCrop, {
@@ -31,7 +31,6 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-// 👇 Gift adicionado aqui para corrigir o erro
 import { Pen, Settings, List, CalendarDays, Calendar, Loader2, Check, BarChart, Share2, Tv, Upload, Eye, Handshake, Gift } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -83,7 +82,6 @@ export default function DashboardPage() {
   const { data: session, status, update: updateSession } = useSession();
   const { toast } = useToast();
 
-  // --- ESTADOS CORRIGIDOS (Movidos para dentro do componente) ---
   const [manualImageFile, setManualImageFile] = useState<File | null>(null);
   const [isUploadingManual, setIsUploadingManual] = useState(false);
 
@@ -180,21 +178,29 @@ export default function DashboardPage() {
   }, [session?.user, selectedFile, selectedBannerFile]);
 
   const fetchSharedData = useCallback(async () => {
-    if (!isLoading) setIsUpdating(true);
+    // 👇 REMOVIDO A LINHA QUE TRAVAVA O LOADING
+    // if (isLoading && dataVersionKey === 0) return; 
+    
+    setIsUpdating(true);
     try {
       const [resWatching, resSchedule] = await Promise.all([
         fetch(`/api/mediastatus?status=WATCHING&page=1&pageSize=50&searchTerm=`, { cache: 'no-store' }),
         fetch(`/api/schedule?list=pending`, { cache: 'no-store' })
       ]);
+      
       if (resWatching.ok) {
         const watchingData = await resWatching.json();
         setInitialMediaItems(watchingData.items || []);
-      } else setInitialMediaItems([]);
+      } else {
+        setInitialMediaItems([]);
+      }
 
       if (resSchedule.ok) {
         const scheduleData = await resSchedule.json();
         setInitialScheduleItems(Array.isArray(scheduleData) ? scheduleData : []);
-      } else setInitialScheduleItems([]);
+      } else {
+        setInitialScheduleItems([]);
+      }
 
     } catch (error) {
       console.error("Erro crítico ao buscar dados:", error);
@@ -203,18 +209,24 @@ export default function DashboardPage() {
       setInitialScheduleItems([]);
     } finally {
       setIsUpdating(false);
-      setIsLoading(false);
+      setIsLoading(false); // 👇 Isso garante que o loading saia da tela
     }
-  }, [isLoading]);
+  }, [dataVersionKey]); // Dependências do useCallback
 
   useEffect(() => {
-    if (status === "authenticated") fetchSharedData();
-    else if (status === "unauthenticated") { setIsLoading(false); if (typeof window !== 'undefined') redirect("/auth/signin"); }
-  }, [status]);
+    if (status === "authenticated") {
+        fetchSharedData();
+    } else if (status === "unauthenticated") { 
+        setIsLoading(false); 
+        if (typeof window !== 'undefined') redirect("/auth/signin"); 
+    }
+  }, [status, fetchSharedData]); // 👈 CORREÇÃO: fetchSharedData adicionado
 
   useEffect(() => {
-    if (status === "authenticated" && dataVersionKey > 0) fetchSharedData();
-  }, [dataVersionKey, status]);
+    if (status === "authenticated" && dataVersionKey > 0) {
+        fetchSharedData();
+    }
+  }, [dataVersionKey, status, fetchSharedData]); // 👈 CORREÇÃO: fetchSharedData adicionado
 
   // --- FUNÇÕES DE MAPEAMENTO ---
   const mapDataToMediaItems = (dataItems: MediaStatusWithMedia[]): MappedMediaItem[] => {
@@ -316,12 +328,52 @@ export default function DashboardPage() {
   // --- JSX PRINCIPAL ---
   return (
     <>
-      {/* Tour Removido */}
       <canvas ref={canvasRef} style={{ display: 'none', objectFit: 'contain' }} />
 
-      {/* Diálogos Crop Avatar/Banner */}
-      <Dialog open={isCropperOpen} onOpenChange={setIsCropperOpen}> <DialogContent className="max-w-md"> <DialogHeader><DialogTitle>Cortar Avatar (1:1)</DialogTitle></DialogHeader> {imageSrc && (<ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(c) => setCompletedCrop(c)} aspect={avatarAspect} circularCrop > <img ref={imgRef} alt="Cortar" src={imageSrc} onLoad={onImageLoad} style={{ maxHeight: '70vh' }} /> </ReactCrop>)} <DialogFooter> <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose> <Button onClick={handleCropConfirm}>Confirmar</Button> </DialogFooter> </DialogContent> </Dialog>
-      <Dialog open={isBannerCropperOpen} onOpenChange={setIsBannerCropperOpen}> <DialogContent className="max-w-2xl"> <DialogHeader><DialogTitle>Cortar Banner (16:9)</DialogTitle></DialogHeader> {bannerImageSrc && (<ReactCrop crop={bannerCrop} onChange={(_, percentCrop) => setBannerCrop(percentCrop)} onComplete={(c) => setCompletedBannerCrop(c)} aspect={bannerAspect} > <img ref={bannerImgRef} alt="Cortar" src={bannerImageSrc} onLoad={onBannerImageLoad} style={{ maxHeight: '70vh', width: '100%' }} /> </ReactCrop>)} <DialogFooter> <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose> <Button onClick={handleBannerCropConfirm}>Confirmar</Button> </DialogFooter> </DialogContent> </Dialog>
+      {/* Diálogos Crop Avatar/Banner COM IMAGE OTIMIZADA */}
+      <Dialog open={isCropperOpen} onOpenChange={setIsCropperOpen}> 
+        <DialogContent className="max-w-md"> 
+          <DialogHeader><DialogTitle>Cortar Avatar (1:1)</DialogTitle></DialogHeader> 
+          {imageSrc && (
+            <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(c) => setCompletedCrop(c)} aspect={avatarAspect} circularCrop > 
+               {/* 👇 Substituído <img> por <Image> unoptimized */}
+               <Image 
+                 ref={imgRef} 
+                 alt="Cortar" 
+                 src={imageSrc} 
+                 width={500}
+                 height={500}
+                 onLoad={onImageLoad} 
+                 style={{ maxHeight: '70vh', width: 'auto', height: 'auto' }} 
+                 unoptimized={true}
+               /> 
+            </ReactCrop>
+          )} 
+          <DialogFooter> <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose> <Button onClick={handleCropConfirm}>Confirmar</Button> </DialogFooter> 
+        </DialogContent> 
+      </Dialog>
+
+      <Dialog open={isBannerCropperOpen} onOpenChange={setIsBannerCropperOpen}> 
+        <DialogContent className="max-w-2xl"> 
+          <DialogHeader><DialogTitle>Cortar Banner (16:9)</DialogTitle></DialogHeader> 
+          {bannerImageSrc && (
+            <ReactCrop crop={bannerCrop} onChange={(_, percentCrop) => setBannerCrop(percentCrop)} onComplete={(c) => setCompletedBannerCrop(c)} aspect={bannerAspect} > 
+               {/* 👇 Substituído <img> por <Image> unoptimized */}
+               <Image 
+                 ref={bannerImgRef} 
+                 alt="Cortar" 
+                 src={bannerImageSrc} 
+                 width={800}
+                 height={450}
+                 onLoad={onBannerImageLoad} 
+                 style={{ maxHeight: '70vh', width: '100%', height: 'auto' }} 
+                 unoptimized={true}
+               /> 
+            </ReactCrop>
+          )} 
+          <DialogFooter> <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose> <Button onClick={handleBannerCropConfirm}>Confirmar</Button> </DialogFooter> 
+        </DialogContent> 
+      </Dialog>
 
       {/* Modal de Configurações */}
       <Dialog open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen}>
@@ -350,7 +402,9 @@ export default function DashboardPage() {
                   <Label>Banner do Perfil</Label>
                   <input type="file" ref={bannerFileInputRef} onChange={handleBannerFileChange} accept="image/png, image/jpeg, image/gif" className="hidden" />
                   <div className="relative w-full h-24 bg-muted rounded-md overflow-hidden group cursor-pointer border" onClick={handleBannerClick}>
-                    {previewBanner ? (<Image src={previewBanner} alt="Banner" fill className="object-cover" />) : (<div className="flex items-center justify-center h-full text-muted-foreground text-xs">Sem banner</div>)}
+                    {previewBanner ? (
+                        <Image src={previewBanner} alt="Banner" fill className="object-cover" unoptimized={true} />
+                    ) : (<div className="flex items-center justify-center h-full text-muted-foreground text-xs">Sem banner</div>)}
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"> <span className="text-white text-sm font-medium flex items-center gap-2"><Upload className="h-4 w-4" /> Alterar</span> </div>
                   </div>
                 </div>

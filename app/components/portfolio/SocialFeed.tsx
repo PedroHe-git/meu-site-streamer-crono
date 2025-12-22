@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Instagram, Loader2, ExternalLink } from "lucide-react";
+import { Instagram, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Image from "next/image"; 
 
 type SocialItem = {
   id: string;
@@ -32,7 +33,6 @@ export function SocialFeed() {
     fetchPosts();
   }, []);
 
-  // Se não tiver nada cadastrado, esconde a seção
   if (!isLoading && posts.length === 0) return null;
 
   return (
@@ -60,14 +60,21 @@ export function SocialFeed() {
                     rel="noopener noreferrer"
                     className="relative aspect-square overflow-hidden rounded-2xl group cursor-pointer bg-gray-200 block shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
                   >
-                    {/* Imagem */}
-                    <img
-                      src={post.imageUrl}
-                      alt="Instagram Post"
-                      className="w-full h-full object-cover"
-                    />
+                    {post.imageUrl ? (
+                      <Image
+                        src={post.imageUrl}
+                        alt="Instagram Post"
+                        fill
+                        unoptimized={true} // 👈 FIX
+                        sizes="(max-width: 768px) 50vw, 33vw"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+                        <Instagram className="w-10 h-10 text-white" />
+                      </div>
+                    )}
                     
-                    {/* Overlay Hover */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-6">
                        <p className="text-white font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform">
                           <Instagram className="w-5 h-5" /> 
