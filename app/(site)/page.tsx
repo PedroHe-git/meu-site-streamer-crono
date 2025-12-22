@@ -7,19 +7,32 @@ import TwitchPlayer from "@/app/components/portfolio/TwitchPlayer";
 import Header from "@/app/components/portfolio/Header";
 import Footer from "@/app/components/portfolio/Footer";
 import { getTwitchStatus } from "@/lib/twitch";
-import { prisma } from "@/lib/prisma"; // 👈 Importação do Prisma adicionada
+import { prisma } from "@/lib/prisma";
+import { unstable_cache } from "next/cache"; // 👈 1. Importar o cache
 
-// Cache da página inteira por 60 segundos
+// Mantemos o revalidate baixo para o Status da Twitch atualizar rápido
 export const revalidate = 60;
 
+// 2. Criamos uma função cacheada para buscar o Criador sem acordar o banco toda hora
+const getCachedCreator = unstable_cache(
+  async () => {
+    return await prisma.user.findFirst({
+      where: { role: "CREATOR" }
+    });
+  },
+  ['creator-profile-home'], // Chave única do cache
+  {
+    revalidate: 86400, // 👈 Cache de 24 HORAS. O banco só acorda 1 vez por dia para isso.
+    tags: ['user-profile'] // Tag para invalidar manualmente se você editar o perfil
+  }
+);
+
 export default async function HomePage() {
-  // 1. Busca os dados da Live na Twitch API
+  // 1. Busca os dados da Live na Twitch API (Não usa o banco, usa API da Twitch)
   const { isLive, viewer_count, title, game_name } = await getTwitchStatus();
   
-  // 2. Busca o perfil do CRIADOR no banco de dados para pegar os Stats personalizados
-  const creator = await prisma.user.findFirst({
-    where: { role: "CREATOR" }
-  });
+  // 3. Substituímos a chamada direta do Prisma pela função cacheada
+  const creator = await getCachedCreator();
 
   // Usa o usuário do banco ou fallback para "MahMoojen"
   const TWITCH_USERNAME = creator?.twitchUsername || "MahMoojen"; 
@@ -27,6 +40,8 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-purple-500/30 flex flex-col">
       <Header />
+      
+      {/* ... RESTO DO CÓDIGO PERMANECE IGUAL ... */}
       
       {/* --- HERO SECTION --- */}
       <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden flex-grow">
@@ -79,7 +94,7 @@ export default async function HomePage() {
                 </Button>
               </div>
 
-              {/* Stats Rápidos (DADOS DO BANCO) */}
+              {/* Stats Rápidos (DADOS DO BANCO - Agora cacheados) */}
               <div className="flex items-center justify-center lg:justify-start gap-8 pt-8 border-t border-white/5">
                 <div>
                   <p className="text-2xl font-bold text-white">{creator?.statFollowers || "0"}</p>
