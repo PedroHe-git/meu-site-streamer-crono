@@ -29,7 +29,8 @@ const navItems = [
   { name: "Cronograma", href: "/cronograma" },
   { name: "VODS | Assistidos", href: "/historico" },
   { name: "Patrocinios", href: "/patrocinio" },
-  { name: "Redes", href: "/redes" },
+  { name: "YouTube", href: "/youtube" },
+  { name: "Instagram", href: "/redes" },
   { name: "Contato", href: "/contato" },
 ];
 

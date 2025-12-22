@@ -58,6 +58,11 @@ model User {
   socialItems SocialItem[]
   sponsors       Sponsor[]
 
+  youtubeMainUrl   String? 
+  youtubeSecondUrl String?
+  youtubeThirdUrl  String? 
+  youtubeFourthUrl String? 
+
   statFollowers    String?  
   statMedia        String?  
   statRegion       String?  

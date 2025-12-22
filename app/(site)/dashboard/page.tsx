@@ -80,6 +80,8 @@ const STEP_LISTAS: Step = { target: '#tour-step-2-listas-busca', content: 'Este 
 const STEP_AGENDA: Step = { target: '#tour-step-3-agenda', content: 'Organize seus episódios com o Gerir Agendamento! Escolha o item, defina a data e pronto!', placement: 'top', };
 const STEP_CALENDARIO: Step = { target: '#tour-step-4-calendario', content: 'Aqui tem uma visão completa do seu cronograma.', placement: 'top', };
 
+
+
 function centerAspectCrop(mediaWidth: number, mediaHeight: number, aspect: number): Crop {
   return centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, mediaWidth, mediaHeight), mediaWidth, mediaHeight);
 }
@@ -88,6 +90,10 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: session, status, update: updateSession } = useSession();
   const { toast } = useToast();
+  const [ytMain, setYtMain] = useState("");
+  const [ytSecond, setYtSecond] = useState("");
+  const [ytThird, setYtThird] = useState("");  // Novo
+  const [ytFourth, setYtFourth] = useState(""); // Novo
 
   // Estados de Dados
   const [initialMediaItems, setInitialMediaItems] = useState<MediaStatusWithMedia[]>([]);
@@ -190,6 +196,11 @@ export default function DashboardPage() {
       setStatFollowers(userAny.statFollowers || "");
       setStatMedia(userAny.statMedia || "");
       setStatRegion(userAny.statRegion || "");
+      const u = session.user as any;
+      setYtMain(userAny.youtubeMainUrl || "");
+      setYtSecond(userAny.youtubeSecondUrl || "");
+      setYtThird(userAny.youtubeThirdUrl || "");
+      setYtFourth(userAny.youtubeFourthUrl || "");
     }
   }, [session?.user, selectedFile, selectedBannerFile]);
 
@@ -282,11 +293,11 @@ export default function DashboardPage() {
     try {
       if (selectedFile) { newImageUrl = await handleAvatarUpload(); }
       if (selectedBannerFile) { newBannerUrl = await handleBannerUpload(); }
-      const payload = { name: displayName, bio: bio, profileVisibility: profileVisibility, showToWatchList: showToWatch, showWatchingList: showWatching, showWatchedList: showWatched, showDroppedList: showDropped, image: newImageUrl, profileBannerUrl: newBannerUrl, discordWebhookUrl: discordWebhook, twitchUrl: twitchLink, statFollowers, statMedia, statRegion, };
+      const payload = { name: displayName, bio: bio, profileVisibility: profileVisibility, showToWatchList: showToWatch, showWatchingList: showWatching, showWatchedList: showWatched, showDroppedList: showDropped, image: newImageUrl, profileBannerUrl: newBannerUrl, discordWebhookUrl: discordWebhook, twitchUrl: twitchLink, statFollowers, statMedia, statRegion, youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth, };
       const res = await fetch('/api/profile/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Falha ao guardar definições.'); }
       const newSettings = await res.json();
-      if (updateSession) { await updateSession({ ...session, user: { ...session?.user, name: newSettings.name, image: newSettings.image, bio: newSettings.bio, profileVisibility: newSettings.profileVisibility, showToWatchList: newSettings.showToWatchList, showWatchingList: newSettings.showWatchingList, showWatchedList: newSettings.showWatchedList, showDroppedList: newSettings.showDroppedList, profileBannerUrl: newSettings.profileBannerUrl, twitchUsername: newSettings.twitchUsername, } }); }
+      if (updateSession) { await updateSession({ ...session, user: { ...session?.user, name: newSettings.name, image: newSettings.image, bio: newSettings.bio, profileVisibility: newSettings.profileVisibility, showToWatchList: newSettings.showToWatchList, showWatchingList: newSettings.showWatchingList, showWatchedList: newSettings.showWatchedList, showDroppedList: newSettings.showDroppedList, profileBannerUrl: newSettings.profileBannerUrl, twitchUsername: newSettings.twitchUsername, youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth, statFollowers: statFollowers, statMedia: statMedia, statRegion: statRegion, } }); }
       toast({ title: "Perfil Atualizado!", description: "As suas alterações foram guardadas com sucesso.", className: "bg-green-600 text-white border-none", });
       setSelectedFile(null); setSelectedBannerFile(null); setIsProfileModalOpen(false);
     } catch (error: any) { console.error("Erro ao guardar definições:", error); setActionError(`Erro: ${error.message}`); toast({ variant: "destructive", title: "Erro ao salvar", description: error.message }); } finally { setIsSavingSettings(false); if (fileInputRef.current) fileInputRef.current.value = ""; if (bannerFileInputRef.current) bannerFileInputRef.current.value = ""; }
@@ -344,6 +355,32 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2"> <Label htmlFor="display-name">Nome de Exibição</Label> <Input id="display-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /> </div>
                 <div className="space-y-2"> <Label htmlFor="bio">Bio</Label> <Textarea id="bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Conte um pouco sobre você..." className="resize-none h-[40px] min-h-[40px]" /> </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 border p-4 rounded-md border-red-900/20 bg-red-500/5">
+              <Label className="flex items-center gap-2 text-red-400 font-bold">
+                <div className="bg-red-600 p-1 rounded text-white"><Tv size={14} /></div>
+                Meus Canais do YouTube
+              </Label>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs">Principal (Mahcetou)</Label>
+                  <Input placeholder="URL do canal..." value={ytMain} onChange={e => setYtMain(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Secundário (mahnimes)</Label>
+                  <Input placeholder="URL do canal..." value={ytSecond} onChange={e => setYtSecond(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Terceiro (cinemah)</Label>
+                  <Input placeholder="URL do canal..." value={ytThird} onChange={e => setYtThird(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Quarto (mahmoojenlives)</Label>
+                  <Input placeholder="URL do canal..." value={ytFourth} onChange={e => setYtFourth(e.target.value)} />
+                </div>
               </div>
             </div>
 

@@ -9,22 +9,22 @@ import { revalidateTag } from "next/cache"; // Importação necessária
 // Schema de Validação (Zod)
 const settingsSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(50, "Nome muito longo"),
-  
+
   bio: z.string()
     .max(1000, "A bio deve ter no máximo 1000 caracteres")
     .nullable()
     .optional(),
-    
+
   profileVisibility: z.enum(["PUBLIC", "FOLLOWERS_ONLY"]),
-  
+
   image: z.string().url().optional().nullable(),
-  
+
   profileBannerUrl: z.string()
     .optional()
     .nullable()
     .refine((val) => {
-       if (!val || val === "") return true;
-       return val.startsWith("https://");
+      if (!val || val === "") return true;
+      return val.startsWith("https://");
     }, { message: "A URL do banner deve começar com https://" }),
 
   discordWebhookUrl: z.string()
@@ -36,6 +36,11 @@ const settingsSchema = z.object({
     }, {
       message: "Deve ser um Webhook oficial do Discord (https://discord.com/api/webhooks/...)"
     }),
+
+  youtubeMainUrl: z.string().optional().nullable(),
+  youtubeSecondUrl: z.string().optional().nullable(),
+  youtubeThirdUrl: z.string().optional().nullable(),  // Novo
+  youtubeFourthUrl: z.string().optional().nullable(), // Novo
 
   // Adicionamos o campo para receber a URL completa da Twitch ou apenas o user
   twitchUrl: z.string().optional().nullable(),
@@ -87,14 +92,18 @@ export async function PUT(request: Request) {
         statFollowers: data.statFollowers,
         statMedia: data.statMedia,
         statRegion: data.statRegion,
+        youtubeMainUrl: data.youtubeMainUrl,
+        youtubeSecondUrl: data.youtubeSecondUrl,
+        youtubeThirdUrl: data.youtubeThirdUrl,   // Novo
+        youtubeFourthUrl: data.youtubeFourthUrl, // Novo
       },
     });
 
     // REVALIDAÇÃO
     if (session.user.username) {
-       const tag = `user-profile-${session.user.username.toLowerCase()}`;
-       revalidateTag(tag);
-       console.log(`Cache revalidado (SETTINGS) para: ${tag}`);
+      const tag = `user-profile-${session.user.username.toLowerCase()}`;
+      revalidateTag(tag);
+      console.log(`Cache revalidado (SETTINGS) para: ${tag}`);
     }
 
     return NextResponse.json(updatedUser);

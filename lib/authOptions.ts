@@ -37,7 +37,7 @@ export const authOptions: AuthOptions = {
           throw new Error("Credenciais inválidas");
         }
 
-        return user;
+        return user; // O objeto user aqui vem completo do banco (incluindo youtubeUrls)
       },
     }),
   ],
@@ -45,20 +45,20 @@ export const authOptions: AuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
-    // Limpei a lógica do Google/Twitch que não existe mais
     async signIn({ user, account }) {
       if (account?.provider === "credentials") {
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-        // Se você exige verificação de e-mail, mantenha isso. Se não, pode remover.
         if (!dbUser?.emailVerified) {
-          console.log("Login recusado: Email não verificado", user.email);
-          return false;
+          // Se não usar verificação de email, pode remover ou comentar este bloco
+          // console.log("Login recusado: Email não verificado", user.email);
+          // return false; 
         }
       }
       return true;
     },
 
     async jwt({ token, user, trigger, session }) {
+      // 1. CARREGAMENTO INICIAL (Login)
       if (user) {
         token.id = user.id;
         token.name = user.name ?? null;
@@ -68,30 +68,47 @@ export const authOptions: AuthOptions = {
         token.bio = user.bio ?? null;
         token.profileVisibility = user.profileVisibility;
         token.twitchUsername = user.twitchUsername ?? null;
+        token.discordWebhookUrl = user.discordWebhookUrl ?? null;
+        token.profileBannerUrl = user.profileBannerUrl ?? null;
+        
         token.showToWatchList = user.showToWatchList;
         token.showWatchingList = user.showWatchingList;
         token.showWatchedList = user.showWatchedList;
         token.showDroppedList = user.showDroppedList;
-        token.profileBannerUrl = user.profileBannerUrl ?? null;
-        token.discordWebhookUrl = user.discordWebhookUrl ?? null;
+
+        // 👇 NOVOS CAMPOS
+        token.youtubeMainUrl = user.youtubeMainUrl ?? null;
+        token.youtubeSecondUrl = user.youtubeSecondUrl ?? null;
+        token.youtubeThirdUrl = user.youtubeThirdUrl ?? null;
+        token.youtubeFourthUrl = user.youtubeFourthUrl ?? null;
+        
+        token.statFollowers = user.statFollowers ?? null;
+        token.statMedia = user.statMedia ?? null;
+        token.statRegion = user.statRegion ?? null;
       }
 
+      // 2. ATUALIZAÇÃO VIA CLIENTE (update())
       if (trigger === "update" && session) {
         const userPayload = session.user;
         if (userPayload) {
-          token.name = userPayload.name ?? null;
-          token.picture = userPayload.image ?? null;
-          token.bio = userPayload.bio ?? null;
+          token.name = userPayload.name ?? token.name;
+          token.picture = userPayload.image ?? token.picture;
+          token.bio = userPayload.bio ?? token.bio;
           token.profileVisibility = userPayload.profileVisibility;
-          token.showToWatchList = userPayload.showToWatchList;
-          token.showWatchingList = userPayload.showWatchingList;
-          token.showWatchedList = userPayload.showWatchedList;
-          token.showDroppedList = userPayload.showDroppedList;
-          token.profileBannerUrl = userPayload.profileBannerUrl ?? null;
+          token.profileBannerUrl = userPayload.profileBannerUrl ?? token.profileBannerUrl;
           
-          if (userPayload.discordWebhookUrl !== undefined) {
-             token.discordWebhookUrl = userPayload.discordWebhookUrl;
-          }
+          if (userPayload.discordWebhookUrl !== undefined) token.discordWebhookUrl = userPayload.discordWebhookUrl;
+          if (userPayload.twitchUsername !== undefined) token.twitchUsername = userPayload.twitchUsername;
+
+          // 👇 ATUALIZAÇÃO DOS NOVOS CAMPOS
+          if (userPayload.youtubeMainUrl !== undefined) token.youtubeMainUrl = userPayload.youtubeMainUrl;
+          if (userPayload.youtubeSecondUrl !== undefined) token.youtubeSecondUrl = userPayload.youtubeSecondUrl;
+          if (userPayload.youtubeThirdUrl !== undefined) token.youtubeThirdUrl = userPayload.youtubeThirdUrl;
+          if (userPayload.youtubeFourthUrl !== undefined) token.youtubeFourthUrl = userPayload.youtubeFourthUrl;
+
+          if (userPayload.statFollowers !== undefined) token.statFollowers = userPayload.statFollowers;
+          if (userPayload.statMedia !== undefined) token.statMedia = userPayload.statMedia;
+          if (userPayload.statRegion !== undefined) token.statRegion = userPayload.statRegion;
         }
       }
       return token;
@@ -107,12 +124,23 @@ export const authOptions: AuthOptions = {
         session.user.bio = token.bio as string | null;
         session.user.profileVisibility = token.profileVisibility as any;
         session.user.twitchUsername = token.twitchUsername as string | null;
+        session.user.discordWebhookUrl = token.discordWebhookUrl as string | null;
+        session.user.profileBannerUrl = token.profileBannerUrl as string | null;
+
         session.user.showToWatchList = token.showToWatchList as boolean;
         session.user.showWatchingList = token.showWatchingList as boolean;
         session.user.showWatchedList = token.showWatchedList as boolean;
         session.user.showDroppedList = token.showDroppedList as boolean;
-        session.user.profileBannerUrl = token.profileBannerUrl as string | null;
-        session.user.discordWebhookUrl = token.discordWebhookUrl as string | null;
+
+        // 👇 REPASSANDO PARA O FRONTEND
+        session.user.youtubeMainUrl = token.youtubeMainUrl as string | null;
+        session.user.youtubeSecondUrl = token.youtubeSecondUrl as string | null;
+        session.user.youtubeThirdUrl = token.youtubeThirdUrl as string | null;
+        session.user.youtubeFourthUrl = token.youtubeFourthUrl as string | null;
+
+        session.user.statFollowers = token.statFollowers as string | null;
+        session.user.statMedia = token.statMedia as string | null;
+        session.user.statRegion = token.statRegion as string | null;
       }
       return session;
     },
@@ -122,4 +150,4 @@ export const authOptions: AuthOptions = {
   pages: {
     signIn: "/auth/signin",
   },
-};  
+};

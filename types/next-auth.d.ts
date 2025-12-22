@@ -1,15 +1,8 @@
-// types/next-auth.d.ts (Atualizado)
-
 import NextAuth, { DefaultSession, DefaultUser } from "next-auth";
 import { JWT, DefaultJWT } from "next-auth/jwt"; 
 import { UserRole, ProfileVisibility } from "@prisma/client";
 
-// Estende o tipo 'User' base do NextAuth
 declare module "next-auth" {
-  /**
-   * O 'DefaultUser' já tem 'name', 'email', 'image'.
-   * Nós estendemo-lo para incluir os nossos campos do Prisma.
-   */
   interface User extends DefaultUser {
     id: string; 
     role: UserRole;
@@ -21,24 +14,26 @@ declare module "next-auth" {
     showWatchingList: boolean;
     showWatchedList: boolean;
     showDroppedList: boolean;
-    profileBannerUrl: string | null; // <-- ADICIONADO AQUI
+    profileBannerUrl: string | null;
     discordWebhookUrl: string | null;
+
+    // 👇 NOVOS CAMPOS ADICIONADOS
+    youtubeMainUrl: string | null;
+    youtubeSecondUrl: string | null;
+    youtubeThirdUrl: string | null;
+    youtubeFourthUrl: string | null;
+    
+    statFollowers: string | null;
+    statMedia: string | null;
+    statRegion: string | null;
   }
 
-  /**
-   * A 'Session' agora usa a nossa interface 'User' personalizada.
-   */
   interface Session extends DefaultSession {
     user: User;
   }
 }
 
-// Estende o 'JWT'
 declare module "next-auth/jwt" {
-  /**
-   * O 'DefaultJWT' já tem 'name', 'email', e 'picture' (para a imagem).
-   * Nós só precisamos de adicionar os NOSSOS campos customizados.
-   */
   interface JWT extends DefaultJWT {
     id: string;
     role: UserRole;
@@ -51,6 +46,16 @@ declare module "next-auth/jwt" {
     showWatchedList: boolean;
     showDroppedList: boolean;
     profileBannerUrl: string | null;
-    discordWebhookUrl: string | null; 
+    discordWebhookUrl: string | null;
+
+    // 👇 NOVOS CAMPOS ADICIONADOS
+    youtubeMainUrl: string | null;
+    youtubeSecondUrl: string | null;
+    youtubeThirdUrl: string | null;
+    youtubeFourthUrl: string | null;
+
+    statFollowers: string | null;
+    statMedia: string | null;
+    statRegion: string | null;
   }
 }
