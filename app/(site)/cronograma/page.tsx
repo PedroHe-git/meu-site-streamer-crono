@@ -1,77 +1,69 @@
-import { Metadata } from 'next';
-import { prisma } from '@/lib/prisma';
-import { UserRole } from '@prisma/client';
-import ScheduleSlider from '@/app/components/ScheduleSlider';
-import { startOfWeek } from 'date-fns'; 
+import { prisma } from "@/lib/prisma";
+import ScheduleSlider from "@/app/components/ScheduleSlider"; // Verifique se o caminho está correto
+import { Metadata } from "next";
 
-export const revalidate = 60;
+export const revalidate = 60; // Atualiza a cada 60 segundos
 
 export const metadata: Metadata = {
-  title: 'Cronograma | Agenda Semanal',
-  description: 'Confira a programação completa de lives e jogos.',
+  title: "Cronograma | MahMoojen",
+  description: "Confira os horários das próximas lives e o que vamos assistir.",
 };
 
 async function getSchedule() {
   const today = new Date();
-  
-  // Pega o início desta semana para garantir que o carrossel comece certo
-  const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
-  
-  // 👇 MUDANÇA: Buscamos 60 dias para frente (aprox. 8 semanas)
-  // Isso evita que o carrossel fique vazio ao clicar em "Próxima Semana"
-  const futureDate = new Date(startOfCurrentWeek);
-  futureDate.setDate(startOfCurrentWeek.getDate() + 60);
+  today.setHours(0, 0, 0, 0); // Zera o horário para pegar o dia todo
 
-  const events = await prisma.scheduleItem.findMany({
+  // 1. Busca os dados no Banco
+  const rawItems = await prisma.scheduleItem.findMany({
     where: {
       scheduledAt: {
-        gte: startOfCurrentWeek, 
-        lte: futureDate 
+        gte: today, // Apenas itens de hoje em diante
       },
-    },
-    orderBy: {
-      scheduledAt: 'asc',
+      // REMOVIDO: user: { role: "CREATOR" } -> Agora pega de qualquer usuário (você)
     },
     include: {
-      media: {
-        select: {
-          title: true,
-          posterPath: true,
-          mediaType: true
-        }
-      },
-      user: {
-        select: {
-          name: true,
-          image: true,
-          twitchUsername: true
-        }
-      }
+      media: true,
+      user: true,
+    },
+    orderBy: {
+      scheduledAt: "asc",
     },
   });
 
-  return events;
+  // 2. TRUQUE DE SERIALIZAÇÃO:
+  // Converte objetos Date para string para não quebrar o componente do Cliente.
+  // Isso resolve o erro: "Only plain objects can be passed to Client Components"
+  return JSON.parse(JSON.stringify(rawItems));
 }
 
 export default async function CronogramaPage() {
-  const schedule = await getSchedule();
+  const scheduleItems = await getSchedule();
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-      <header className="bg-gradient-to-b from-gray-900 to-gray-950 pt-28 pb-12 border-b border-gray-800">
-        <div className="container mx-auto px-4 text-center">
-          <h1 className="text-4xl md:text-5xl font-black mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
-            Agenda de Lives
+    <main className="min-h-screen bg-[#050505] text-white pt-24 pb-10">
+      <div className="container mx-auto px-4">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-4">
+            Cronograma de <span className="text-purple-500">Lives</span>
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            Saiba exatamente o que vamos assistir ou jogar hoje e nas próximas semanas.
+            Fique por dentro do que vai rolar nas próximas transmissões.
           </p>
         </div>
-      </header>
 
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
-        <ScheduleSlider events={JSON.parse(JSON.stringify(schedule))} />
-      </main>
-    </div>
+        {scheduleItems.length > 0 ? (
+          <ScheduleSlider items={scheduleItems} />
+        ) : (
+          <div className="text-center py-20 bg-gray-900/30 rounded-2xl border border-gray-800">
+            <p className="text-gray-500 text-xl">
+              Nenhum agendamento encontrado para os próximos dias.
+            </p>
+            <p className="text-gray-600 text-sm mt-2">
+              Fique de olho nas redes sociais para avisos de última hora!
+            </p>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
