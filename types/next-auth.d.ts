@@ -26,6 +26,7 @@ declare module "next-auth" {
     statFollowers: string | null;
     statMedia: string | null;
     statRegion: string | null;
+    amazonWishlistUrl: string | null;
   }
 
   interface Session extends DefaultSession {
@@ -57,5 +58,6 @@ declare module "next-auth/jwt" {
     statFollowers: string | null;
     statMedia: string | null;
     statRegion: string | null;
+    amazonWishlistUrl: string | null;
   }
 }

@@ -87,7 +87,7 @@ export default async function BrandLogos() {
             </a>
           ))}
 
-          {/* Card de "Seja um Patrocinador" */}
+          {/* Card de "Seja um Patrocinador" 
           <div className="group relative rounded-2xl border border-dashed border-gray-800 bg-gray-900/20 p-8 flex flex-col items-center justify-center text-center hover:bg-gray-900/40 hover:border-purple-500/40 transition-all duration-300 min-h-[280px]">
              <div className="w-16 h-16 bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl flex items-center justify-center mb-6 shadow-inner group-hover:scale-110 transition-transform duration-500">
                 <Mail className="w-6 h-6 text-gray-400 group-hover:text-white transition-colors" />
@@ -103,7 +103,7 @@ export default async function BrandLogos() {
                    Mídia Kit <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
                 </Link>
              </Button>
-          </div>
+          </div> */}
 
         </div>
       </div>

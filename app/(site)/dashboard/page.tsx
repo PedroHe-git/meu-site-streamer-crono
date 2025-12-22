@@ -5,7 +5,6 @@ import {
   ChangeEvent, SyntheticEvent
 } from "react";
 import { useRouter } from "next/navigation";
-import { Step, STATUS, CallBackProps } from 'react-joyride';
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility, MediaType } from "@prisma/client";
@@ -29,10 +28,11 @@ import StatsTab from "@/app/components/Statistic";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import AppTour from '@/app/components/AppTour';
+
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Pen, Settings, List, CalendarDays, Calendar, Loader2, Check, BarChart, Share2, Tv, Upload, Eye, Handshake } from "lucide-react";
+// 👇 Gift adicionado aqui para corrigir o erro
+import { Pen, Settings, List, CalendarDays, Calendar, Loader2, Check, BarChart, Share2, Tv, Upload, Eye, Handshake, Gift } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -74,14 +74,6 @@ type MappedScheduleItem = ScheduleItemWithMedia & {
   scheduledAt: Date;
 };
 
-// --- Passos do Tour ---
-const STEP_PERFIL: Step = { target: '#btn-editar-perfil', content: 'Clique aqui para personalizar seu avatar, banner, bio e vincular suas redes (Twitch/Discord).', placement: 'bottom', };
-const STEP_LISTAS: Step = { target: '#tour-step-2-listas-busca', content: 'Este é o seu painel principal. Pesquise filmes, animes, séries ou adicione manualmente, e organize-as em listas.', placement: 'top', };
-const STEP_AGENDA: Step = { target: '#tour-step-3-agenda', content: 'Organize seus episódios com o Gerir Agendamento! Escolha o item, defina a data e pronto!', placement: 'top', };
-const STEP_CALENDARIO: Step = { target: '#tour-step-4-calendario', content: 'Aqui tem uma visão completa do seu cronograma.', placement: 'top', };
-
-
-
 function centerAspectCrop(mediaWidth: number, mediaHeight: number, aspect: number): Crop {
   return centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, mediaWidth, mediaHeight), mediaWidth, mediaHeight);
 }
@@ -90,10 +82,17 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: session, status, update: updateSession } = useSession();
   const { toast } = useToast();
+
+  // --- ESTADOS CORRIGIDOS (Movidos para dentro do componente) ---
+  const [manualImageFile, setManualImageFile] = useState<File | null>(null);
+  const [isUploadingManual, setIsUploadingManual] = useState(false);
+
+  // Links e Integrações
   const [ytMain, setYtMain] = useState("");
   const [ytSecond, setYtSecond] = useState("");
-  const [ytThird, setYtThird] = useState("");  // Novo
-  const [ytFourth, setYtFourth] = useState(""); // Novo
+  const [ytThird, setYtThird] = useState("");
+  const [ytFourth, setYtFourth] = useState("");
+  const [amazonLink, setAmazonLink] = useState("");
 
   // Estados de Dados
   const [initialMediaItems, setInitialMediaItems] = useState<MediaStatusWithMedia[]>([]);
@@ -145,40 +144,12 @@ export default function DashboardPage() {
   const [isBannerCropperOpen, setIsBannerCropperOpen] = useState(false);
   const bannerAspect = 16 / 9;
 
-  // stats inicial
+  // Stats
   const [statFollowers, setStatFollowers] = useState("");
   const [statMedia, setStatMedia] = useState("");
   const [statRegion, setStatRegion] = useState("");
 
-  // Lógica do Tour
-  const [runTour, setRunTour] = useState(false);
-  const tourSteps = useMemo(() => {
-    const dynamicSteps: Step[] = [];
-    if (isCreator) dynamicSteps.push(STEP_PERFIL);
-    dynamicSteps.push(STEP_LISTAS, STEP_AGENDA, STEP_CALENDARIO);
-    return dynamicSteps;
-  }, [isCreator]);
-
-  useEffect(() => {
-    if (status === 'authenticated' && !isLoading) {
-      const hasViewedTour = localStorage.getItem('meuCronogramaTourV1');
-      if (!hasViewedTour) setTimeout(() => { setRunTour(true); }, 500);
-    }
-  }, [isLoading, status]);
-
-  const handleJoyrideCallback = (data: CallBackProps) => {
-    const { status } = data;
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status as any)) {
-      localStorage.setItem('meuCronogramaTourV1', 'true');
-      setRunTour(false);
-    }
-  };
-  const handleStartTourClick = () => {
-    localStorage.removeItem('meuCronogramaTourV1');
-    setRunTour(false);
-    setTimeout(() => { setRunTour(true); }, 100);
-  };
-
+  // Carregar dados da Sessão
   useEffect(() => {
     if (session?.user) {
       setDisplayName(session.user.name || "");
@@ -186,21 +157,25 @@ export default function DashboardPage() {
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
       if (!selectedFile) setPreviewImage(session.user.image || null);
       if (!selectedBannerFile) setPreviewBanner(session.user.profileBannerUrl || null);
+      
       setShowToWatch(session.user.showToWatchList ?? true);
       setShowWatching(session.user.showWatchingList ?? true);
       setShowWatched(session.user.showWatchedList ?? true);
       setShowDropped(session.user.showDroppedList ?? true);
+      
       const userAny = session.user as any;
       setDiscordWebhook(userAny.discordWebhookUrl || "");
       setTwitchLink(userAny.twitchUsername ? `https://twitch.tv/${userAny.twitchUsername}` : "");
+      
       setStatFollowers(userAny.statFollowers || "");
       setStatMedia(userAny.statMedia || "");
       setStatRegion(userAny.statRegion || "");
-      const u = session.user as any;
+      
       setYtMain(userAny.youtubeMainUrl || "");
       setYtSecond(userAny.youtubeSecondUrl || "");
       setYtThird(userAny.youtubeThirdUrl || "");
       setYtFourth(userAny.youtubeFourthUrl || "");
+      setAmazonLink(userAny.amazonWishlistUrl || "");
     }
   }, [session?.user, selectedFile, selectedBannerFile]);
 
@@ -241,7 +216,7 @@ export default function DashboardPage() {
     if (status === "authenticated" && dataVersionKey > 0) fetchSharedData();
   }, [dataVersionKey, status]);
 
-  // --- FUNÇÕES DE MAPEAMENTO CORRIGIDAS ---
+  // --- FUNÇÕES DE MAPEAMENTO ---
   const mapDataToMediaItems = (dataItems: MediaStatusWithMedia[]): MappedMediaItem[] => {
     if (!dataItems || !Array.isArray(dataItems)) return [];
     return dataItems.map((item) => ({
@@ -255,7 +230,6 @@ export default function DashboardPage() {
       tmdbId: item.media.tmdbId,
       malId: item.media.malId,
       media: item.media,
-      // 👇 CORREÇÃO: Definimos como 0 pois não existem no banco "Media"
       episodes: 0,
       seasons: 0,
     }));
@@ -293,14 +267,43 @@ export default function DashboardPage() {
     try {
       if (selectedFile) { newImageUrl = await handleAvatarUpload(); }
       if (selectedBannerFile) { newBannerUrl = await handleBannerUpload(); }
-      const payload = { name: displayName, bio: bio, profileVisibility: profileVisibility, showToWatchList: showToWatch, showWatchingList: showWatching, showWatchedList: showWatched, showDroppedList: showDropped, image: newImageUrl, profileBannerUrl: newBannerUrl, discordWebhookUrl: discordWebhook, twitchUrl: twitchLink, statFollowers, statMedia, statRegion, youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth, };
+      const payload = { 
+        name: displayName, bio: bio, profileVisibility: profileVisibility, 
+        showToWatchList: showToWatch, showWatchingList: showWatching, showWatchedList: showWatched, showDroppedList: showDropped, 
+        image: newImageUrl, profileBannerUrl: newBannerUrl, discordWebhookUrl: discordWebhook, twitchUrl: twitchLink, 
+        statFollowers, statMedia, statRegion, 
+        youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth, 
+        amazonWishlistUrl: amazonLink, 
+      };
       const res = await fetch('/api/profile/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Falha ao guardar definições.'); }
       const newSettings = await res.json();
-      if (updateSession) { await updateSession({ ...session, user: { ...session?.user, name: newSettings.name, image: newSettings.image, bio: newSettings.bio, profileVisibility: newSettings.profileVisibility, showToWatchList: newSettings.showToWatchList, showWatchingList: newSettings.showWatchingList, showWatchedList: newSettings.showWatchedList, showDroppedList: newSettings.showDroppedList, profileBannerUrl: newSettings.profileBannerUrl, twitchUsername: newSettings.twitchUsername, youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth, statFollowers: statFollowers, statMedia: statMedia, statRegion: statRegion, } }); }
+      if (updateSession) { 
+        await updateSession({ 
+          ...session, 
+          user: { 
+            ...session?.user, 
+            name: newSettings.name, image: newSettings.image, bio: newSettings.bio, 
+            profileVisibility: newSettings.profileVisibility, 
+            showToWatchList: newSettings.showToWatchList, showWatchingList: newSettings.showWatchingList, showWatchedList: newSettings.showWatchedList, showDroppedList: newSettings.showDroppedList, 
+            profileBannerUrl: newSettings.profileBannerUrl, twitchUsername: newSettings.twitchUsername, 
+            youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth, 
+            statFollowers: statFollowers, statMedia: statMedia, statRegion: statRegion, 
+            amazonWishlistUrl: amazonLink, 
+          } 
+        }); 
+      }
       toast({ title: "Perfil Atualizado!", description: "As suas alterações foram guardadas com sucesso.", className: "bg-green-600 text-white border-none", });
       setSelectedFile(null); setSelectedBannerFile(null); setIsProfileModalOpen(false);
-    } catch (error: any) { console.error("Erro ao guardar definições:", error); setActionError(`Erro: ${error.message}`); toast({ variant: "destructive", title: "Erro ao salvar", description: error.message }); } finally { setIsSavingSettings(false); if (fileInputRef.current) fileInputRef.current.value = ""; if (bannerFileInputRef.current) bannerFileInputRef.current.value = ""; }
+    } catch (error: any) { 
+      console.error("Erro ao guardar definições:", error); 
+      setActionError(`Erro: ${error.message}`); 
+      toast({ variant: "destructive", title: "Erro ao salvar", description: error.message }); 
+    } finally { 
+      setIsSavingSettings(false); 
+      if (fileInputRef.current) fileInputRef.current.value = ""; 
+      if (bannerFileInputRef.current) bannerFileInputRef.current.value = ""; 
+    }
   };
 
   const firstName = (displayName || session?.user?.name)?.split(' ')[0] || session?.user?.username || "";
@@ -313,7 +316,7 @@ export default function DashboardPage() {
   // --- JSX PRINCIPAL ---
   return (
     <>
-      <AppTour run={runTour} steps={tourSteps} callback={handleJoyrideCallback} />
+      {/* Tour Removido */}
       <canvas ref={canvasRef} style={{ display: 'none', objectFit: 'contain' }} />
 
       {/* Diálogos Crop Avatar/Banner */}
@@ -358,6 +361,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* YouTube */}
             <div className="space-y-3 border p-4 rounded-md border-red-900/20 bg-red-500/5">
               <Label className="flex items-center gap-2 text-red-400 font-bold">
                 <div className="bg-red-600 p-1 rounded text-white"><Tv size={14} /></div>
@@ -370,21 +374,36 @@ export default function DashboardPage() {
                   <Input placeholder="URL do canal..." value={ytMain} onChange={e => setYtMain(e.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Secundário (mahnimes)</Label>
+                  <Label className="text-xs">Secundário (Cinemah)</Label>
                   <Input placeholder="URL do canal..." value={ytSecond} onChange={e => setYtSecond(e.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Terceiro (cinemah)</Label>
+                  <Label className="text-xs">Terceiro (Mahnimes)</Label>
                   <Input placeholder="URL do canal..." value={ytThird} onChange={e => setYtThird(e.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Quarto (mahmoojenlives)</Label>
+                  <Label className="text-xs">Quarto (Mahmoojenlives)</Label>
                   <Input placeholder="URL do canal..." value={ytFourth} onChange={e => setYtFourth(e.target.value)} />
                 </div>
               </div>
             </div>
 
-            {/* NOVA SEÇÃO: ESTATÍSTICAS DA HOME */}
+            {/* Amazon Wishlist */}
+            <div className="space-y-2 border p-3 rounded-md border-orange-900/20 bg-orange-500/5">
+              <Label className="flex items-center gap-2 text-orange-500 font-bold">
+                <Gift className="w-4 h-4" /> Amazon Wishlist
+              </Label>
+              <Input
+                placeholder="Cole o link da sua Lista de Desejos aqui..."
+                value={amazonLink}
+                onChange={(e) => setAmazonLink(e.target.value)}
+              />
+              <p className="text-[10px] text-gray-400">
+                O link público da sua lista de presentes da Amazon.
+              </p>
+            </div>
+
+            {/* Stats */}
             <div className="space-y-4">
               <h3 className="text-lg font-medium flex items-center gap-2 border-b pb-2 mt-4">
                 <BarChart className="h-5 w-5" /> Stats da Home
@@ -415,7 +434,6 @@ export default function DashboardPage() {
                   />
                 </div>
               </div>
-              <p className="text-[12px] text-muted-foreground">Estes números aparecerão em destaque na página inicial.</p>
             </div>
 
             {/* Integrações */}
@@ -469,7 +487,6 @@ export default function DashboardPage() {
               <p className="text-lg text-muted-foreground">Gestão do seu cronograma e perfil.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {/* BOTÕES DE ACESSO RÁPIDO ADICIONADOS AQUI 👇 */}
               {isCreator && (
                 <>
                   <Button variant="secondary" onClick={() => router.push('/dashboard/sponsors')} className="gap-2 hidden md:flex hover:bg-blue-600 hover:text-white">
@@ -489,7 +506,6 @@ export default function DashboardPage() {
                   </Button>
                 </>
               )}
-              <Button variant="outline" onClick={handleStartTourClick}>Ajuda</Button>
             </div>
           </div>
 
@@ -507,16 +523,16 @@ export default function DashboardPage() {
                 <TabsTrigger value="stats" className="py-3 data-[state=active]:bg-background data-[state=active]:shadow-sm"> <BarChart className="h-4 w-4 mr-2" /> <span className="hidden sm:inline">Estatísticas</span> </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="listas" className="mt-0 space-y-8 animate-in fade-in duration-500" id="tour-step-2-listas-busca">
+              <TabsContent value="listas" className="mt-0 space-y-8 animate-in fade-in duration-500">
                 <MediaSearch onMediaAdded={handleDataChanged} />
                 <MyLists onDataChanged={handleDataChanged} dataVersionKey={dataVersionKey} />
               </TabsContent>
 
-              <TabsContent value="agenda" className="mt-0 animate-in fade-in duration-500" id="tour-step-3-agenda">
+              <TabsContent value="agenda" className="mt-0 animate-in fade-in duration-500">
                 <ScheduleManager mediaItems={mediaItems} scheduleItems={scheduleItems} onAddSchedule={handleAddSchedule} onRemoveSchedule={handleRemoveSchedule} onCompleteSchedule={handleCompleteSchedule} />
               </TabsContent>
 
-              <TabsContent value="calendario" className="mt-0 animate-in fade-in duration-500" id="tour-step-4-calendario">
+              <TabsContent value="calendario" className="mt-0 animate-in fade-in duration-500">
                 <FullCalendar key={dataVersionKey} scheduleItems={scheduleItems} />
               </TabsContent>
 

@@ -31,20 +31,20 @@ export default async function YoutubePage() {
 
   const subChannels = [
     { 
-      label: "Mahnimes", 
+      label: "Cine Mah", 
       url: creator?.youtubeSecondUrl, 
       icon: <Zap className="w-5 h-5" />, 
       color: "border-yellow-500/20 bg-yellow-500/5 hover:border-yellow-500/50",
       iconColor: "text-yellow-500",
-      desc: "Nerdola de Animes, clica aqui."
+      desc: "Conteúdos assistidos em Live"
     },
     { 
-      label: "Cine Mah", 
+      label: "Mahnimes", 
       url: creator?.youtubeThirdUrl, 
       icon: <Tv className="w-5 h-5" />, 
       color: "border-purple-500/20 bg-purple-500/5 hover:border-purple-500/50",
       iconColor: "text-purple-500",
-      desc: "Conteúdos assistidos em Live"
+      desc: "Nerdola de Anime? Clique aquui!"
     },
     { 
       label: "Mah Moojen Cortes", 

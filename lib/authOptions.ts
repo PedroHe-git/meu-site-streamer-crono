@@ -37,7 +37,7 @@ export const authOptions: AuthOptions = {
           throw new Error("Credenciais inválidas");
         }
 
-        return user; // O objeto user aqui vem completo do banco (incluindo youtubeUrls)
+        return user as any; // O objeto user aqui vem completo do banco (incluindo youtubeUrls)
       },
     }),
   ],
@@ -85,6 +85,7 @@ export const authOptions: AuthOptions = {
         token.statFollowers = user.statFollowers ?? null;
         token.statMedia = user.statMedia ?? null;
         token.statRegion = user.statRegion ?? null;
+        token.amazonWishlistUrl = user.amazonWishlistUrl ?? null;
       }
 
       // 2. ATUALIZAÇÃO VIA CLIENTE (update())
@@ -109,6 +110,8 @@ export const authOptions: AuthOptions = {
           if (userPayload.statFollowers !== undefined) token.statFollowers = userPayload.statFollowers;
           if (userPayload.statMedia !== undefined) token.statMedia = userPayload.statMedia;
           if (userPayload.statRegion !== undefined) token.statRegion = userPayload.statRegion;
+
+          if (userPayload.amazonWishlistUrl !== undefined) token.amazonWishlistUrl = userPayload.amazonWishlistUrl;
         }
       }
       return token;
@@ -141,6 +144,8 @@ export const authOptions: AuthOptions = {
         session.user.statFollowers = token.statFollowers as string | null;
         session.user.statMedia = token.statMedia as string | null;
         session.user.statRegion = token.statRegion as string | null;
+
+        session.user.amazonWishlistUrl = token.amazonWishlistUrl as string | null;
       }
       return session;
     },

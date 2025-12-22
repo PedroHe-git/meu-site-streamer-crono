@@ -76,15 +76,15 @@ export default function SponsorsPage() {
             <h3 className="text-xl font-bold text-white mb-4">Séries & Animes</h3>
             <div className="space-y-3">
               <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                <span className="text-gray-400">Anime (20min)</span>
+                <span className="text-gray-400">Anime  ep. até 20min</span>
                 <span className="font-bold text-white">R$ 30,00 <span className="text-[10px] text-gray-500">/ep</span></span>
               </div>
               <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                <span className="text-gray-400">Série (&lt;25min)</span>
+                <span className="text-gray-400">Série ep. &lt;25min</span>
                 <span className="font-bold text-white">R$ 30,00 <span className="text-[10px] text-gray-500">/ep</span></span>
               </div>
               <div className="flex justify-between items-center text-sm pb-2">
-                <span className="text-gray-400">Série (50min)</span>
+                <span className="text-gray-400">Série ep. até 50min</span>
                 <span className="font-bold text-white">R$ 60,00 <span className="text-[10px] text-gray-500">/ep</span></span>
               </div>
             </div>

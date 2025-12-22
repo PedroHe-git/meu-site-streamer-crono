@@ -37,6 +37,8 @@ const settingsSchema = z.object({
       message: "Deve ser um Webhook oficial do Discord (https://discord.com/api/webhooks/...)"
     }),
 
+
+  amazonWishlistUrl: z.string().optional().nullable(),
   youtubeMainUrl: z.string().optional().nullable(),
   youtubeSecondUrl: z.string().optional().nullable(),
   youtubeThirdUrl: z.string().optional().nullable(),  // Novo
@@ -96,6 +98,7 @@ export async function PUT(request: Request) {
         youtubeSecondUrl: data.youtubeSecondUrl,
         youtubeThirdUrl: data.youtubeThirdUrl,   // Novo
         youtubeFourthUrl: data.youtubeFourthUrl, // Novo
+        amazonWishlistUrl: data.amazonWishlistUrl,
       },
     });
 

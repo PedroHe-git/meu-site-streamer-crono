@@ -67,6 +67,8 @@ model User {
   statMedia        String?  
   statRegion       String?  
 
+  amazonWishlistUrl String?
+
   // --- Campos de Personalização ---
   bio              String? @db.Text // Mantido
   profileBannerUrl String?
@@ -127,7 +129,11 @@ model MediaStatus {
   rating                Int? // (Bônus: Se você implementar a funcionalidade de nota)
   watchedAt             DateTime? // <-- O CAMPO-CHAVE PARA OS GRÁFICOS
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
+
   @@unique([userId, mediaId])
+  
 }
 
 model ScheduleItem {

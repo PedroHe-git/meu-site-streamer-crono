@@ -29,9 +29,9 @@ const navItems = [
   { name: "Cronograma", href: "/cronograma" },
   { name: "VODS | Assistidos", href: "/historico" },
   { name: "Patrocinios", href: "/patrocinio" },
-  { name: "YouTube", href: "/youtube" },
-  { name: "Instagram", href: "/redes" },
-  { name: "Contato", href: "/contato" },
+  { name: "Redes", href: "/redes" },
+  { name: "Wishlist", href: "/wishlist" },
+  // { name: "Contato", href: "/contato" }, // comentado para ocultar por enquanto
 ];
 
 export default function Header() {

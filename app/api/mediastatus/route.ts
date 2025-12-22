@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
-import { MovieStatusType, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { revalidateTag, unstable_cache } from "next/cache";
 
 export const runtime = 'nodejs';
@@ -73,6 +73,7 @@ export async function POST(request: Request) {
         status: status,
         isWeekly: isWeekly || false,
         watchedAt: status === 'WATCHED' ? new Date() : null,
+        updatedAt: new Date(), // Força atualização da data para subir na lista
       },
       create: {
         userId: userId,
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
     revalidateTag(`dashboard-lists-${userId}`); // Limpa lista do painel
     revalidateTag(`user-stats-${userId}`);      // Limpa estatísticas
     if (session.user.username) {
-        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`); // Limpa perfil público
+        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`); 
     }
 
     return NextResponse.json(mediaStatus);
@@ -127,7 +128,7 @@ export async function PUT(request: Request) {
         return new NextResponse("Não autorizado", { status: 403 });
     }
 
-    const updateData: any = {};
+    const updateData: any = { updatedAt: new Date() }; // Atualiza data para reordenar
     if (status) {
       updateData.status = status;
       updateData.watchedAt = status === 'WATCHED' ? new Date() : null;
@@ -190,7 +191,7 @@ export async function DELETE(request: Request) {
     // INVALIDAÇÃO DE CACHE
     revalidateTag(`dashboard-lists-${userId}`);
     revalidateTag(`user-stats-${userId}`);
-    revalidateTag(`dashboard-schedule-${userId}`); // Remove também da agenda
+    revalidateTag(`dashboard-schedule-${userId}`); 
     if (session.user.username) {
         revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
     }
@@ -213,15 +214,17 @@ export async function GET(request: Request) {
   const userId = session.user.id;
   const { searchParams } = new URL(request.url);
   
-  const status = searchParams.get("status") as MovieStatusType;
+  // Tipagem do status
+  const status = searchParams.get("status");
   const page = parseInt(searchParams.get("page") || "1", 10);
-  const pageSize = parseInt(searchParams.get("pageSize") || "50", 10);
+  const pageSize = parseInt(searchParams.get("pageSize") || "10", 10); // Padrão ajustado para 10 conforme solicitado
   const searchTerm = searchParams.get("searchTerm") || "";
 
   if (!status) return new NextResponse("Status não fornecido", { status: 400 });
 
   try {
     // Chave única para o cache baseada nos filtros
+    // Se mudar a página, o status ou o termo de busca, a chave muda e busca novo dado
     const cacheKey = `list-${userId}-${status}-${page}-${pageSize}-${searchTerm}`;
 
     const getCachedList = unstable_cache(
@@ -229,12 +232,13 @@ export async function GET(request: Request) {
         // Filtro direto no banco de dados
         const whereClause: Prisma.MediaStatusWhereInput = {
             userId: userId,
-            status: status,
+            status: status as any, // Cast para o enum do Prisma
             media: {
                 title: searchTerm ? { contains: searchTerm, mode: 'insensitive' } : undefined
             }
         };
 
+        // Executa Contagem e Busca em paralelo para performance
         const [totalCount, items] = await Promise.all([
             prisma.mediaStatus.count({ where: whereClause }),
             prisma.mediaStatus.findMany({
@@ -242,16 +246,18 @@ export async function GET(request: Request) {
                 take: pageSize,
                 skip: (page - 1) * pageSize,
                 include: { media: true },
-                orderBy: { media: { title: 'asc' } }
+                // ORDEM: Mais recentes primeiro (melhor UX para Dashboard)
+                orderBy: { updatedAt: 'desc' } 
             })
         ]);
 
-        return { items, totalCount, page, pageSize };
+        // Retorna 'total' (não 'totalCount') para bater com o frontend MyLists
+        return { items, total: totalCount, page, pageSize };
       },
       [cacheKey], 
       {
-        revalidate: 3600, // Cache de 1 hora
-        tags: [`dashboard-lists-${userId}`] // Tag para invalidação
+        revalidate: 3600, // Cache de 1 hora (mas é invalidado pelas tags acima)
+        tags: [`dashboard-lists-${userId}`] 
       }
     );
 
