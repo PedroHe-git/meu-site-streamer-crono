@@ -28,9 +28,6 @@ async function getSchedule() {
         gte: startOfCurrentWeek, 
         lte: futureDate 
       },
-      user: {
-        role: UserRole.CREATOR
-      }
     },
     orderBy: {
       scheduledAt: 'asc',
@@ -67,7 +64,7 @@ export default async function CronogramaPage() {
             Agenda de Lives
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            Saiba exatamente o que vamos jogar hoje e nas próximas semanas.
+            Saiba exatamente o que vamos assistir ou jogar hoje e nas próximas semanas.
           </p>
         </div>
       </header>
