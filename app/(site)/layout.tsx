@@ -1,5 +1,6 @@
 // app/(site)/layout.tsx
 import { Inter } from 'next/font/google';
+import { Analytics } from "@vercel/analytics/react";
 
 import '@/app/globals.css'; 
 // 👇 MUDANÇA: Usamos o Header do Portfolio como a navegação principal
@@ -30,6 +31,7 @@ export default function RootLayout({
           {/* 'min-h-screen' garante que o rodapé fique lá embaixo */}
           <main className="min-h-screen relative">
             {children}
+            <Analytics />
           </main>
           
         </AuthContext>
