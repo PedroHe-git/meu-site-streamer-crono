@@ -1,19 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
-import { format } from "date-fns";
+import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Calendar, Clock, MonitorPlay, Tv, AlertCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, RotateCcw, MonitorPlay } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "@/components/ui/carousel";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-// Definimos a interface aceitando string OU Date para evitar erros
 interface ScheduleItem {
   id: string;
   title?: string | null;
-  scheduledAt: string | Date; // <--- AQUI ESTA A CORREÇÃO
+  scheduledAt: string | Date;
+  seasonNumber?: number | null;
+  episodeNumber?: number | null;
   media?: {
     title: string;
     posterPath?: string | null;
@@ -30,154 +40,204 @@ interface ScheduleSliderProps {
 }
 
 export default function ScheduleSlider({ items }: ScheduleSliderProps) {
-  // Ordena itens garantindo que a data seja um objeto Date válido
-  const sortedItems = [...items].sort((a, b) => 
-    new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
-  );
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [api, setApi] = useState<CarouselApi>();
 
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // Calcula início e fim da semana selecionada (Segunda a Domingo)
+  const startOfCurrentWeek = startOfWeek(currentDate, { locale: ptBR, weekStartsOn: 1 });
+  const endOfCurrentWeek = endOfWeek(currentDate, { locale: ptBR, weekStartsOn: 1 });
 
-  const nextSlide = () => {
-    setCurrentIndex((prev) => (prev + 1) % sortedItems.length);
-  };
+  // Gera os 7 dias da semana
+  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(startOfCurrentWeek, i));
 
-  const prevSlide = () => {
-    setCurrentIndex((prev) => (prev - 1 + sortedItems.length) % sortedItems.length);
-  };
+  // Scroll automático para o dia atual
+  useEffect(() => {
+    if (!api) return;
 
-  if (items.length === 0) return null;
+    const today = new Date();
+    const isCurrentWeek = weekDays.some(day => isSameDay(day, today));
 
-  const currentItem = sortedItems[currentIndex];
-  // CONVERSÃO SEGURA: Garante que é um objeto Date
-  const itemDate = new Date(currentItem.scheduledAt);
+    if (isCurrentWeek) {
+      // Encontra o índice do dia atual (0=Segunda, 6=Domingo)
+      const todayIndex = weekDays.findIndex(day => isSameDay(day, today));
+      if (todayIndex !== -1) {
+        api.scrollTo(todayIndex);
+      }
+    } else {
+      // Se for outra semana, volta para o início (Segunda)
+      api.scrollTo(0);
+    }
+  }, [api, weekDays]);
+
+  // Navegação
+  const nextWeek = () => setCurrentDate(prev => addWeeks(prev, 1));
+  const prevWeek = () => setCurrentDate(prev => subWeeks(prev, 1));
+  const resetToToday = () => setCurrentDate(new Date());
 
   return (
-    <div className="relative w-full max-w-5xl mx-auto">
-      {/* Container Principal */}
-      <div className="relative bg-[#0A0A0A] border border-white/10 rounded-3xl overflow-hidden shadow-2xl min-h-[500px] flex flex-col md:flex-row">
-        
-        {/* Lado Esquerdo: Imagem/Poster */}
-        <div className="relative w-full md:w-5/12 h-64 md:h-auto overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10 md:hidden" />
-          
-          {currentItem.media?.posterPath ? (
-            <Image
-              src={currentItem.media.posterPath}
-              alt={currentItem.media.title || "Capa"}
-              fill
-              className="object-cover transition-transform duration-700 group-hover:scale-110"
-              priority
-            />
-          ) : (
-             // Fallback se não tiver imagem
-            <div className="w-full h-full bg-gray-900 flex items-center justify-center">
-              <MonitorPlay className="w-20 h-20 text-gray-700" />
-            </div>
-          )}
-          
-          {/* Badge de Tipo de Mídia */}
-          <div className="absolute top-4 left-4 z-20">
-             <Badge variant="secondary" className="bg-black/60 backdrop-blur-md border-white/10 text-white px-3 py-1">
-                {currentItem.media?.mediaType === "ANIME" ? "Anime" : 
-                 currentItem.media?.mediaType === "MOVIE" ? "Filme" : "Live"}
-             </Badge>
-          </div>
-        </div>
-
-        {/* Lado Direito: Informações */}
-        <div className="flex-1 p-8 md:p-12 flex flex-col justify-center relative">
-          
-          {/* Data e Hora em Destaque */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex flex-col items-center bg-purple-600/10 border border-purple-500/20 rounded-2xl p-3 min-w-[70px]">
-              <span className="text-sm text-purple-400 font-bold uppercase">
-                {format(itemDate, "MMM", { locale: ptBR })}
-              </span>
-              <span className="text-3xl font-black text-white">
-                {format(itemDate, "dd")}
-              </span>
-            </div>
-            
-            <div className="flex flex-col">
-              <h2 className="text-gray-400 text-sm font-medium flex items-center gap-2 uppercase tracking-widest">
-                <Clock className="w-4 h-4 text-purple-500" />
-                Horário da Live
-              </h2>
-              <p className="text-2xl font-bold text-white">
-                {format(itemDate, "HH:mm")}h
-              </p>
-            </div>
-          </div>
-
-          {/* Título Principal */}
-          <h1 className="text-3xl md:text-4xl font-black text-white leading-tight mb-4 line-clamp-2">
-            {currentItem.title || currentItem.media?.title || "Sem título definido"}
-          </h1>
-
-          {/* Descrição ou infos extras (opcional) */}
-          <p className="text-gray-400 text-lg mb-8 line-clamp-3">
-             {currentItem.media?.title 
-               ? `Vamos assistir e reagir a ${currentItem.media.title}. Prepare a pipoca!` 
-               : "Uma transmissão especial preparada para você."}
-          </p>
-
-          {/* Rodapé do Card: Streamer */}
-          <div className="mt-auto pt-6 border-t border-white/5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden border border-white/10">
-                 {currentItem.user?.image ? (
-                   <Image src={currentItem.user.image} width={40} height={40} alt="Avatar" />
-                 ) : (
-                   <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-500">M</div>
-                 )}
-              </div>
-              <div className="flex flex-col">
-                 <span className="text-sm font-bold text-white">{currentItem.user?.name || "Streamer"}</span>
-                 <span className="text-xs text-gray-500">Host</span>
-              </div>
-            </div>
-
-            <Button className="bg-white text-black hover:bg-gray-200 rounded-full px-6 font-bold transition-all hover:scale-105">
-               Definir Lembrete
-            </Button>
-          </div>
-
-        </div>
-
-        {/* Botões de Navegação (Setas) */}
-        {sortedItems.length > 1 && (
-          <div className="absolute bottom-6 right-6 flex gap-2 z-30">
-            <button 
-              onClick={prevSlide}
-              className="w-12 h-12 rounded-full bg-black/50 hover:bg-purple-600 border border-white/10 flex items-center justify-center text-white transition-all backdrop-blur-md"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            <button 
-              onClick={nextSlide}
-              className="w-12 h-12 rounded-full bg-black/50 hover:bg-purple-600 border border-white/10 flex items-center justify-center text-white transition-all backdrop-blur-md"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
-          </div>
-        )}
-      </div>
+    <div className="relative w-full max-w-7xl mx-auto space-y-6">
       
-      {/* Indicadores (Dots) */}
-      {sortedItems.length > 1 && (
-        <div className="flex justify-center gap-2 mt-6">
-          {sortedItems.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrentIndex(idx)}
-              className={cn(
-                "w-2 h-2 rounded-full transition-all duration-300",
-                idx === currentIndex ? "w-8 bg-purple-500" : "bg-gray-700 hover:bg-gray-600"
-              )}
-            />
-          ))}
+      {/* Controles de Navegação de Semana */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-900/50 p-4 rounded-xl border border-gray-800 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-500/10 rounded-lg">
+            <Calendar className="w-5 h-5 text-purple-400" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Visualizando</p>
+            <span className="text-lg font-bold text-gray-100 capitalize">
+              {format(startOfCurrentWeek, "d 'de' MMM", { locale: ptBR })} - {format(endOfCurrentWeek, "d 'de' MMM", { locale: ptBR })}
+            </span>
+          </div>
         </div>
-      )}
+
+        <div className="flex items-center gap-2 bg-gray-950 p-1 rounded-lg border border-gray-800">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={prevWeek} 
+            className="hover:bg-gray-800 text-gray-400 hover:text-white"
+            title="Semana Anterior"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          
+          <Button 
+            variant="secondary" 
+            onClick={resetToToday} 
+            className="h-8 px-4 text-xs font-bold bg-gray-800 hover:bg-gray-700 border border-gray-700"
+          >
+            <RotateCcw className="w-3 h-3 mr-2" />
+            Hoje
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={nextWeek} 
+            className="hover:bg-gray-800 text-gray-400 hover:text-white"
+            title="Próxima Semana"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Carrossel com todos os dias da semana */}
+      <Carousel 
+        setApi={setApi}
+        opts={{ align: "start", loop: false }} 
+        className="w-full"
+      >
+        <CarouselContent className="-ml-2 md:-ml-4">
+          {weekDays.map((day) => {
+            const isToday = isSameDay(day, new Date());
+            const isPast = day < new Date() && !isToday;
+            
+            // Filtra eventos deste dia específico (incluindo dias passados)
+            const dayEvents = items.filter(item => {
+              const itemDate = new Date(item.scheduledAt);
+              return isSameDay(itemDate, day);
+            });
+
+            return (
+              <CarouselItem key={day.toISOString()} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3 xl:basis-1/4">
+                <div 
+                  className={cn(
+                    "h-full flex flex-col rounded-xl border transition-colors duration-300",
+                    isToday 
+                      ? "border-purple-500 bg-gradient-to-b from-purple-900/20 to-gray-900/50 shadow-[0_0_15px_rgba(168,85,247,0.15)]" 
+                      : isPast
+                      ? "border-gray-800 bg-gray-900/20 opacity-75"
+                      : "border-gray-800 bg-gray-900/40 hover:border-gray-700"
+                  )}
+                >
+                  
+                  {/* Cabeçalho do Dia */}
+                  <div className={cn("p-4 border-b", isToday ? "border-purple-500/30" : "border-gray-800")}>
+                    <div className="flex justify-between items-center mb-1">
+                      <p className={cn("text-sm font-bold uppercase tracking-wider", isToday ? "text-purple-400" : "text-gray-500")}>
+                        {format(day, "EEEE", { locale: ptBR })}
+                      </p>
+                      {isToday && <Badge className="bg-purple-600 text-[10px] h-5">HOJE</Badge>}
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className={cn("text-3xl font-black", isToday ? "text-white" : "text-gray-300")}>
+                        {format(day, "d")}
+                      </span>
+                      <span className="text-sm text-gray-500 capitalize">
+                        {format(day, "MMM", { locale: ptBR })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Lista de Eventos do Dia */}
+                  <div className="flex-1 p-3 space-y-3 min-h-[200px]">
+                    {dayEvents.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-gray-700 gap-2 opacity-60">
+                        <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center">
+                          <Calendar className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-medium">Sem lives</span>
+                      </div>
+                    ) : (
+                      dayEvents.map(event => {
+                        const eventDate = new Date(event.scheduledAt);
+                        
+                        return (
+                          <Card key={event.id} className="bg-gray-800 border-0 overflow-hidden group hover:ring-1 hover:ring-purple-500 transition-all shadow-lg">
+                            {/* Área da Imagem */}
+                            <div className="relative aspect-[16/9] w-full bg-gray-900">
+                              {event.media?.posterPath ? (
+                                <Image 
+                                  src={event.media.posterPath}
+                                  alt={event.media.title}
+                                  fill
+                                  className="object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                                />
+                              ) : (
+                                <div className="flex items-center justify-center h-full bg-gray-700">
+                                  <MonitorPlay className="w-12 h-12 text-gray-600" />
+                                </div>
+                              )}
+                            </div>
+                            
+                            <CardContent className="p-3 space-y-2">
+                              <h4 className="font-bold text-sm line-clamp-1 text-gray-100" title={event.media?.title}>
+                                {event.media?.title || event.title || "Live Especial"}
+                              </h4>
+                              
+                              <div className="flex flex-wrap gap-1">
+                                <Badge variant="secondary" className="text-[10px] h-5 px-1 bg-gray-700 text-gray-300">
+                                  {event.media?.mediaType === "MOVIE" ? "Filme" : 
+                                   event.media?.mediaType === "ANIME" ? "Anime" : "Live"}
+                                </Badge>
+                                
+                                {(event.seasonNumber || event.episodeNumber) && (
+                                  <Badge className="text-[10px] h-5 px-1 bg-yellow-500/10 text-yellow-500 border-yellow-500/20 font-mono">
+                                    {event.seasonNumber && `S${event.seasonNumber}`}
+                                    {event.seasonNumber && event.episodeNumber && " "}
+                                    {event.episodeNumber && `E${event.episodeNumber}`}
+                                  </Badge>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })
+                    )}
+                  </div>
+
+                </div>
+              </CarouselItem>
+            );
+          })}
+        </CarouselContent>
+        
+        {/* Setas de Navegação */}
+        <CarouselPrevious className="hidden md:flex -left-4 border-gray-700 bg-gray-800/80 backdrop-blur-sm text-white hover:bg-purple-600 hover:border-purple-500" />
+        <CarouselNext className="hidden md:flex -right-4 border-gray-700 bg-gray-800/80 backdrop-blur-sm text-white hover:bg-purple-600 hover:border-purple-500" />
+      </Carousel>
     </div>
   );
 }

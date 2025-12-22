@@ -2,24 +2,30 @@ import { Metadata } from 'next';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@prisma/client';
 import { Button } from '@/components/ui/button';
-import { History, PlayCircle, Film } from 'lucide-react'; // Removi o 'Youtube'
+import { PlayCircle, ListVideo } from 'lucide-react';
 import UserListsClient from '@/app/components/UserListsClient';
 import NextImage from "next/image";
-
-// Se for usar imagem PNG, descomente esta linha:
-// import Image from 'next/image';
 
 export const revalidate = 60; 
 
 export const metadata: Metadata = {
-  title: 'Já Assistidos na Live',
-  description: 'Filmes, séries, animes e jogos já vistos e jogados em lives.',
+  title: 'Histórico e Listas | MahMoojen',
+  description: 'Confira o que estamos assistindo, o que já vimos e o que vem por aí.',
 };
 
 async function getCreatorData() {
+  // 1. Busca o criador E as configurações de visibilidade dele
   const creator = await prisma.user.findFirst({
     where: { role: UserRole.CREATOR },
-    select: { id: true, username: true }
+    select: { 
+      id: true, 
+      username: true,
+      // 👇 IMPORTANTE: Buscamos as colunas de configuração do banco
+      showToWatchList: true,
+      showWatchingList: true,
+      showWatchedList: true,
+      showDroppedList: true
+    }
   });
 
   if (!creator) return null;
@@ -46,13 +52,16 @@ export default async function HistoricoPage() {
   const { creator, listCounts } = data;
   const VOD_CHANNEL_URL = "https://cinefy.gg/mahmoojen"; 
 
+  // Calcula o total de itens (somente das listas que estão visíveis ou com itens)
+  const totalItems = listCounts.TO_WATCH + listCounts.WATCHING + listCounts.WATCHED + listCounts.DROPPED;
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 pb-20">
       
       <header className="py-20 border-b border-gray-900 bg-gradient-to-b from-gray-900/50 to-gray-950">
         <div className="container mx-auto px-4 text-center">
-          <h1 className="text-4xl font-black text-white mb-2">Arquivo</h1>
-          <p className="text-gray-400">Memórias e gravações das nossas lives.</p>
+          <h1 className="text-4xl font-black text-white mb-2">Conteúdos & VODs</h1>
+          <p className="text-gray-400">Tudo o que assistimos, estamos vendo e vamos ver em live.</p>
         </div>
       </header>
 
@@ -60,26 +69,29 @@ export default async function HistoricoPage() {
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           
-          {/* --- BLOCO ESQUERDA: LISTA --- */}
+          {/* --- BLOCO ESQUERDA: LISTAS --- */}
           <div className="bg-gray-900/40 border border-gray-800 rounded-2xl p-6 md:p-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold flex items-center gap-2 text-white">
-                 <Film className="w-5 h-5 text-purple-500" />
-                 Já Assistidos em Live
+                 <ListVideo className="w-5 h-5 text-purple-500" />
+                 Biblioteca do Canal
               </h2>
               <span className="text-xs bg-gray-800 text-gray-400 px-3 py-1 rounded-full font-mono">
-                  {listCounts.WATCHED}
+                  {totalItems} Itens
               </span>
             </div>
 
+            {/* 👇 CONFIGURAÇÃO DAS LISTAS */}
             <UserListsClient
               username={creator.username}
               isOwner={false}
               counts={listCounts}
-              showWatchedList={true} 
-              showToWatchList={false} 
-              showWatchingList={false}
-              showDroppedList={false}
+              // Aqui definimos a visibilidade. 
+              // Se vier null do banco, usamos 'true' para mostrar por padrão.
+              showToWatchList={creator.showToWatchList ?? true} 
+              showWatchingList={creator.showWatchingList ?? true}
+              showWatchedList={creator.showWatchedList ?? true} 
+              showDroppedList={creator.showDroppedList ?? true}
               isCompact={true}
               itemsPerPage={10} 
             />
@@ -93,10 +105,7 @@ export default async function HistoricoPage() {
 
              <div className="relative z-10 flex flex-col items-center">
                 
-                {/* 👇 AQUI ESTÁ A MUDANÇA: Usando a Imagem PNG */}
                 <div className="w-24 h-24 bg-gradient-to-br from-yellow-600 to-yellow-800 rounded-3xl shadow-2xl flex items-center justify-center mb-6 transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 border border-yellow-500/30 p-4">
-                    
-                    {/* 2. Use o novo nome aqui */}
                     <NextImage 
                        src="/logocinefy.png" 
                        alt="Logo Cinefy" 
@@ -104,7 +113,6 @@ export default async function HistoricoPage() {
                        height={80} 
                        className="object-contain drop-shadow-md"
                     />
-
                 </div>
 
                 <h2 className="text-3xl font-black text-white mb-4">
