@@ -1,46 +1,51 @@
 import { prisma } from "@/lib/prisma";
 import ScheduleSlider from "@/app/components/ScheduleSlider";
 import { Metadata } from "next";
-import { startOfWeek, subWeeks } from "date-fns"; // Adicione esta importação
+import { startOfWeek } from "date-fns";
+import { unstable_cache } from "next/cache"; // 👈 Importar o cache
 
-export const revalidate = 60; 
+// 1. Aumentamos o tempo de revalidação para 1 hora (3600 segundos)
+export const revalidate = 3600; 
 
 export const metadata: Metadata = {
   title: "Cronograma | MahMoojen",
   description: "Confira os horários das próximas lives e o que vamos assistir.",
 };
 
-async function getSchedule() {
-  const today = new Date();
+// 2. Criar a função de busca COM CACHE
+const getCachedSchedule = unstable_cache(
+  async () => {
+    const today = new Date();
+    const startDate = startOfWeek(today, { weekStartsOn: 1 }); // Segunda-feira
 
-  // [CORREÇÃO]: Define o início da busca para o começo da semana atual (Segunda-feira)
-  // Isso garante que se hoje for Quarta, os itens de Seg/Ter ainda apareçam na grade.
-  const startDate = startOfWeek(today, { weekStartsOn: 1 }); // 1 = Segunda-feira
-  
-  // (Opcional) Se quiser que o botão "Semana Anterior" funcione por 1 semana,
-  // você pode usar: const startDate = subWeeks(startOfWeek(today, { weekStartsOn: 1 }), 1);
-
-  const rawItems = await prisma.scheduleItem.findMany({
-    where: {
-      scheduledAt: {
-        gte: startDate, // Busca do início da semana em diante
+    const rawItems = await prisma.scheduleItem.findMany({
+      where: {
+        scheduledAt: {
+          gte: startDate,
+        },
       },
-      // user: { role: "CREATOR" } // Pode manter comentado se for site de usuário único
-    },
-    include: {
-      media: true,
-      user: true,
-    },
-    orderBy: {
-      scheduledAt: "asc",
-    },
-  });
+      include: {
+        media: true,
+        user: true,
+      },
+      orderBy: {
+        scheduledAt: "asc",
+      },
+    });
 
-  return JSON.parse(JSON.stringify(rawItems));
-}
+    // É importante retornar dados planos para o cache
+    return JSON.parse(JSON.stringify(rawItems));
+  },
+  ['public-schedule-list'], // Chave única
+  {
+    revalidate: 3600, // Revalida a cada 1 hora
+    tags: ['schedule'] // Tag para limpar cache quando você editar no dashboard
+  }
+);
 
 export default async function CronogramaPage() {
-  const scheduleItems = await getSchedule();
+  // 3. Usa a função cacheada (não toca no banco se estiver no cache)
+  const scheduleItems = await getCachedSchedule();
 
   return (
     <main className="min-h-screen bg-[#050505] text-white pt-24 pb-10">
@@ -54,7 +59,6 @@ export default async function CronogramaPage() {
           </p>
         </div>
 
-        {/* Verifica se há itens OU se estamos visualizando a semana atual vazia */}
         <ScheduleSlider items={scheduleItems} />
       </div>
     </main>
