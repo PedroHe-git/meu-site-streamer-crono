@@ -1,6 +1,7 @@
-'use client'; 
+"use client";
 
 import { SessionProvider } from "next-auth/react";
+import { HibernationProvider } from "@/app/context/HibernationContext"; // Certifique-se de que este arquivo existe
 
 export default function AuthContext({ 
   children 
@@ -10,11 +11,13 @@ export default function AuthContext({
   return (
     <SessionProvider
       // 👇 Bloqueia verificações automáticas que acordam o banco
-      refetchInterval={0}           // Desativa a atualização por tempo decorrido
-      refetchOnWindowFocus={false}    // Desativa a atualização ao trocar de aba ou foca na janela
-      refetchWhenOffline={false}      // Desativa tentativas de reconexão em modo offline
+      refetchInterval={0}           // Desativa a atualização periódica (padrão era verificar a cada X tempo)
+      refetchOnWindowFocus={false}  // Desativa a verificação ao trocar de aba (focar na janela)
+      refetchWhenOffline={false}    // Não tenta reconectar agressivamente se cair a internet
     >
-      {children}
+      <HibernationProvider>
+        {children}
+      </HibernationProvider>
     </SessionProvider>
   );
 }

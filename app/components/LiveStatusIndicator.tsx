@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Tv } from "lucide-react";
+import { useHibernation } from "@/app/context/HibernationContext";
 
 interface Props {
   twitchChannel: string;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function LiveStatusIndicator({ twitchChannel, className }: Props) {
+  const { isHibernating } = useHibernation();
   const [isLive, setIsLive] = useState(false);
   const [liveTitle, setLiveTitle] = useState<string | null>(null);
   const [gameName, setGameName] = useState<string | null>(null);
@@ -21,9 +23,11 @@ export default function LiveStatusIndicator({ twitchChannel, className }: Props)
   const channelUrl = `https://twitch.tv/${cleanChannel}`;
 
   useEffect(() => {
+    // 🛑 SE ESTIVER HIBERNANDO, NÃO FAZ NADA!
+    if (isHibernating) return; 
+
     const fetchStatus = async () => {
       if (!cleanChannel) return;
-
       try {
         const res = await fetch(`/api/twitch/status?channel=${cleanChannel}`);
         if (res.ok) {
@@ -35,15 +39,18 @@ export default function LiveStatusIndicator({ twitchChannel, className }: Props)
           }
         }
       } catch (error) {
-        console.error("Erro ao verificar live:", error);
+        console.error("Erro live:", error);
         setIsLive(false);
       }
     };
 
-    fetchStatus();
+    fetchStatus(); // Busca inicial
+    
+    // Intervalo de 15 minutos
     const interval = setInterval(fetchStatus, 1000 * 60 * 15);
+    
     return () => clearInterval(interval);
-  }, [cleanChannel]);
+  }, [cleanChannel, isHibernating]);
 
   // Constrói o texto do Tooltip
   const tooltipText = isLive 
