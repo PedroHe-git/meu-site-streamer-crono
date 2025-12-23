@@ -32,7 +32,6 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
   
-  // Paginação - 🛑 IMPORTANTE: PageSize deve ser igual ao da API
   const [page, setPage] = useState(1);
   const pageSize = 16; 
   const [totalItems, setTotalItems] = useState(0);
@@ -44,18 +43,19 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     DROPPED: 0
   });
 
-  // Reseta página ao trocar aba
   useEffect(() => { 
     setPage(1);
-    setItems([]); // Limpa a lista visual imediatamente ao trocar de aba
+    setItems([]); 
   }, [activeTab]);
 
-  // 1. Atualiza contadores das abas
+  // 1. Atualiza contadores (VERSÃO OTIMIZADA - BANCO DORME 😴)
   const fetchAllCounts = useCallback(async () => {
     const statuses = ["WATCHING", "TO_WATCH", "WATCHED", "DROPPED"];
     try {
       const promises = statuses.map(s => 
-        fetch(`/api/mediastatus?status=${s}&page=1&pageSize=16&_t=${Date.now()}`, { cache: 'no-store' })
+        // 🛑 REMOVIDO: _t=${Date.now()} e cache: 'no-store'
+        // Agora usamos o cache inteligente da API. O banco só é chamado se o cache expirar.
+        fetch(`/api/mediastatus?status=${s}&page=1&pageSize=16`)
         .then(r => r.json())
       );
       const results = await Promise.all(promises);
@@ -70,19 +70,17 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   }, []);
 
-  // 2. Busca Lista Atual
+  // 2. Busca Lista Atual (VERSÃO OTIMIZADA)
   const fetchList = useCallback(async () => {
     setIsLoading(true);
     try {
-      // ⚡ Adicionado timestamp (_t) e cache no-store para evitar dados duplicados/antigos
+      // 🛑 REMOVIDO: cache busting forçado
       const res = await fetch(
-        `/api/mediastatus?status=${activeTab}&page=${page}&pageSize=${pageSize}&_t=${Date.now()}`,
-        { cache: 'no-store' }
+        `/api/mediastatus?status=${activeTab}&page=${page}&pageSize=${pageSize}`
       );
       if (!res.ok) throw new Error("Erro ao buscar lista");
       const data = await res.json();
       
-      // 🛑 CORREÇÃO: Substitui a lista totalmente para evitar duplicatas de paginação
       setItems(data.items || []);
       setTotalItems(data.total || 0);
     } catch (error) {
@@ -95,7 +93,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
   useEffect(() => {
     fetchList();
     fetchAllCounts();
-  }, [fetchList, fetchAllCounts, dataVersionKey]);
+  }, [fetchList, fetchAllCounts, dataVersionKey]); 
 
   const handleMove = async (id: string, newStatus: string) => {
     setIsActionLoading(id);
@@ -108,7 +106,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
       if (!res.ok) throw new Error("Erro ao mover");
       
       toast({ title: "Movido!", description: `Item movido para ${newStatus}` });
-      onDataChanged(); // Dispara o dataVersionKey para atualizar as listas
+      onDataChanged(); 
     } catch (error) {
       toast({ title: "Erro", variant: "destructive" });
     } finally {
@@ -132,7 +130,6 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   };
 
-  // Cálculo correto de páginas baseado no pageSize sincronizado
   const totalPages = Math.ceil(totalItems / pageSize);
 
   const renderTabTrigger = (value: string, label: string, count: number) => (

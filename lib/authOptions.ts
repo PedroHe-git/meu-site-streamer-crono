@@ -1,13 +1,15 @@
-import { AuthOptions } from "next-auth";
+import { NextAuthOptions } from "next-auth";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma"; // 👈 IMPORTANTE: Usar o singleton, não criar new PrismaClient()
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 
-const prisma = new PrismaClient();
-
-export const authOptions: AuthOptions = {
+export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 dias (Ajuda o banco a dormir ao evitar re-auth frequente)
+  },
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -37,88 +39,101 @@ export const authOptions: AuthOptions = {
           throw new Error("Credenciais inválidas");
         }
 
-        return user as any; // O objeto user aqui vem completo do banco (incluindo youtubeUrls)
+        return user;
       },
     }),
   ],
-  session: {
-    strategy: "jwt",
-  },
   callbacks: {
+    // Callback executado ao tentar login
     async signIn({ user, account }) {
+      // ⚡ OTIMIZAÇÃO: Removemos a consulta ao banco aqui para não acordar o Neon desnecessariamente.
+      // Se você precisar reativar a verificação de e-mail no futuro, descomente a lógica abaixo,
+      // mas saiba que isso fará uma leitura no banco a cada login.
+      
+      /*
       if (account?.provider === "credentials") {
-        const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-        if (!dbUser?.emailVerified) {
-          // Se não usar verificação de email, pode remover ou comentar este bloco
-          // console.log("Login recusado: Email não verificado", user.email);
-          // return false; 
-        }
+         // Lógica de verificação de e-mail removida para performance
       }
+      */
       return true;
     },
 
+    // Callback executado ao criar/atualizar o token JWT
     async jwt({ token, user, trigger, session }) {
-      // 1. CARREGAMENTO INICIAL (Login)
+      // 1. CARREGAMENTO INICIAL (No momento do Login)
       if (user) {
         token.id = user.id;
-        token.name = user.name ?? null;
-        token.picture = user.image ?? null;
-        token.role = user.role;
-        token.username = user.username;
-        token.bio = user.bio ?? null;
-        token.profileVisibility = user.profileVisibility;
-        token.twitchUsername = user.twitchUsername ?? null;
-        token.discordWebhookUrl = user.discordWebhookUrl ?? null;
-        token.profileBannerUrl = user.profileBannerUrl ?? null;
+        token.name = user.name;
+        token.picture = user.image;
         
-        token.showToWatchList = user.showToWatchList;
-        token.showWatchingList = user.showWatchingList;
-        token.showWatchedList = user.showWatchedList;
-        token.showDroppedList = user.showDroppedList;
+        // Campos personalizados (Usando 'as any' pois o User padrão do NextAuth não tem esses campos)
+        const u = user as any;
+        
+        token.role = u.role;
+        token.username = u.username;
+        token.bio = u.bio;
+        token.profileVisibility = u.profileVisibility;
+        token.twitchUsername = u.twitchUsername;
+        token.discordWebhookUrl = u.discordWebhookUrl;
+        token.profileBannerUrl = u.profileBannerUrl;
+        
+        // Listas
+        token.showToWatchList = u.showToWatchList;
+        token.showWatchingList = u.showWatchingList;
+        token.showWatchedList = u.showWatchedList;
+        token.showDroppedList = u.showDroppedList;
 
-        // 👇 NOVOS CAMPOS
-        token.youtubeMainUrl = user.youtubeMainUrl ?? null;
-        token.youtubeSecondUrl = user.youtubeSecondUrl ?? null;
-        token.youtubeThirdUrl = user.youtubeThirdUrl ?? null;
-        token.youtubeFourthUrl = user.youtubeFourthUrl ?? null;
+        // Youtube & Stats
+        token.youtubeMainUrl = u.youtubeMainUrl;
+        token.youtubeSecondUrl = u.youtubeSecondUrl;
+        token.youtubeThirdUrl = u.youtubeThirdUrl;
+        token.youtubeFourthUrl = u.youtubeFourthUrl;
         
-        token.statFollowers = user.statFollowers ?? null;
-        token.statMedia = user.statMedia ?? null;
-        token.statRegion = user.statRegion ?? null;
-        token.amazonWishlistUrl = user.amazonWishlistUrl ?? null;
+        token.statFollowers = u.statFollowers;
+        token.statMedia = u.statMedia;
+        token.statRegion = u.statRegion;
+        token.amazonWishlistUrl = u.amazonWishlistUrl;
       }
 
-      // 2. ATUALIZAÇÃO VIA CLIENTE (update())
-      if (trigger === "update" && session) {
+      // 2. ATUALIZAÇÃO VIA CLIENTE (Quando chamamos update() no frontend)
+      if (trigger === "update" && session?.user) {
         const userPayload = session.user;
-        if (userPayload) {
-          token.name = userPayload.name ?? token.name;
-          token.picture = userPayload.image ?? token.picture;
-          token.bio = userPayload.bio ?? token.bio;
-          token.profileVisibility = userPayload.profileVisibility;
-          token.profileBannerUrl = userPayload.profileBannerUrl ?? token.profileBannerUrl;
-          
-          if (userPayload.discordWebhookUrl !== undefined) token.discordWebhookUrl = userPayload.discordWebhookUrl;
-          if (userPayload.twitchUsername !== undefined) token.twitchUsername = userPayload.twitchUsername;
+        
+        // Atualiza apenas o que foi enviado
+        if (userPayload.name !== undefined) token.name = userPayload.name;
+        if (userPayload.image !== undefined) token.picture = userPayload.image;
+        if (userPayload.bio !== undefined) token.bio = userPayload.bio;
+        if (userPayload.profileVisibility !== undefined) token.profileVisibility = userPayload.profileVisibility;
+        if (userPayload.profileBannerUrl !== undefined) token.profileBannerUrl = userPayload.profileBannerUrl;
+        
+        if (userPayload.discordWebhookUrl !== undefined) token.discordWebhookUrl = userPayload.discordWebhookUrl;
+        if (userPayload.twitchUsername !== undefined) token.twitchUsername = userPayload.twitchUsername;
 
-          // 👇 ATUALIZAÇÃO DOS NOVOS CAMPOS
-          if (userPayload.youtubeMainUrl !== undefined) token.youtubeMainUrl = userPayload.youtubeMainUrl;
-          if (userPayload.youtubeSecondUrl !== undefined) token.youtubeSecondUrl = userPayload.youtubeSecondUrl;
-          if (userPayload.youtubeThirdUrl !== undefined) token.youtubeThirdUrl = userPayload.youtubeThirdUrl;
-          if (userPayload.youtubeFourthUrl !== undefined) token.youtubeFourthUrl = userPayload.youtubeFourthUrl;
+        // Atualização dos novos campos
+        if (userPayload.youtubeMainUrl !== undefined) token.youtubeMainUrl = userPayload.youtubeMainUrl;
+        if (userPayload.youtubeSecondUrl !== undefined) token.youtubeSecondUrl = userPayload.youtubeSecondUrl;
+        if (userPayload.youtubeThirdUrl !== undefined) token.youtubeThirdUrl = userPayload.youtubeThirdUrl;
+        if (userPayload.youtubeFourthUrl !== undefined) token.youtubeFourthUrl = userPayload.youtubeFourthUrl;
 
-          if (userPayload.statFollowers !== undefined) token.statFollowers = userPayload.statFollowers;
-          if (userPayload.statMedia !== undefined) token.statMedia = userPayload.statMedia;
-          if (userPayload.statRegion !== undefined) token.statRegion = userPayload.statRegion;
+        if (userPayload.statFollowers !== undefined) token.statFollowers = userPayload.statFollowers;
+        if (userPayload.statMedia !== undefined) token.statMedia = userPayload.statMedia;
+        if (userPayload.statRegion !== undefined) token.statRegion = userPayload.statRegion;
 
-          if (userPayload.amazonWishlistUrl !== undefined) token.amazonWishlistUrl = userPayload.amazonWishlistUrl;
-        }
+        if (userPayload.amazonWishlistUrl !== undefined) token.amazonWishlistUrl = userPayload.amazonWishlistUrl;
+        
+        // Atualização de toggles de lista
+        if (userPayload.showToWatchList !== undefined) token.showToWatchList = userPayload.showToWatchList;
+        if (userPayload.showWatchingList !== undefined) token.showWatchingList = userPayload.showWatchingList;
+        if (userPayload.showWatchedList !== undefined) token.showWatchedList = userPayload.showWatchedList;
+        if (userPayload.showDroppedList !== undefined) token.showDroppedList = userPayload.showDroppedList;
       }
+      
       return token;
     },
 
+    // Callback executado sempre que o useSession é chamado no frontend
     async session({ session, token }) {
-      if (token && session.user) {
+      if (session.user && token) {
         session.user.id = token.id as string;
         session.user.name = token.name;
         session.user.image = token.picture;
@@ -135,7 +150,7 @@ export const authOptions: AuthOptions = {
         session.user.showWatchedList = token.showWatchedList as boolean;
         session.user.showDroppedList = token.showDroppedList as boolean;
 
-        // 👇 REPASSANDO PARA O FRONTEND
+        // Repassando novos campos para o Frontend
         session.user.youtubeMainUrl = token.youtubeMainUrl as string | null;
         session.user.youtubeSecondUrl = token.youtubeSecondUrl as string | null;
         session.user.youtubeThirdUrl = token.youtubeThirdUrl as string | null;

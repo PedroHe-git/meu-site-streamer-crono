@@ -11,6 +11,7 @@ import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility, MediaTyp
 import Image from "next/image"; 
 import { Input } from "@/components/ui/input";
 
+
 import ReactCrop, {
   type Crop,
   PixelCrop,
@@ -461,7 +462,7 @@ export default function DashboardPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2"> <Label htmlFor="display-name">Nome de Exibição</Label> <Input id="display-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /> </div>
-                <div className="space-y-2"> <Label htmlFor="bio">Bio</Label> <Textarea id="bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Conte um pouco sobre você..." className="resize-none h-[40px] min-h-[40px]" /> </div>
+                <div className="space-y-2"> <Label htmlFor="bio">Bio</Label> <Textarea id="bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Conte um pouco sobre você..." className="min-h-[150px] resize-y" /> </div>
               </div>
             </div>
 
