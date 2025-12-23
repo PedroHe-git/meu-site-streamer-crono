@@ -4,9 +4,11 @@ import { Analytics } from "@vercel/analytics/react";
 import Clarity from "@/app/components/Clarity";
 
 import '@/app/globals.css'; 
-// 👇 MUDANÇA: Usamos o Header do Portfolio como a navegação principal
+
+// 👇 Componentes Importados
 import Header from '@/app/components/portfolio/Header'; 
 import AuthContext from '@/app/context/AuthContext';
+import AutoLogout from '@/app/components/AutoLogout'; // 👈 NOVO: Importamos a Hibernação
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -25,6 +27,9 @@ export default function RootLayout({
       <body className={`${inter.className} bg-gray-950 text-gray-100`}>
         <AuthContext>
           
+          {/* 👇 ADICIONADO: Monitor de Hibernação (Roda no site todo) */}
+          <AutoLogout />
+
           {/* Navegação Unificada */}
           <Header />
           
