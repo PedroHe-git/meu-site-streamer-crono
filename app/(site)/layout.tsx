@@ -1,14 +1,14 @@
-// app/(site)/layout.tsx
 import { Inter } from 'next/font/google';
 import { Analytics } from "@vercel/analytics/react";
 import Clarity from "@/app/components/Clarity";
 
 import '@/app/globals.css'; 
 
-// 👇 Componentes Importados
 import Header from '@/app/components/portfolio/Header'; 
 import AuthContext from '@/app/context/AuthContext';
-import AutoLogout from '@/app/components/AutoLogout'; // 👈 NOVO: Importamos a Hibernação
+import AutoLogout from '@/app/components/AutoLogout';
+// 👇 Importamos o Provider de Hibernação aqui
+import { HibernationProvider } from "@/app/context/HibernationContext"; 
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -25,21 +25,24 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className="dark">
       <body className={`${inter.className} bg-gray-950 text-gray-100`}>
+        {/* 1. Contexto de Autenticação (Com economia de Banco ativa) */}
         <AuthContext>
           
-          {/* 👇 ADICIONADO: Monitor de Hibernação (Roda no site todo) */}
-          <AutoLogout />
+          {/* 2. Contexto de Hibernação (Controle Global) */}
+          <HibernationProvider>
+            
+            {/* Componente que vigia a inatividade */}
+            <AutoLogout />
 
-          {/* Navegação Unificada */}
-          <Header />
-          
-          {/* Conteúdo Principal */}
-          {/* 'min-h-screen' garante que o rodapé fique lá embaixo */}
-          <main className="min-h-screen relative">
-            {children}
-            <Analytics />
-            <Clarity />
-          </main>
+            <Header />
+            
+            <main className="min-h-screen relative">
+              {children}
+              <Analytics />
+              <Clarity />
+            </main>
+
+          </HibernationProvider>
           
         </AuthContext>
       </body>

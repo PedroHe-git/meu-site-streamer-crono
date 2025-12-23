@@ -1,15 +1,14 @@
-// app/components/AutoLogout.tsx
 "use client";
 
 import { useEffect, useCallback } from "react";
 import { Moon, MousePointer2 } from "lucide-react";
-import { useHibernation } from "@/app/context/HibernationContext"; // 👈 Importar
+import { useHibernation } from "@/app/context/HibernationContext";
 
 export default function AutoLogout() {
-  // 👇 Usamos o contexto global agora
+  // 👇 AGORA USAMOS O CONTEXTO GLOBAL
   const { isHibernating, setIsHibernating } = useHibernation();
 
-  // 5 Minutos (Ideal para Neon Free Tier)
+  // 5 Minutos (Ideal para Neon)
   const TIMEOUT_MS = 5 * 60 * 1000; 
 
   const wakeUp = useCallback(() => {
@@ -43,7 +42,7 @@ export default function AutoLogout() {
       clearTimeout(timeoutId);
       events.forEach((event) => window.removeEventListener(event, startTimer));
     };
-  }, [isHibernating, setIsHibernating]); // Removido TIMEOUT_MS das deps para evitar re-renders
+  }, [isHibernating, setIsHibernating]);
 
   if (!isHibernating) return null;
 
@@ -52,7 +51,6 @@ export default function AutoLogout() {
       onClick={wakeUp}
       className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center text-center animate-in fade-in duration-700 cursor-pointer select-none touch-none"
     >
-      {/* ... (O resto do HTML/Visual permanece idêntico ao anterior) ... */}
       <div className="group relative">
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
         <div className="relative w-32 h-32 bg-gray-900 ring-1 ring-white/10 rounded-full flex items-center justify-center mb-8 shadow-2xl">
