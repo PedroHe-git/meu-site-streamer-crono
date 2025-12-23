@@ -32,9 +32,9 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
   
-  // Paginação
+  // Paginação - 🛑 IMPORTANTE: PageSize deve ser igual ao da API
   const [page, setPage] = useState(1);
-  const pageSize = 16;
+  const pageSize = 16; 
   const [totalItems, setTotalItems] = useState(0);
 
   const [counts, setCounts] = useState({
@@ -44,17 +44,19 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     DROPPED: 0
   });
 
-  // Reseta página ao trocar aba para evitar erro de página inexistente no novo status
+  // Reseta página ao trocar aba
   useEffect(() => { 
-    setPage(1); 
+    setPage(1);
+    setItems([]); // Limpa a lista visual imediatamente ao trocar de aba
   }, [activeTab]);
 
-  // 1. Atualiza contadores usando cache: 'no-store' para precisão no dashboard
+  // 1. Atualiza contadores das abas
   const fetchAllCounts = useCallback(async () => {
     const statuses = ["WATCHING", "TO_WATCH", "WATCHED", "DROPPED"];
     try {
       const promises = statuses.map(s => 
-        fetch(`/api/mediastatus?status=${s}&page=1&pageSize=1`, { cache: 'no-store' }).then(r => r.json())
+        fetch(`/api/mediastatus?status=${s}&page=1&pageSize=16&_t=${Date.now()}`, { cache: 'no-store' })
+        .then(r => r.json())
       );
       const results = await Promise.all(promises);
       setCounts({
@@ -68,19 +70,19 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   }, []);
 
-  // 2. Busca Lista Atual - CORREÇÃO: cache: 'no-store' e substituição total do estado
+  // 2. Busca Lista Atual
   const fetchList = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Adicionamos cache: 'no-store' para garantir que o Dashboard ignore o cache da Vercel
+      // ⚡ Adicionado timestamp (_t) e cache no-store para evitar dados duplicados/antigos
       const res = await fetch(
-        `/api/mediastatus?status=${activeTab}&page=${page}&pageSize=${pageSize}`,
+        `/api/mediastatus?status=${activeTab}&page=${page}&pageSize=${pageSize}&_t=${Date.now()}`,
         { cache: 'no-store' }
       );
       if (!res.ok) throw new Error("Erro ao buscar lista");
       const data = await res.json();
       
-      // 🛑 CORREÇÃO: setItems(data.items) substitui a lista, impedindo duplicatas na paginação
+      // 🛑 CORREÇÃO: Substitui a lista totalmente para evitar duplicatas de paginação
       setItems(data.items || []);
       setTotalItems(data.total || 0);
     } catch (error) {
@@ -88,7 +90,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, page, toast]);
+  }, [activeTab, page, toast, pageSize]);
 
   useEffect(() => {
     fetchList();
@@ -106,7 +108,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
       if (!res.ok) throw new Error("Erro ao mover");
       
       toast({ title: "Movido!", description: `Item movido para ${newStatus}` });
-      onDataChanged();
+      onDataChanged(); // Dispara o dataVersionKey para atualizar as listas
     } catch (error) {
       toast({ title: "Erro", variant: "destructive" });
     } finally {
@@ -130,6 +132,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   };
 
+  // Cálculo correto de páginas baseado no pageSize sincronizado
   const totalPages = Math.ceil(totalItems / pageSize);
 
   const renderTabTrigger = (value: string, label: string, count: number) => (
@@ -227,7 +230,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                 ))}
               </div>
 
-              {/* PAGINAÇÃO FIXA */}
+              {/* PAGINAÇÃO */}
               <div className="flex items-center justify-between pt-4 border-t border-border/50">
                 <p className="text-xs text-muted-foreground">
                     Total: {totalItems} itens

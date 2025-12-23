@@ -9,45 +9,65 @@ export const runtime = 'nodejs';
 // --- FUNÇÃO POST (Adicionar Item) ---
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return new NextResponse("Não autorizado", { status: 401 });
+  if (!session?.user?.id) return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
   const userId = session.user.id;
 
   try {
     const body = await request.json();
     const { status, title, tmdbId, malId, igdbId, posterPath, mediaType, isWeekly } = body;
 
-    // Lógica de Mídia (Simplificada para o exemplo, mantenha a sua completa)
-    let media = await prisma.media.findFirst({
-        where: mediaType === 'ANIME' ? { malId: Number(malId) } : { title }
-    });
+    if (!title || !status || !mediaType) return new NextResponse(JSON.stringify({ error: "Dados em falta" }), { status: 400 });
+
+    let whereClause: any = { mediaType };
+    if (mediaType === 'ANIME' && malId) whereClause.malId = Number(malId);
+    else if ((mediaType === 'MOVIE' || mediaType === 'SERIES') && tmdbId) whereClause.tmdbId = Number(tmdbId);
+    else if (mediaType === 'GAME' && igdbId) whereClause.igdbId = Number(igdbId);
+    else if (mediaType === 'OUTROS') whereClause.title = title;
+
+    let media = await prisma.media.findFirst({ where: whereClause });
 
     if (!media) {
       media = await prisma.media.create({
-        data: { title, tmdbId: Number(tmdbId), malId: Number(malId), igdbId: Number(igdbId), posterPath, mediaType }
+        data: {
+          title,
+          tmdbId: tmdbId ? Number(tmdbId) : null,
+          malId: malId ? Number(malId) : null,
+          igdbId: igdbId ? Number(igdbId) : null,
+          posterPath: posterPath || "",
+          mediaType: mediaType, 
+        },
       });
     }
-
+    
     const mediaStatus = await prisma.mediaStatus.upsert({
       where: { userId_mediaId: { userId, mediaId: media.id } },
-      update: { status, isWeekly: !!isWeekly, updatedAt: new Date() },
-      create: { userId, mediaId: media.id, status, isWeekly: !!isWeekly }
+      update: {
+        status,
+        isWeekly: isWeekly || false,
+        watchedAt: status === 'WATCHED' ? new Date() : null,
+        updatedAt: new Date(),
+      },
+      create: {
+        userId,
+        mediaId: media.id,
+        status,
+        isWeekly: isWeekly || false,
+        watchedAt: status === 'WATCHED' ? new Date() : null,
+      },
     });
 
-    // ⚡ SINCRONIZAÇÃO DE CACHE (O SEGREDO)
-    // Limpamos a TAG que engloba TODAS as páginas e filtros
-    revalidateTag(`mediastatus-${userId}`); 
-    revalidateTag(`schedule`); // Limpa para não dar "mídia corrompida" no agendamento
-    
+    // ⚡ SINCRONIZAÇÃO DE CACHE: Limpa a tag mestre que invalida todas as páginas de uma vez
+    revalidateTag(`mediastatus-${userId}`);
+    revalidateTag(`schedule`);
     if (session.user.username) {
         const userTag = session.user.username.toLowerCase();
-        revalidateTag(`list-${userTag}`); 
         revalidateTag(`user-profile-${userTag}`);
         revalidateTag(`simple-schedule-${userTag}`);
     }
 
     return NextResponse.json(mediaStatus);
   } catch (error) {
-    return new NextResponse("Erro Interno", { status: 500 });
+    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
   }
 }
 
@@ -59,15 +79,22 @@ export async function PUT(request: Request) {
 
   try {
     const { id, status, isWeekly } = await request.json();
+    const updateData: any = { updatedAt: new Date() };
+    if (status) {
+      updateData.status = status;
+      updateData.watchedAt = status === 'WATCHED' ? new Date() : null;
+    }
+    if (isWeekly !== undefined) updateData.isWeekly = isWeekly;
+
     const updated = await prisma.mediaStatus.update({
-      where: { id, userId }, // Segurança: garante que o item é do usuário
-      data: { status, isWeekly, updatedAt: new Date() }
+      where: { id, userId },
+      data: updateData,
     });
 
     // ⚡ LIMPEZA DE CACHE
     revalidateTag(`mediastatus-${userId}`);
     if (session.user.username) {
-        revalidateTag(`list-${session.user.username.toLowerCase()}`);
+        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
     }
 
     return NextResponse.json(updated);
@@ -92,7 +119,7 @@ export async function DELETE(request: Request) {
     revalidateTag(`mediastatus-${userId}`);
     revalidateTag(`schedule`);
     if (session.user.username) {
-        revalidateTag(`list-${session.user.username.toLowerCase()}`);
+        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
     }
 
     return new NextResponse(null, { status: 204 });
@@ -101,50 +128,53 @@ export async function DELETE(request: Request) {
   }
 }
 
-// --- FUNÇÃO GET (Otimizada para Paginação sem Duplicados) ---
+// --- FUNÇÃO GET OTIMIZADA ---
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
 
   const { searchParams } = new URL(request.url);
+  const userId = session.user.id;
+  
+  // Pegamos as variáveis da URL antes de passá-las para o cache
   const status = searchParams.get("status") || "ALL";
   const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = parseInt(searchParams.get("pageSize") || "12");
-  const searchTerm = searchParams.get("searchTerm") || "";
-  const userId = session.user.id;
+  const pageSize = parseInt(searchParams.get("pageSize") || "16");
+  const searchTerm = searchParams.get("searchTerm") || ""; // 👈 Definição que faltava
 
   try {
-    const getCachedData = unstable_cache(
-      async () => {
-        const where: any = { userId };
-        if (status !== "ALL") where.status = status;
-        if (searchTerm) {
-          where.media = { title: { contains: searchTerm, mode: 'insensitive' } };
+    const getCachedMediaStatus = unstable_cache(
+      async (uId, s, p, ps, st) => { // Recebe como argumentos para garantir unicidade
+        const whereClause: any = { userId: uId };
+        
+        if (s !== "ALL") whereClause.status = s;
+        if (st) {
+          whereClause.media = { title: { contains: st, mode: 'insensitive' } };
         }
 
         const [items, total] = await Promise.all([
           prisma.mediaStatus.findMany({
-            where: where,
+            where: whereClause,
             include: { media: true },
-            orderBy: { updatedAt: "desc" },
-            take: pageSize,
-            skip: (page - 1) * pageSize,
+            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+            take: ps,
+            skip: (p - 1) * ps,
           }),
-          prisma.mediaStatus.count({ where }),
+          prisma.mediaStatus.count({ where: whereClause }),
         ]);
 
-        return { items, total, totalPages: Math.ceil(total / pageSize) };
+        return { items, total, totalPages: Math.ceil(total / ps) };
       },
-      // A chave individual garante que o cache de uma página não sobrescreva outra
-      [`mediastatus-${userId}-${status}-${page}-${searchTerm}`], 
+      // 🔑 Chave de cache agora inclui todas as variáveis para evitar "congelamento" em 24 itens
+      [`mediastatus-${userId}-${status}-${page}-${pageSize}-${searchTerm}`], 
       {
         revalidate: 3600,
-        // 👈 A TAG É A CHAVE: Ao limpar esta tag, a Vercel mata TODAS as chaves acima
         tags: [`mediastatus-${userId}`] 
       }
     );
 
-    const data = await getCachedData();
+    // Passamos os valores para a função cacheada
+    const data = await getCachedMediaStatus(userId, status, page, pageSize, searchTerm);
     return NextResponse.json(data);
   } catch (error) {
     return new NextResponse("Erro Interno", { status: 500 });
