@@ -11,13 +11,18 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = 15; // Tamanho da paginação pública
+  
+  // 👇 Permite que o frontend defina o limite (ex: 2000), com padrão 15
+  const limitParam = searchParams.get("limit") || searchParams.get("pageSize");
+  const pageSize = limitParam ? parseInt(limitParam) : 15;
+  
+  // 👇 Pega o termo de busca (opcional, para uso futuro ou se mudar para busca no server)
+  const searchTerm = searchParams.get("search") || "";
 
   const username = params.username;
   if (!username) return new NextResponse("Username missing", { status: 400 });
 
   try {
-    // Normaliza para minúsculo para bater com a tag de invalidação do dashboard
     const normalizedUsername = decodeURIComponent(username).toLowerCase();
 
     const getCachedList = unstable_cache(
@@ -29,13 +34,19 @@ export async function GET(
 
         if (!user) return null;
 
-        // Se status for "ALL" ou vazio, pegamos tudo, senão aplica filtro
         const whereClause: any = {
             userId: user.id
         };
         
         if (status && status !== "ALL") {
             whereClause.status = status;
+        }
+
+        // Adiciona suporte a busca no banco (caso o front passe ?search=...)
+        if (searchTerm) {
+            whereClause.media = {
+                title: { contains: searchTerm, mode: 'insensitive' }
+            };
         }
 
         const [items, total] = await Promise.all([
@@ -51,12 +62,10 @@ export async function GET(
 
         return { items, total, totalPages: Math.ceil(total / pageSize) };
       },
-      // Chave única de cache para essa combinação de dados
-      [`lists-${normalizedUsername}-${status}-${page}`], 
+      // 👇 Chave de Cache atualizada com pageSize e searchTerm
+      [`lists-${normalizedUsername}-${status}-${page}-${pageSize}-${searchTerm}`], 
       {
-        revalidate: 3600, // Cache de 1 hora por padrão
-        // 🛑 CORREÇÃO CRÍTICA: 
-        // Usamos a mesma tag que o POST/PUT/DELETE limpam no 'mediastatus/route.ts'
+        revalidate: 3600,
         tags: [`user-profile-${normalizedUsername}`]
       }
     );

@@ -49,12 +49,18 @@ export default function UserListsClient({
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
 
-  // 1. Busca os dados (Cache - Traz tudo de uma vez)
+  // 1. Busca os dados (CORREÇÃO: Aponta para a API Pública)
   useEffect(() => {
     async function fetchList() {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/mediastatus?status=${activeTab}&page=1&pageSize=2000`);
+        // 👇 MUDANÇA CRÍTICA AQUI:
+        // Usamos a API pública que aceita 'username'. 
+        // Passamos 'limit=2000' para pegar todos os itens e filtrar localmente, mantendo a lógica atual.
+        const res = await fetch(`/api/users/${username}/lists?status=${activeTab}&page=1&limit=2000`);
+        
+        if (!res.ok) throw new Error("Falha ao buscar");
+        
         const data = await res.json();
         setItems(data.items || []);
       } catch (error) {
@@ -63,8 +69,10 @@ export default function UserListsClient({
         setIsLoading(false);
       }
     }
-    fetchList();
-  }, [activeTab]);
+    if (username) {
+        fetchList();
+    }
+  }, [activeTab, username]);
 
   // Reseta página ao mudar aba ou busca
   useEffect(() => {
@@ -96,22 +104,10 @@ export default function UserListsClient({
   return (
     <div className="w-full space-y-6">
       
-      {/* ABAS (Correção Visual Aqui 👇) */}
+      {/* ABAS */}
       {activeListCount > 1 ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList
-            className="
-              flex
-              flex-wrap 
-              w-full
-              justify-start
-              gap-2
-              p-0
-              bg-transparent
-              border-0
-              h-auto
-            "
-          >
+          <TabsList className="flex flex-wrap w-full justify-start gap-2 p-0 bg-transparent border-0 h-auto">
             {tabs
               .filter(tab => tab.show)
               .map(({ key, label, count, Icon }) => (
@@ -119,16 +115,9 @@ export default function UserListsClient({
                   key={key}
                   value={key}
                   className="
-                    flex
-                    items-center
-                    gap-0
-                    px-3
-                    py-5
-                    rounded-lg
-                    bg-transparent
-                    border border-transparent
-                    text-gray-400
-                    hover:text-white hover:bg-white/5
+                    flex items-center gap-0 px-4 py-3 rounded-lg
+                    bg-transparent border border-transparent
+                    text-gray-400 hover:text-white hover:bg-white/5
                     transition-all
                     data-[state=active]:bg-purple-600
                     data-[state=active]:text-white
@@ -161,12 +150,9 @@ export default function UserListsClient({
            </div>
         ) : (
           <>
-            {/* GRID DE ITENS - TAMANHO AUMENTADO */}
+            {/* GRID DE ITENS */}
             <div className={cn(
               "grid gap-4 animate-in fade-in zoom-in-95 duration-500",
-              // 👇 AQUI ESTÁ A MUDANÇA:
-              // Antes: lg:grid-cols-5 (Pequeno)
-              // Agora: lg:grid-cols-4 (Maior)
               isCompact 
                 ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4" 
                 : "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
@@ -178,7 +164,6 @@ export default function UserListsClient({
                       src={item.media.posterPath}
                       alt={item.media.title}
                       fill
-                      // Ajustei o sizes para o navegador baixar imagens de melhor qualidade já que ficaram maiores
                       sizes="(max-width: 768px) 50vw, 33vw"
                       className={cn("object-cover transition-transform duration-500 group-hover:scale-105", 
                         activeTab === 'DROPPED' && "grayscale opacity-60"
