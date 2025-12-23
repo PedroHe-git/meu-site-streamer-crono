@@ -13,6 +13,9 @@ export async function GET(request: Request) {
   // 1. Rate Limit (60 buscas por minuto)
   const headersList = headers();
   const ip = headersList.get("x-forwarded-for") || "unknown";
+  
+  // Nota: Se estiver rodando localmente sem proxy, o IP pode vir null ou loopback.
+  // Em produção na Vercel funciona bem.
   if (!checkRateLimit(ip, 60, 60 * 1000)) {
     return new NextResponse(JSON.stringify({ error: "Muitas pesquisas. Aguarde." }), { status: 429 });
   }
@@ -29,17 +32,29 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 2. Obter Token Twitch
-    const tokenUrl = `https://id.twitch.tv/oauth2/token?client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`;
-    const tokenRes = await fetch(tokenUrl, { method: 'POST' });
+    // 2. Obter Token Twitch (CORRIGIDO: Enviando no Body)
+    const tokenRes = await fetch("https://id.twitch.tv/oauth2/token", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'client_credentials'
+      })
+    });
     
-    if (!tokenRes.ok) throw new Error("Falha ao obter token");
+    if (!tokenRes.ok) {
+        const errorText = await tokenRes.text();
+        console.error(`Erro Auth Twitch (${tokenRes.status}):`, errorText);
+        throw new Error("Falha ao obter token");
+    }
     
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
 
-    // 3. Query Limpa para IGDB (Sem comentários e sem aspas na string de busca)
-    // Removemos o filtro 'category' para ser mais abrangente (encontrar Dota, etc)
+    // 3. Query Limpa para IGDB
     const cleanQuery = query.replace(/"/g, '');
     const igdbQuery = `search "${cleanQuery}"; fields name, cover.url, first_release_date; limit 20;`;
 

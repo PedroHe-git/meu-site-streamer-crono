@@ -7,7 +7,7 @@ import { UserRole } from "@prisma/client";
 
 export const runtime = 'nodejs';
 
-// GET: Busca itens agendados (Futuros OU Passados não concluídos)
+// GET: Busca itens agendados
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
@@ -22,23 +22,19 @@ export async function GET(request: Request) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        let whereClause: any = { userId }; // Filtra sempre pelo usuário logado
+        let whereClause: any = { userId };
 
         if (listType === 'pending') {
           whereClause = {
             userId,
             OR: [
-              { scheduledAt: { gte: today } }, // Itens de hoje em diante
-              { isCompleted: false }           // ⚡ Itens do passado que ainda estão pendentes
+              { scheduledAt: { gte: today } },
+              { isCompleted: false }
             ]
           };
         } else if (listType === 'history') {
-          whereClause = {
-            userId,
-            isCompleted: true
-          };
+          whereClause = { userId, isCompleted: true };
         } else {
-           // Padrão: Próximos itens e pendências
            whereClause = { 
              userId,
              OR: [
@@ -51,20 +47,22 @@ export async function GET(request: Request) {
         return await prisma.scheduleItem.findMany({
           where: whereClause,
           include: { media: true },
-          orderBy: { scheduledAt: 'asc' },
-          take: 50 // Aumentado para suportar itens acumulados
+          orderBy: [
+            { scheduledAt: 'asc' },
+            { horario: 'asc' } // <-- Adicione isso
+          ],
+          take: 20
         });
       },
       [`schedule-${userId}-${listType || 'default'}`], 
       {
         revalidate: 3600,
-        tags: ['schedule'] // Tag global para revalidação
+        tags: [`schedule-${userId}`, 'schedule'] // Tag específica do usuário + tag global
       }
     );
 
     const schedule = await getCachedSchedule();
     return NextResponse.json(schedule);
-
   } catch (error) {
     return new NextResponse("Erro na Agenda", { status: 500 });
   }
@@ -73,10 +71,7 @@ export async function GET(request: Request) {
 // POST: Cria novo item
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  
-  if (!session || session.user.role !== UserRole.CREATOR) {
-    return new NextResponse("Acesso Negado", { status: 403 });
-  }
+  if (!session || session.user.role !== UserRole.CREATOR) return new NextResponse("Acesso Negado", { status: 403 });
 
   try {
     const body = await request.json();
@@ -99,12 +94,13 @@ export async function POST(request: Request) {
       include: { media: true }
     });
 
-    // ⚡ INVALIDAÇÃO DE CACHE
+    // LIMPEZA DE CACHE
     revalidateTag('schedule'); 
+    revalidateTag(`schedule-${userId}`);
     if (session.user.username) {
-       const username = session.user.username.toLowerCase();
-       revalidateTag(`user-profile-${username}`);
-       revalidateTag(`simple-schedule-${username}`);
+       const userTag = session.user.username.toLowerCase();
+       revalidateTag(`user-profile-${userTag}`);
+       revalidateTag(`simple-schedule-${userTag}`);
     }
 
     return NextResponse.json(newScheduleItem);
@@ -113,26 +109,62 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH: Para concluir itens (Resolve o problema de não conseguir dar concluído)
+// PATCH: Concluir Item (Correção da Transação e Cache)
 export async function PATCH(request: Request) {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== UserRole.CREATOR) return new NextResponse("Negado", { status: 403 });
 
     try {
-        const { id, isCompleted } = await request.json();
-        const updated = await prisma.scheduleItem.update({
-            where: { id, userId: session.user.id },
-            data: { isCompleted }
-        });
+        const { id, isCompleted, mediaId } = await request.json();
+        const userId = session.user.id;
 
-        // ⚡ Limpa o cache para o item sumir da lista de pendentes
-        revalidateTag('schedule');
-        if (session.user.username) {
-            revalidateTag(`simple-schedule-${session.user.username.toLowerCase()}`);
+        // Lógica condicional para o status da mídia
+        let mediaUpdateData = {};
+        
+        if (isCompleted) {
+            // Se está CONCLUINDO:
+            mediaUpdateData = { 
+                status: 'WATCHED', 
+                watchedAt: new Date(), 
+                updatedAt: new Date() 
+            };
+        } else {
+            // Se está DESFAZENDO (Voltando para pendente):
+            mediaUpdateData = { 
+                status: 'WATCHING', // Volta para "Assistindo"
+                watchedAt: null,    // Remove a data de conclusão
+                updatedAt: new Date() 
+            };
         }
 
-        return NextResponse.json(updated);
+        const [updatedSchedule] = await prisma.$transaction([
+            prisma.scheduleItem.update({
+                where: { id, userId },
+                data: { isCompleted }
+            }),
+            // Só atualiza a mídia se tiver mediaId
+            ...(mediaId ? [
+                prisma.mediaStatus.update({
+                    where: { userId_mediaId: { userId, mediaId } },
+                    data: mediaUpdateData
+                })
+            ] : [])
+        ]);
+
+        // Revalida tudo para a interface atualizar instantaneamente
+        revalidateTag('schedule');
+        revalidateTag(`schedule-${userId}`);
+        revalidateTag(`mediastatus-${userId}`); 
+
+        if (session.user.username) {
+            const userTag = session.user.username.toLowerCase();
+            revalidateTag(`user-profile-${userTag}`);
+            revalidateTag(`simple-schedule-${userTag}`);
+        }
+
+        return NextResponse.json(updatedSchedule);
     } catch (error) {
+        console.error("Erro no PATCH schedule:", error);
         return new NextResponse("Erro", { status: 500 });
     }
 }
@@ -151,6 +183,9 @@ export async function DELETE(request: Request) {
       });
 
       revalidateTag('schedule');
+      revalidateTag(`schedule-${session.user.id}`);
+      // Opcional: Se deletar da agenda devia mudar o status da lista? Geralmente não.
+      
       if (session.user.username) {
         revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
       }

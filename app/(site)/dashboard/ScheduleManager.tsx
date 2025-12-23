@@ -1,12 +1,24 @@
-// app/dashboard/ScheduleManager.tsx
 "use client";
 
 import { useState, useMemo, useEffect } from "react"; 
+import { useRouter } from "next/navigation"; // 👈 IMPORTANTE: Para recarregar os dados
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Clock, Check, Plus, Trash2, Loader2, Calendar as CalendarIconLucide, ListVideo, Tv } from "lucide-react"; 
+import { 
+  Calendar as CalendarIcon, 
+  Clock, 
+  Check, 
+  Plus, 
+  Trash2, 
+  Loader2, 
+  Calendar as CalendarIconLucide, 
+  ListVideo, 
+  Tv,
+  Megaphone,
+  RotateCcw 
+} from "lucide-react"; 
 import { Calendar as ShadCalendar } from "@/components/ui/calendar";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -32,22 +44,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"; 
-import { Megaphone } from "lucide-react"; // Ícone
-import { Toaster } from "@/components/ui/toaster";
-import { useToast } from "@/hooks/use-toast"; // Importar Toast
-
-// [CORREÇÃO 1] Importar MediaType do Prisma
+import { useToast } from "@/hooks/use-toast";
 import { MediaType } from "@prisma/client";
-
-// [CORREÇÃO 2] Remover a definição manual antiga de MediaType.
-// O código agora usa o MediaType importado do Prisma, que inclui 'GAME'.
 
 type MediaItem = {
   id: string; 
   userId: string;
   mediaId: string;
   title: string;
-  mediaType: MediaType; // Usa o tipo oficial do Prisma
+  mediaType: MediaType;
   posterPath: string; 
   status: string;
   isWeekly?: boolean;
@@ -74,9 +79,9 @@ type ScheduleManagerProps = {
   onAddSchedule: (newSchedule: ScheduleItem) => void;
   onRemoveSchedule: (id: string) => void;
   onCompleteSchedule: (id: string) => void;
+  onDataChanged?: () => void;
 };
 
-// Função formatHorario
 const formatHorario = (horario: string | null): string | null => {
   if (horario === "1-Primeiro") return "Primeiro";
   if (horario === "2-Segundo") return "Segundo";
@@ -90,11 +95,13 @@ const formatHorario = (horario: string | null): string | null => {
 export default function ScheduleManager({
   mediaItems,
   scheduleItems,
-  onAddSchedule,
+  onAddSchedule, // Essas props manuais ainda são úteis para updates locais otimistas
   onRemoveSchedule,
   onCompleteSchedule,
+  onDataChanged
 }: ScheduleManagerProps) {
   const { toast } = useToast();
+  const router = useRouter(); // 👈 Inicializa o router
 
   const [selectedMedia, setSelectedMedia] = useState(""); 
   const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
@@ -109,12 +116,13 @@ export default function ScheduleManager({
 
   const today = new Date(new Date().setHours(0, 0, 0, 0));
 
-  // --- NOVOS ESTADOS PARA OS MODAIS ---
   const [isAnnounceDialogOpen, setIsAnnounceDialogOpen] = useState(false);
   const [isWebhookHelpOpen, setIsWebhookHelpOpen] = useState(false);
   const [isAnnouncing, setIsAnnouncing] = useState(false);
 
-  const getMediaById = (id: string) => mediaItems.find((m) => m.mediaId === id);
+  const getMediaData = (schedule: ScheduleItem) => {
+     return schedule.media || mediaItems.find((m) => m.mediaId === schedule.mediaId);
+  };
 
   const formatDate = (date: Date) => { 
     return date.toLocaleDateString("pt-BR", {
@@ -124,31 +132,26 @@ export default function ScheduleManager({
     });
   };
 
-  // --- LÓGICA DE ANÚNCIO ---
-
   const handleClickAnnounce = () => {
-    // Abre o modal de confirmação primeiro
     setIsAnnounceDialogOpen(true);
   };
 
   const executeAnnounce = async () => {
     setIsAnnouncing(true);
-    setIsAnnounceDialogOpen(false); // Fecha o modal de confirmação
+    setIsAnnounceDialogOpen(false);
 
     try {
       const res = await fetch("/api/announce", { method: "POST" });
       const data = await res.json();
 
       if (!res.ok) {
-        // Se o erro for especificamente sobre o Webhook
         if (res.status === 400 && data.error && data.error.includes("Webhook")) {
-          setIsWebhookHelpOpen(true); // Abre o tutorial
-          return; // Para a execução aqui
+          setIsWebhookHelpOpen(true);
+          return;
         }
         throw new Error(data.error || "Erro ao anunciar");
       }
 
-      // SUCESSO: Notificação bonita
       toast({
         title: "🎉 Divulgado com Sucesso!",
         description: "O seu cronograma foi enviado para o Discord com notificação @everyone.",
@@ -157,7 +160,6 @@ export default function ScheduleManager({
       });
 
     } catch (error: any) {
-      // ERRO GENÉRICO
       toast({
         title: "Falha ao enviar",
         description: error.message,
@@ -219,19 +221,18 @@ export default function ScheduleManager({
         body: JSON.stringify(scheduleData),
       });
 
-      if (!res.ok) {
-        throw new Error("Falha ao agendar");
-      }
+      if (!res.ok) throw new Error("Falha ao agendar");
       
       const newScheduleItemRaw = await res.json();
       
-      const newScheduleItem: ScheduleItem = {
+      onAddSchedule({
         ...newScheduleItemRaw,
         scheduledAt: new Date(newScheduleItemRaw.scheduledAt)
-      };
+      }); 
       
-      onAddSchedule(newScheduleItem); 
-      
+      if (onDataChanged) onDataChanged(); 
+      router.refresh(); // 👈 Atualiza Server Component
+
       setSelectedMedia("");
       setScheduleDate(undefined);
       setScheduleTime("");
@@ -245,30 +246,57 @@ export default function ScheduleManager({
     }
   };
 
-  const handleComplete = async (id: string) => {
-    const key = `complete-${id}`;
+  const handleComplete = async (item: ScheduleItem) => {
+    const key = `complete-${item.id}`;
     setLoadingStates(prev => ({ ...prev, [key]: true }));
     try {
-      const res = await fetch('/api/schedule/complete', {
-          method: 'POST',
+      const res = await fetch('/api/schedule', {
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scheduleId: id, isCompleted: true }), 
+          body: JSON.stringify({ 
+            id: item.id, 
+            isCompleted: true,
+            mediaId: item.mediaId
+          }), 
       });
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Falha ao completar (API):", errorText);
-        throw new Error(errorText || 'Falha ao completar');
-      }
+      if (!res.ok) throw new Error('Falha ao completar');
       
-      onCompleteSchedule(id); 
+      toast({ title: "Concluído!", description: "Item movido para Concluídos." });
+      
+      onCompleteSchedule(item.id); // Atualiza visual localmente rápido
+      if (onDataChanged) onDataChanged(); 
+      router.refresh(); // 👈 Busca a verdade do servidor
       
     } catch (error: any) {
-      console.error(error.message);
-      toast({
-        title: "Erro",
-        description: "Não foi possível concluir o item.",
-        variant: "destructive"
+      toast({ title: "Erro", variant: "destructive" });
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleUndo = async (item: ScheduleItem) => {
+    const key = `undo-${item.id}`;
+    setLoadingStates(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await fetch('/api/schedule', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            id: item.id, 
+            isCompleted: false,
+            mediaId: item.mediaId
+          }), 
       });
+      if (!res.ok) throw new Error('Falha ao desfazer');
+      
+      toast({ title: "Desfeito!", description: "Item voltou para a agenda." });
+      
+      // Aqui não temos "onUndoSchedule", então confiamos no router.refresh
+      if (onDataChanged) onDataChanged(); 
+      router.refresh(); // 👈 Essencial para reaparecer na lista de cima
+      
+    } catch (error: any) {
+      toast({ title: "Erro", variant: "destructive" });
     } finally {
       setLoadingStates(prev => ({ ...prev, [key]: false }));
     }
@@ -278,13 +306,12 @@ export default function ScheduleManager({
     const key = `remove-${id}`;
     setLoadingStates(prev => ({ ...prev, [key]: true }));
     try {
-      const res = await fetch(`/api/schedule?id=${id}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-      });
+      const res = await fetch(`/api/schedule?id=${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Falha ao remover');
 
-      onRemoveSchedule(id); 
+      onRemoveSchedule(id);
+      if (onDataChanged) onDataChanged(); 
+      router.refresh(); // 👈 Garante sincronia
 
     } catch (error: any) {
       console.error(error.message);
@@ -301,17 +328,10 @@ export default function ScheduleManager({
       .sort((a, b) => {
         const dateA = new Date(a.scheduledAt).setHours(0, 0, 0, 0);
         const dateB = new Date(b.scheduledAt).setHours(0, 0, 0, 0);
-        if (dateA !== dateB) {
-          return dateA - dateB; 
-        }
-        
-        if (a.horario && b.horario) {
-          return a.horario.localeCompare(b.horario); 
-        }
-        
+        if (dateA !== dateB) return dateA - dateB; 
+        if (a.horario && b.horario) return a.horario.localeCompare(b.horario); 
         if (a.horario) return -1; 
         if (b.horario) return 1;  
-
         return 0; 
       });
       
@@ -320,17 +340,7 @@ export default function ScheduleManager({
       .sort((a, b) => {
         const dateA = new Date(a.scheduledAt).setHours(0, 0, 0, 0);
         const dateB = new Date(b.scheduledAt).setHours(0, 0, 0, 0);
-        if (dateA !== dateB) {
-          return dateB - dateA; 
-        }
-
-        if (a.horario && b.horario) {
-          return a.horario.localeCompare(b.horario); 
-        }
-        
-        if (a.horario) return -1; 
-        if (b.horario) return 1;  
-        
+        if (dateA !== dateB) return dateB - dateA; 
         return 0;
       });
 
@@ -341,10 +351,9 @@ export default function ScheduleManager({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       
-      {/* Coluna 1: Stack Vertical para o Formulário e a Nova Lista */}
+      {/* Coluna 1: Formulário e Lista de Disponíveis */}
       <div className="lg:col-span-1 space-y-6">
         
-        {/* Card 1: Formulário de Agendamento */}
         <Card className="shadow-lg border-2">
           <CardHeader>
             <CardTitle>Agendar Sessão</CardTitle>
@@ -380,7 +389,6 @@ export default function ScheduleManager({
               </div>
 
               <div className="space-y-4">
-                {/* Calendário */}
                 <div className="space-y-2">
                   <Label htmlFor="schedule-date">Data</Label>
                   <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
@@ -415,7 +423,6 @@ export default function ScheduleManager({
                   </Popover>
                 </div>
                 
-                {/* Inputs de S/E (visíveis condicionalmente) */}
                 {showEpisodeFields && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -445,7 +452,6 @@ export default function ScheduleManager({
                   </div>
                 )}
 
-                {/* Select de Prioridade */}
                 <div className="space-y-2">
                   <Label htmlFor="schedule-priority">Ordem de Visualização (Opcional)</Label>
                   <Select
@@ -483,7 +489,6 @@ export default function ScheduleManager({
           </CardContent>
         </Card>
 
-        {/* Card 2: Lista de Itens Disponíveis */}
         <Card className="shadow-lg border-2">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -504,10 +509,7 @@ export default function ScheduleManager({
                 </div>
               ) : (
                 mediaItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
-                  >
+                  <div key={item.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                     <ImageWithFallback
                       src={item.posterPath} 
                       alt={item.title}
@@ -528,8 +530,6 @@ export default function ScheduleManager({
           </CardContent>
         </Card>
       </div>
-      {/* --- Fim da Coluna 1 --- */}
-
 
       {/* Coluna 2: Próximos Agendamentos */}
       <Card className="lg:col-span-2 shadow-lg border-2">
@@ -545,7 +545,6 @@ export default function ScheduleManager({
               </CardDescription>
             </div>
             
-            {/* --- BOTÃO ANUNCIAR --- */}
             <Button 
               variant="outline" 
               size="sm"
@@ -561,7 +560,6 @@ export default function ScheduleManager({
                  {isAnnouncing ? "..." : "Anunciar"}
               </span>
             </Button>
-            {/* ------------------ */}
           </div>
         </CardHeader>
         <CardContent>
@@ -572,28 +570,18 @@ export default function ScheduleManager({
               </p>
             ) : (
               upcomingSchedules.map((schedule) => {
-                const media = getMediaById(schedule.mediaId); 
+                const media = getMediaData(schedule); 
                 const isLoading = loadingStates[`complete-${schedule.id}`] || loadingStates[`remove-${schedule.id}`];
 
                 if (!media) {
                   return (
-                    <div
-                      key={schedule.id}
-                      className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg"
-                    >
+                    <div key={schedule.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                       <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-destructive line-clamp-1">Mídia Removida ou Corrompida</h4>
                         <div className="flex items-center gap-2 text-muted-foreground text-sm">
                           <CalendarIconLucide className="h-4 w-4" />
-                          <span>{formatDate(schedule.scheduledAt)}</span> 
+                          <span>{formatDate(new Date(schedule.scheduledAt))}</span> 
                         </div>
-                        {schedule.horario && (
-                          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                            <Clock className="h-4 w-4" />
-                            <span>{formatHorario(schedule.horario)}</span>
-                          </div>
-                        )}
-                        <p className="text-xs text-destructive/80 mt-1">Este item agendado não está em nenhuma lista. Pode removê-lo.</p>
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
                         <Button
@@ -603,11 +591,7 @@ export default function ScheduleManager({
                           onClick={() => handleRemove(schedule.id)}
                           disabled={isLoading}
                         >
-                          {isLoading ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4" />}
-                        </Button>
-                        <Button size="sm" variant="outline" disabled={true}>
-                          <Check className="h-4 w-4" />
-                          <span className="ml-2 hidden sm:inline">Concluir</span>
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -615,10 +599,7 @@ export default function ScheduleManager({
                 }
 
                 return (
-                  <div
-                    key={schedule.id}
-                    className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-muted/50 rounded-lg"
-                  >
+                  <div key={schedule.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-muted/50 rounded-lg">
                     <ImageWithFallback
                       src={media.posterPath} 
                       alt={media.title}
@@ -630,7 +611,7 @@ export default function ScheduleManager({
                       <h4 className="font-bold line-clamp-1">{media.title}</h4>
                       <div className="flex items-center gap-2 text-muted-foreground text-sm">
                         <CalendarIconLucide className="h-4 w-4" />
-                        <span>{formatDate(schedule.scheduledAt)}</span> 
+                        <span>{formatDate(new Date(schedule.scheduledAt))}</span> 
                       </div>
                       {schedule.horario && (
                         <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -661,7 +642,7 @@ export default function ScheduleManager({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleComplete(schedule.id)}
+                        onClick={() => handleComplete(schedule)}
                         disabled={isLoading}
                         className="bg-green-600 text-white hover:bg-green-700 hover:text-white"
                       >
@@ -680,9 +661,7 @@ export default function ScheduleManager({
           </div>
         </CardContent>
       </Card>
-      {/* Fim da Coluna 2 */}
 
-      
       {/* Coluna 3: Concluídos Recentemente */}
       {completedSchedules.length > 0 && (
          <Card className="lg:col-span-3 shadow-lg border-2"> 
@@ -695,21 +674,34 @@ export default function ScheduleManager({
           <CardContent>
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {completedSchedules.slice(0, 5).map(schedule => { 
-                const media = getMediaById(schedule.mediaId);
+                const media = getMediaData(schedule);
                 if (!media) return null;
 
                 return (
-                  <div
-                    key={schedule.id}
-                    className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
-                  >
+                  <div key={schedule.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                     <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium line-clamp-1">{media.title}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatDate(schedule.scheduledAt)}
+                        {formatDate(new Date(schedule.scheduledAt))}
                       </p>
                     </div>
+                    
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="text-muted-foreground hover:text-blue-600"
+                      title="Desfazer conclusão"
+                      onClick={() => handleUndo(schedule)}
+                      disabled={loadingStates[`undo-${schedule.id}`]}
+                    >
+                      {loadingStates[`undo-${schedule.id}`] ? (
+                        <Loader2 className="h-4 w-4 animate-spin"/> 
+                      ) : (
+                        <RotateCcw className="h-4 w-4" />
+                      )}
+                    </Button>
+
                     <Button
                       size="icon"
                       variant="ghost"
@@ -727,9 +719,7 @@ export default function ScheduleManager({
         </Card>
       )}
 
-      {/* --- DIALOGS --- */}
-
-      {/* 1. Confirmação de Envio */}
+      {/* Dialogs de Anúncio e Webhook */}
       <AlertDialog open={isAnnounceDialogOpen} onOpenChange={setIsAnnounceDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -747,7 +737,6 @@ export default function ScheduleManager({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 2. Tutorial de Webhook (Caso não configurado) */}
       <AlertDialog open={isWebhookHelpOpen} onOpenChange={setIsWebhookHelpOpen}>
         <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>

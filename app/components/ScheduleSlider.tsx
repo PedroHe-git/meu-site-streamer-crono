@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Calendar, RotateCcw, MonitorPlay, CheckCircle2, ArrowRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, MonitorPlay, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,7 @@ interface ScheduleItem {
   id: string;
   title?: string | null;
   scheduledAt: string | Date;
+  horario?: string | null; // 👈 Adicionado campo horario
   isCompleted?: boolean;
   seasonNumber?: number | null;
   episodeNumber?: number | null;
@@ -40,9 +41,8 @@ export default function ScheduleSlider({ items }: ScheduleSliderProps) {
   const resetToToday = () => setCurrentDate(new Date());
 
   return (
-    <div className="w-full max-w-[1800px] mx-auto space-y-4"> {/* Espaçamento geral reduzido */}
+    <div className="w-full max-w-[1800px] mx-auto space-y-4"> 
       
-      {/* --- CABEÇALHO COMPACTO --- */}
       <div className="flex items-center justify-between bg-[#0a0a0a] px-4 py-2 rounded-lg border border-gray-800 shadow-sm mb-6">
         <div className="flex items-center gap-3">
           <div className="p-1.5 bg-purple-500/10 rounded-md">
@@ -68,24 +68,30 @@ export default function ScheduleSlider({ items }: ScheduleSliderProps) {
         </div>
       </div>
 
-      {/* --- LISTA DE DIAS (LINHAS COMPACTAS) --- */}
-      <div className="flex flex-col space-y-4"> {/* Menos espaço entre os dias */}
+      <div className="flex flex-col space-y-4">
         {weekDays.map((day) => {
           const isToday = isSameDay(day, new Date());
           
           const dayEvents = items
             .filter(item => isSameDay(new Date(item.scheduledAt), day))
-            .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+            .sort((a, b) => {
+              // 1. Ordena por Data/Hora
+              const timeDiff = new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+              if (timeDiff !== 0) return timeDiff;
+              
+              // 2. Desempate pelo Horário ("1-Primeiro", "2-Segundo")
+              if (a.horario && b.horario) return a.horario.localeCompare(b.horario);
+              if (a.horario) return -1; // Quem tem horário vem antes
+              if (b.horario) return 1;
+              
+              return 0;
+            });
 
-          // Se não tiver eventos e não for hoje, podemos esconder ou mostrar muito pequeno?
-          // Aqui mantemos mostrando, mas bem compacto.
-          
           return (
             <div key={day.toISOString()} className={cn("relative group transition-all duration-500 rounded-xl p-2", isToday ? "bg-purple-900/5 border border-purple-500/10" : "hover:bg-gray-900/20")}>
               
               <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
                 
-                {/* 1. DATA (Esquerda - Mais estreita) */}
                 <div className="md:w-32 flex-shrink-0 flex md:flex-col items-center md:items-start gap-1">
                   <div className={cn("flex items-baseline gap-2 md:flex-col md:gap-0", isToday ? "text-purple-400" : "text-gray-500")}>
                     <span className="text-[10px] font-bold uppercase tracking-widest leading-none">
@@ -103,7 +109,6 @@ export default function ScheduleSlider({ items }: ScheduleSliderProps) {
                   )}
                 </div>
 
-                {/* 2. ITENS (Direita - Horizontal Compacto) */}
                 <div className="flex-1 min-w-0 w-full overflow-hidden">
                   {dayEvents.length === 0 ? (
                     <div className="h-24 border border-dashed border-gray-800/50 rounded-lg bg-gray-900/10 flex items-center justify-center gap-2 text-gray-700 text-xs">
@@ -117,13 +122,11 @@ export default function ScheduleSlider({ items }: ScheduleSliderProps) {
                         return (
                           <Card 
                             key={event.id} 
-                            // 👇 Largura reduzida: w-[100px] mobile, w-[120px] desktop
                             className={cn(
                               "flex-shrink-0 w-[100px] md:w-[120px] bg-transparent border-0 shadow-none group/card relative transition-all duration-300",
                               isDone ? "opacity-40 grayscale hover:opacity-100 hover:grayscale-0" : "opacity-100"
                             )}
                           >
-                            {/* POSTER (2:3) */}
                             <div className="relative aspect-[2/3] w-full bg-gray-900 rounded-lg overflow-hidden shadow-sm border border-gray-800/50 group-hover/card:border-purple-500/50 transition-colors">
                               
                               {event.media?.posterPath ? (
@@ -156,7 +159,6 @@ export default function ScheduleSlider({ items }: ScheduleSliderProps) {
                               )}
                             </div>
                             
-                            {/* Infos Compactas */}
                             <div className="mt-1.5 space-y-0.5">
                               <h4 
                                 className={cn(
@@ -183,7 +185,6 @@ export default function ScheduleSlider({ items }: ScheduleSliderProps) {
                 </div>
               </div>
               
-              {/* Separador Sutil */}
               {!isSameDay(day, weekDays[6]) && (
                  <div className="mt-4 border-b border-gray-900/50 w-full" />
               )}

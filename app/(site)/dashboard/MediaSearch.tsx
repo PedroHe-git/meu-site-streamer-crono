@@ -406,11 +406,11 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                       disabled={addingState !== null}
                       className="h-7 px-2 text-xs"
                     >
-                      {addingState === toWatchKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Próximos"}
+                      {addingState === toWatchKey ? <Loader2 className="h-3 w-3 animate-spin" /> : "Para Assistir"}
                     </Button>
 
                     {/* [CORREÇÃO] Exibir botão 'Essa Semana' também para Jogos (GAME) */}
-                    {(media.source === "ANIME" || media.source === "SERIES" || media.source === "GAME") && (
+                    {(media.source === "ANIME" || media.source === "SERIES" || media.source === "GAME" || media.source === "MOVIE" ) && (
                       <Button
                         size="sm"
                         variant="outline"

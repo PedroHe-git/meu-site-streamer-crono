@@ -28,9 +28,10 @@ const getCachedSchedule = unstable_cache(
         media: true,
         user: true,
       },
-      orderBy: {
-        scheduledAt: "asc",
-      },
+      orderBy: [
+        { scheduledAt: "asc" },
+        { horario: "asc" } // Desempate pelo "1-Primeiro", "2-Segundo"
+      ],
     });
 
     // É importante retornar dados planos para o cache
