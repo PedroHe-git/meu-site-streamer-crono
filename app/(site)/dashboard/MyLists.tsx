@@ -35,9 +35,8 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
   // Paginação
   const [page, setPage] = useState(1);
   const pageSize = 16;
-  const [totalItems, setTotalItems] = useState(0); // Total da aba atual
+  const [totalItems, setTotalItems] = useState(0);
 
-  // 👇 ESTADO PARA OS CONTADORES DAS ABAS
   const [counts, setCounts] = useState({
     WATCHING: 0,
     TO_WATCH: 0,
@@ -45,21 +44,19 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     DROPPED: 0
   });
 
-  // Reseta página ao trocar aba
-  useEffect(() => { setPage(1); }, [activeTab]);
+  // Reseta página ao trocar aba para evitar erro de página inexistente no novo status
+  useEffect(() => { 
+    setPage(1); 
+  }, [activeTab]);
 
-  // 1. Função para atualizar os contadores de TODAS as abas (roda ao iniciar ou mudar dados)
+  // 1. Atualiza contadores usando cache: 'no-store' para precisão no dashboard
   const fetchAllCounts = useCallback(async () => {
-    // Fazemos requisições leves (pageSize=1) apenas para pegar o 'total' de cada status
     const statuses = ["WATCHING", "TO_WATCH", "WATCHED", "DROPPED"];
-    
     try {
       const promises = statuses.map(s => 
-        fetch(`/api/mediastatus?status=${s}&page=1&pageSize=1`).then(r => r.json())
+        fetch(`/api/mediastatus?status=${s}&page=1&pageSize=1`, { cache: 'no-store' }).then(r => r.json())
       );
-      
       const results = await Promise.all(promises);
-      
       setCounts({
         WATCHING: results[0].total || 0,
         TO_WATCH: results[1].total || 0,
@@ -71,17 +68,21 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   }, []);
 
-  // 2. Busca Lista Atual
+  // 2. Busca Lista Atual - CORREÇÃO: cache: 'no-store' e substituição total do estado
   const fetchList = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/mediastatus?status=${activeTab}&page=${page}&pageSize=${pageSize}`);
+      // Adicionamos cache: 'no-store' para garantir que o Dashboard ignore o cache da Vercel
+      const res = await fetch(
+        `/api/mediastatus?status=${activeTab}&page=${page}&pageSize=${pageSize}`,
+        { cache: 'no-store' }
+      );
       if (!res.ok) throw new Error("Erro ao buscar lista");
       const data = await res.json();
       
+      // 🛑 CORREÇÃO: setItems(data.items) substitui a lista, impedindo duplicatas na paginação
       setItems(data.items || []);
-      setTotalItems(data.total || 0); // Atualiza total para paginação
-
+      setTotalItems(data.total || 0);
     } catch (error) {
       toast({ title: "Erro", description: "Falha ao carregar lista.", variant: "destructive" });
     } finally {
@@ -89,13 +90,11 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   }, [activeTab, page, toast]);
 
-  // Efeito Principal: Carrega lista e contadores
   useEffect(() => {
     fetchList();
-    fetchAllCounts(); // Atualiza os números das abas
+    fetchAllCounts();
   }, [fetchList, fetchAllCounts, dataVersionKey]);
 
-  // Ações (Mover/Deletar)
   const handleMove = async (id: string, newStatus: string) => {
     setIsActionLoading(id);
     try {
@@ -107,8 +106,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
       if (!res.ok) throw new Error("Erro ao mover");
       
       toast({ title: "Movido!", description: `Item movido para ${newStatus}` });
-      onDataChanged(); // Força atualização global
-      // Não precisamos remover localmente manual, o onDataChanged vai disparar o useEffect e atualizar tudo
+      onDataChanged();
     } catch (error) {
       toast({ title: "Erro", variant: "destructive" });
     } finally {
@@ -134,7 +132,6 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
 
   const totalPages = Math.ceil(totalItems / pageSize);
 
-  // Helper para renderizar a Tab com contador
   const renderTabTrigger = (value: string, label: string, count: number) => (
     <TabsTrigger value={value} className="text-xs px-3 py-1.5 gap-2">
       {label}
@@ -146,11 +143,10 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
 
   return (
     <div className="space-y-4">
-      
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex items-center justify-between mb-4 overflow-x-auto pb-2 sm:pb-0">
           <TabsList className="bg-muted/50 p-1 h-auto">
-            {renderTabTrigger("WATCHING", "Assistindo", counts.WATCHING)}
+            {renderTabTrigger("WATCHING", "Essa Semana", counts.WATCHING)}
             {renderTabTrigger("TO_WATCH", "Para Assistir", counts.TO_WATCH)}
             {renderTabTrigger("WATCHED", "Concluídos", counts.WATCHED)}
             {renderTabTrigger("DROPPED", "Dropados", counts.DROPPED)}
@@ -168,12 +164,9 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
             </div>
           ) : (
             <TabsContent value={activeTab} className="mt-0 space-y-6">
-              
-              {/* GRID */}
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3 animate-in fade-in">
                 {items.map((item) => (
                   <div key={item.id} className="group relative flex flex-col gap-1.5">
-                    {/* POSTER (Código Visual igual ao anterior) */}
                     <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-border bg-muted shadow-sm transition-all hover:ring-2 hover:ring-primary/50">
                       {item.media.posterPath ? (
                         <Image
@@ -192,7 +185,6 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                         </div>
                       )}
                       
-                      {/* Menu de Ações (Igual ao anterior) */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -203,7 +195,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                           <DropdownMenuContent align="center">
                             <DropdownMenuLabel>Mover para...</DropdownMenuLabel>
                             <DropdownMenuItem onClick={() => handleMove(item.id, "WATCHING")}>
-                              <PlayCircle className="w-4 h-4 mr-2" /> Assistindo
+                              <PlayCircle className="w-4 h-4 mr-2" /> Essa Semana
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleMove(item.id, "TO_WATCH")}>
                               <Plus className="w-4 h-4 mr-2" /> Para Assistir
@@ -235,7 +227,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                 ))}
               </div>
 
-              {/* PAGINAÇÃO COM NÚMEROS */}
+              {/* PAGINAÇÃO FIXA */}
               <div className="flex items-center justify-between pt-4 border-t border-border/50">
                 <p className="text-xs text-muted-foreground">
                     Total: {totalItems} itens
@@ -267,7 +259,6 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                     </Button>
                 </div>
               </div>
-
             </TabsContent>
           )}
         </div>
