@@ -99,7 +99,7 @@ export default function HistoricoPage() {
               showWatchedList={creator.showWatchedList ?? true} 
               showDroppedList={creator.showDroppedList ?? true}
               isCompact={true}
-              itemsPerPage={12}
+              itemsPerPage={8}
               searchTerm={searchTerm} // 👈 PASSANDO O TERMO
             />
           </div>

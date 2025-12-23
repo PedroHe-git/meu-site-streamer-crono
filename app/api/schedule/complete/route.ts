@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
     const mediaId = updatedItem.mediaId;
 
-    // 2. Busca informações do MediaStatus (para saber se é SEMANAL)
+    // 2. Busca se é semanal
     const mediaStatusInfo = await prisma.mediaStatus.findUnique({
         where: {
             userId_mediaId: { userId, mediaId }
@@ -41,9 +41,9 @@ export async function POST(request: Request) {
 
     const isWeekly = mediaStatusInfo?.isWeekly || false;
 
-    // 3. Lógica de Status
+    // 3. Lógica Inteligente de Status
     if (isCompleted) {
-      // Conta itens pendentes
+      // Conta quantos itens AINDA faltam (excluindo o atual que já está true)
       const remainingItemsCount = await prisma.scheduleItem.count({
         where: {
           userId: userId,
@@ -52,46 +52,40 @@ export async function POST(request: Request) {
         }
       });
 
-      // LÓGICA CORRIGIDA:
-      // Se for Semanal (isWeekly === true) -> Mantém WATCHING sempre.
-      // Se não for Semanal -> Verifica se acabou os itens (count === 0).
+      // Se NÃO for semanal e NÃO sobrar episódios -> Move para WATCHED
+      // Se for semanal, ou ainda tiver episódios -> Mantém WATCHING
       let newStatus: 'WATCHED' | 'WATCHING' = 'WATCHING';
-
       if (!isWeekly && remainingItemsCount === 0) {
           newStatus = 'WATCHED';
       }
       
-      // Se for semanal, ou se sobraram itens, ele fica/continua como WATCHING.
-
       await prisma.mediaStatus.update({
         where: { userId_mediaId: { userId, mediaId } },
         data: { 
             status: newStatus,
-            // Só preenche a data de conclusão se realmente finalizou (WATCHED)
             watchedAt: newStatus === 'WATCHED' ? new Date() : null 
         }
       });
     } 
     else {
-        // Se desmarcou, volta para WATCHING
+        // Se desmarcou, força volta para WATCHING
         await prisma.mediaStatus.update({
             where: { userId_mediaId: { userId, mediaId } },
             data: { status: 'WATCHING', watchedAt: null }
         });
     }
 
-    // Invalida caches
-    revalidateTag(`dashboard-schedule-${userId}`);
-    revalidateTag(`dashboard-lists-${userId}`);
-    revalidateTag(`user-stats-${userId}`);
-    if (session.user.username) {
-    const username = session.user.username.toLowerCase();
-    revalidateTag(`user-profile-${username}`);
+    // --- CORREÇÃO DE CACHE (CRUCIAL) ---
+    revalidateTag(`mediastatus-${userId}`); // <--- Atualiza a lista MyLists
+    revalidateTag(`schedule-${userId}`);    // <--- Atualiza a Agenda
+    revalidateTag(`schedule`); 
     
-    // --- ADICIONE ISTO ---
-    revalidateTag(`overlay-${username}`); // Atualiza o OBS instantaneamente
-    // ---------------------
-}
+    if (session.user.username) {
+        const username = session.user.username.toLowerCase();
+        revalidateTag(`user-profile-${username}`);
+        revalidateTag(`simple-schedule-${username}`);
+        revalidateTag(`overlay-${username}`);
+    }
 
     return NextResponse.json(updatedItem);
 

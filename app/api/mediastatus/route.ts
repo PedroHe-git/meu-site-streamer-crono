@@ -6,7 +6,7 @@ import { revalidateTag, unstable_cache } from "next/cache";
 
 export const runtime = 'nodejs';
 
-// --- FUNÇÃO POST (Adicionar Item) ---
+// --- POST ---
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
@@ -56,13 +56,11 @@ export async function POST(request: Request) {
       },
     });
 
-    // ⚡ SINCRONIZAÇÃO DE CACHE: Limpa a tag mestre que invalida todas as páginas de uma vez
+    // CACHE
     revalidateTag(`mediastatus-${userId}`);
-    revalidateTag(`schedule`);
+    revalidateTag(`schedule-${userId}`);
     if (session.user.username) {
-        const userTag = session.user.username.toLowerCase();
-        revalidateTag(`user-profile-${userTag}`);
-        revalidateTag(`simple-schedule-${userTag}`);
+        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
     }
 
     return NextResponse.json(mediaStatus);
@@ -71,7 +69,7 @@ export async function POST(request: Request) {
   }
 }
 
-// --- FUNÇÃO PUT (Atualizar Item) ---
+// --- PUT ---
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return new NextResponse("Não autorizado", { status: 401 });
@@ -91,8 +89,9 @@ export async function PUT(request: Request) {
       data: updateData,
     });
 
-    // ⚡ LIMPEZA DE CACHE
+    // CACHE
     revalidateTag(`mediastatus-${userId}`);
+    revalidateTag(`schedule-${userId}`);
     if (session.user.username) {
         revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
     }
@@ -103,7 +102,7 @@ export async function PUT(request: Request) {
   }
 }
 
-// --- FUNÇÃO DELETE (Remover Item) ---
+// --- DELETE ---
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return new NextResponse("Não autorizado", { status: 401 });
@@ -115,9 +114,9 @@ export async function DELETE(request: Request) {
   try {
     await prisma.mediaStatus.delete({ where: { id, userId } });
 
-    // ⚡ LIMPEZA TOTAL
+    // CACHE
     revalidateTag(`mediastatus-${userId}`);
-    revalidateTag(`schedule`);
+    revalidateTag(`schedule-${userId}`);
     if (session.user.username) {
         revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
     }
@@ -128,44 +127,52 @@ export async function DELETE(request: Request) {
   }
 }
 
-// --- FUNÇÃO GET OTIMIZADA ---
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status");
-  
-  // Agora lemos o pageSize da URL (ou usamos 16 como padrão)
-  const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = parseInt(searchParams.get("pageSize") || "16"); 
+// --- GET OTIMIZADO ---
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
 
-  if (!status) return new NextResponse("Status required", { status: 400 });
+  const { searchParams } = new URL(request.url);
+  const userId = session.user.id;
+  
+  const status = searchParams.get("status") || "ALL";
+  const page = parseInt(searchParams.get("page") || "1");
+  const pageSize = parseInt(searchParams.get("pageSize") || "16");
+  const searchTerm = searchParams.get("searchTerm") || ""; 
 
   try {
-    const getCachedList = unstable_cache(
-      async () => {
-        const where = { status: status as any };
+    const getCachedMediaStatus = unstable_cache(
+      async (uId, s, p, ps, st) => {
+        const whereClause: any = { userId: uId };
         
-        // Se pageSize for muito grande (ex: 2000), o Prisma busca tudo
-        const [total, items] = await Promise.all([
-           prisma.mediaStatus.count({ where }),
-           prisma.mediaStatus.findMany({
-             where,
-             include: { media: true },
-             skip: (page - 1) * pageSize, // Pula itens baseado no tamanho da página
-             take: pageSize,              // Pega a quantidade solicitada
-             orderBy: { updatedAt: 'desc' }
-           })
+        if (s !== "ALL") whereClause.status = s;
+        if (st) {
+          whereClause.media = { title: { contains: st, mode: 'insensitive' } };
+        }
+
+        const [items, total] = await Promise.all([
+          prisma.mediaStatus.findMany({
+            where: whereClause,
+            include: { media: true },
+            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+            take: ps,
+            skip: (p - 1) * ps,
+          }),
+          prisma.mediaStatus.count({ where: whereClause }),
         ]);
-        return { total, items };
+
+        return { items, total, totalPages: Math.ceil(total / ps) };
       },
-      // ⚠️ IMPORTANTE: Adicione pageSize na chave do cache
-      // Se não adicionar, ele pode te devolver a lista de 16 itens quando você pedir 1000
-      [`list-${status}-${page}-${pageSize}`], 
-      { revalidate: 3600, tags: ['mediastatus'] }
+      [`mediastatus-${userId}-${status}-${page}-${pageSize}-${searchTerm}`], 
+      {
+        revalidate: 3600,
+        tags: [`mediastatus-${userId}`] // A TAG MÁGICA QUE TUDO DEPENDE
+      }
     );
 
-    const data = await getCachedList();
+    const data = await getCachedMediaStatus(userId, status, page, pageSize, searchTerm);
     return NextResponse.json(data);
   } catch (error) {
-    return new NextResponse("Erro", { status: 500 });
+    return new NextResponse("Erro Interno", { status: 500 });
   }
 }

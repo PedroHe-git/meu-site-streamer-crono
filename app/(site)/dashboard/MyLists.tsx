@@ -1,8 +1,11 @@
+// app/(site)/dashboard/MyLists.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { Media, MediaStatus } from "@prisma/client";
-import { Loader2, Trash2, CheckCircle2, PlayCircle, Plus, MoreVertical, ChevronLeft, ChevronRight } from "lucide-react";
+// Adicionado o ícone 'Calendar' para representar o Semanal
+import { Loader2, Trash2, CheckCircle2, PlayCircle, Plus, MoreVertical, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,13 +51,11 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     setItems([]); 
   }, [activeTab]);
 
-  // 1. Atualiza contadores (VERSÃO OTIMIZADA - BANCO DORME 😴)
+  // 1. Atualiza contadores
   const fetchAllCounts = useCallback(async () => {
     const statuses = ["WATCHING", "TO_WATCH", "WATCHED", "DROPPED"];
     try {
       const promises = statuses.map(s => 
-        // 🛑 REMOVIDO: _t=${Date.now()} e cache: 'no-store'
-        // Agora usamos o cache inteligente da API. O banco só é chamado se o cache expirar.
         fetch(`/api/mediastatus?status=${s}&page=1&pageSize=16`)
         .then(r => r.json())
       );
@@ -70,11 +71,10 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     }
   }, []);
 
-  // 2. Busca Lista Atual (VERSÃO OTIMIZADA)
+  // 2. Busca Lista Atual
   const fetchList = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 🛑 REMOVIDO: cache busting forçado
       const res = await fetch(
         `/api/mediastatus?status=${activeTab}&page=${page}&pageSize=${pageSize}`
       );
@@ -94,6 +94,29 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
     fetchList();
     fetchAllCounts();
   }, [fetchList, fetchAllCounts, dataVersionKey]); 
+
+  // --- NOVA FUNÇÃO: Alternar Semanal ---
+  const handleToggleWeekly = async (id: string, currentIsWeekly: boolean) => {
+    setIsActionLoading(id);
+    try {
+      const res = await fetch(`/api/mediastatus`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, isWeekly: !currentIsWeekly }),
+      });
+      if (!res.ok) throw new Error("Erro ao atualizar");
+      
+      toast({ 
+        title: !currentIsWeekly ? "Marcado como Semanal" : "Removido do Semanal", 
+        description: !currentIsWeekly ? "Este item aparecerá na sua agenda semanal." : "Item removido da agenda semanal."
+      });
+      onDataChanged(); 
+    } catch (error) {
+      toast({ title: "Erro", variant: "destructive" });
+    } finally {
+      setIsActionLoading(null);
+    }
+  };
 
   const handleMove = async (id: string, newStatus: string) => {
     setIsActionLoading(id);
@@ -185,6 +208,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                         </div>
                       )}
                       
+                      {/* OVERLAY DE AÇÕES */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -193,7 +217,17 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="center">
-                            <DropdownMenuLabel>Mover para...</DropdownMenuLabel>
+                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                            
+                            {/* BOTÃO TOGGLE SEMANAL */}
+                            <DropdownMenuItem onClick={() => handleToggleWeekly(item.id, item.isWeekly)}>
+                                <Calendar className="w-4 h-4 mr-2" />
+                                {item.isWeekly ? "Remover do Semanal" : "Marcar como Semanal"}
+                            </DropdownMenuItem>
+
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Mover para...</DropdownMenuLabel>
+                            
                             <DropdownMenuItem onClick={() => handleMove(item.id, "WATCHING")}>
                               <PlayCircle className="w-4 h-4 mr-2" /> Essa Semana
                             </DropdownMenuItem>
@@ -211,11 +245,21 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                         </DropdownMenu>
                       </div>
 
+                      {/* BADGE DE TIPO (Filme/Serie) */}
                       <div className="absolute top-1 right-1 pointer-events-none">
                          <Badge variant="secondary" className="text-[8px] h-4 px-1 bg-black/70 backdrop-blur border-0 text-white font-normal">
-                            {item.media.mediaType === "MOVIE" ? "Filme" : item.media.mediaType === "ANIME" ? "Anime" : "Série"}
+                            {item.media.mediaType === "MOVIE" ? "Filme" : item.media.mediaType === "ANIME" ? "Anime" : item.media.mediaType === "GAME" ? "Jogo" : "Série"}
                          </Badge>
                       </div>
+
+                      {/* NOVO: BADGE DE SEMANAL */}
+                      {item.isWeekly && (
+                        <div className="absolute top-1 left-1 pointer-events-none">
+                            <Badge className="bg-purple-600/90 hover:bg-purple-600 text-[8px] h-4 px-1 border-0 text-white font-bold shadow-sm">
+                                SEMANAL
+                            </Badge>
+                        </div>
+                      )}
                     </div>
 
                     <div className="px-0.5">

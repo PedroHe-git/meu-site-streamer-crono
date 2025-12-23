@@ -49,7 +49,7 @@ export async function GET(request: Request) {
           include: { media: true },
           orderBy: [
             { scheduledAt: 'asc' },
-            { horario: 'asc' } // <-- Adicione isso
+            { horario: 'asc' }
           ],
           take: 20
         });
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
       [`schedule-${userId}-${listType || 'default'}`], 
       {
         revalidate: 3600,
-        tags: [`schedule-${userId}`, 'schedule'] // Tag específica do usuário + tag global
+        tags: [`schedule-${userId}`, 'schedule'] 
       }
     );
 
@@ -94,9 +94,11 @@ export async function POST(request: Request) {
       include: { media: true }
     });
 
-    // LIMPEZA DE CACHE
+    // CACHE UPDATE
     revalidateTag('schedule'); 
     revalidateTag(`schedule-${userId}`);
+    revalidateTag(`mediastatus-${userId}`); // Atualiza lista caso afete status
+
     if (session.user.username) {
        const userTag = session.user.username.toLowerCase();
        revalidateTag(`user-profile-${userTag}`);
@@ -109,7 +111,7 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH: Concluir Item (Correção da Transação e Cache)
+// PATCH: Concluir/Editar Item (Com Lógica Inteligente)
 export async function PATCH(request: Request) {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== UserRole.CREATOR) return new NextResponse("Negado", { status: 403 });
@@ -118,53 +120,59 @@ export async function PATCH(request: Request) {
         const { id, isCompleted, mediaId } = await request.json();
         const userId = session.user.id;
 
-        // Lógica condicional para o status da mídia
-        let mediaUpdateData = {};
-        
-        if (isCompleted) {
-            // Se está CONCLUINDO:
-            mediaUpdateData = { 
-                status: 'WATCHED', 
-                watchedAt: new Date(), 
-                updatedAt: new Date() 
-            };
-        } else {
-            // Se está DESFAZENDO (Voltando para pendente):
-            mediaUpdateData = { 
-                status: 'WATCHING', // Volta para "Assistindo"
-                watchedAt: null,    // Remove a data de conclusão
-                updatedAt: new Date() 
-            };
+        // 1. Atualiza Schedule
+        const updatedSchedule = await prisma.scheduleItem.update({
+            where: { id, userId },
+            data: { isCompleted }
+        });
+
+        // 2. Atualiza MediaStatus (se necessário)
+        if (mediaId) {
+            if (isCompleted) {
+                const mediaStatus = await prisma.mediaStatus.findUnique({
+                    where: { userId_mediaId: { userId, mediaId } },
+                    select: { isWeekly: true }
+                });
+                
+                const pendingCount = await prisma.scheduleItem.count({
+                    where: { userId, mediaId, isCompleted: false }
+                });
+
+                if (!mediaStatus?.isWeekly && pendingCount === 0) {
+                    await prisma.mediaStatus.update({
+                        where: { userId_mediaId: { userId, mediaId } },
+                        data: { status: 'WATCHED', watchedAt: new Date() }
+                    });
+                } else {
+                    // Garante que fique em WATCHING
+                     await prisma.mediaStatus.update({
+                        where: { userId_mediaId: { userId, mediaId } },
+                        data: { status: 'WATCHING' }
+                    });
+                }
+            } else {
+                // Voltou atrás
+                await prisma.mediaStatus.update({
+                    where: { userId_mediaId: { userId, mediaId } },
+                    data: { status: 'WATCHING', watchedAt: null }
+                });
+            }
         }
 
-        const [updatedSchedule] = await prisma.$transaction([
-            prisma.scheduleItem.update({
-                where: { id, userId },
-                data: { isCompleted }
-            }),
-            // Só atualiza a mídia se tiver mediaId
-            ...(mediaId ? [
-                prisma.mediaStatus.update({
-                    where: { userId_mediaId: { userId, mediaId } },
-                    data: mediaUpdateData
-                })
-            ] : [])
-        ]);
-
-        // Revalida tudo para a interface atualizar instantaneamente
+        // --- CACHE UPDATE ---
         revalidateTag('schedule');
         revalidateTag(`schedule-${userId}`);
-        revalidateTag(`mediastatus-${userId}`); 
+        revalidateTag(`mediastatus-${userId}`); // <--- CRUCIAL
 
         if (session.user.username) {
             const userTag = session.user.username.toLowerCase();
             revalidateTag(`user-profile-${userTag}`);
             revalidateTag(`simple-schedule-${userTag}`);
+            revalidateTag(`overlay-${userTag}`);
         }
 
         return NextResponse.json(updatedSchedule);
     } catch (error) {
-        console.error("Erro no PATCH schedule:", error);
         return new NextResponse("Erro", { status: 500 });
     }
 }
@@ -184,10 +192,12 @@ export async function DELETE(request: Request) {
 
       revalidateTag('schedule');
       revalidateTag(`schedule-${session.user.id}`);
-      // Opcional: Se deletar da agenda devia mudar o status da lista? Geralmente não.
+      revalidateTag(`mediastatus-${session.user.id}`); // Previne dados órfãos na lista
       
       if (session.user.username) {
-        revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
+        const userTag = session.user.username.toLowerCase();
+        revalidateTag(`user-profile-${userTag}`);
+        revalidateTag(`simple-schedule-${userTag}`);
       }
   
       return NextResponse.json({ success: true });
