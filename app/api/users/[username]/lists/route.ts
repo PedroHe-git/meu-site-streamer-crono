@@ -11,7 +11,7 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = 12; // Tamanho da paginação pública
+  const pageSize = 15; // Tamanho da paginação pública
 
   const username = params.username;
   if (!username) return new NextResponse("Username missing", { status: 400 });

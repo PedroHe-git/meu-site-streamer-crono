@@ -129,54 +129,43 @@ export async function DELETE(request: Request) {
 }
 
 // --- FUNÇÃO GET OTIMIZADA ---
-export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
-
-  const { searchParams } = new URL(request.url);
-  const userId = session.user.id;
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status");
   
-  // Pegamos as variáveis da URL antes de passá-las para o cache
-  const status = searchParams.get("status") || "ALL";
+  // Agora lemos o pageSize da URL (ou usamos 16 como padrão)
   const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = parseInt(searchParams.get("pageSize") || "16");
-  const searchTerm = searchParams.get("searchTerm") || ""; // 👈 Definição que faltava
+  const pageSize = parseInt(searchParams.get("pageSize") || "16"); 
+
+  if (!status) return new NextResponse("Status required", { status: 400 });
 
   try {
-    const getCachedMediaStatus = unstable_cache(
-      async (uId, s, p, ps, st) => { // Recebe como argumentos para garantir unicidade
-        const whereClause: any = { userId: uId };
+    const getCachedList = unstable_cache(
+      async () => {
+        const where = { status: status as any };
         
-        if (s !== "ALL") whereClause.status = s;
-        if (st) {
-          whereClause.media = { title: { contains: st, mode: 'insensitive' } };
-        }
-
-        const [items, total] = await Promise.all([
-          prisma.mediaStatus.findMany({
-            where: whereClause,
-            include: { media: true },
-            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-            take: ps,
-            skip: (p - 1) * ps,
-          }),
-          prisma.mediaStatus.count({ where: whereClause }),
+        // Se pageSize for muito grande (ex: 2000), o Prisma busca tudo
+        const [total, items] = await Promise.all([
+           prisma.mediaStatus.count({ where }),
+           prisma.mediaStatus.findMany({
+             where,
+             include: { media: true },
+             skip: (page - 1) * pageSize, // Pula itens baseado no tamanho da página
+             take: pageSize,              // Pega a quantidade solicitada
+             orderBy: { updatedAt: 'desc' }
+           })
         ]);
-
-        return { items, total, totalPages: Math.ceil(total / ps) };
+        return { total, items };
       },
-      // 🔑 Chave de cache agora inclui todas as variáveis para evitar "congelamento" em 24 itens
-      [`mediastatus-${userId}-${status}-${page}-${pageSize}-${searchTerm}`], 
-      {
-        revalidate: 3600,
-        tags: [`mediastatus-${userId}`] 
-      }
+      // ⚠️ IMPORTANTE: Adicione pageSize na chave do cache
+      // Se não adicionar, ele pode te devolver a lista de 16 itens quando você pedir 1000
+      [`list-${status}-${page}-${pageSize}`], 
+      { revalidate: 3600, tags: ['mediastatus'] }
     );
 
-    // Passamos os valores para a função cacheada
-    const data = await getCachedMediaStatus(userId, status, page, pageSize, searchTerm);
+    const data = await getCachedList();
     return NextResponse.json(data);
   } catch (error) {
-    return new NextResponse("Erro Interno", { status: 500 });
+    return new NextResponse("Erro", { status: 500 });
   }
 }
