@@ -7,14 +7,11 @@ export async function GET(
   { params }: { params: { username: string } }
 ) {
   const { username } = params;
-  // Normalizar para minúsculas para garantir consistência nas tags
   const normalizedUsername = decodeURIComponent(username).toLowerCase();
 
   try {
-    // Envolvemos a busca pesada no cache
     const getCachedOverlayData = unstable_cache(
       async () => {
-        // 1. Busca o ID do usuário
         const user = await prisma.user.findFirst({
           where: { username: { equals: normalizedUsername, mode: 'insensitive' } },
           select: { id: true }
@@ -22,17 +19,15 @@ export async function GET(
 
         if (!user) return null;
 
-        // 2. Define o intervalo de "HOJE"
         const now = new Date();
         const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(now); endOfDay.setHours(23, 59, 59, 999);
 
-        // 3. Busca itens pendentes
         const todaysItems = await prisma.scheduleItem.findMany({
           where: {
             userId: user.id,
             scheduledAt: { gte: startOfDay, lte: endOfDay },
-            isCompleted: false // Apenas o que falta
+            isCompleted: false 
           },
           include: { media: true },
           orderBy: [{ horario: 'asc' }, { scheduledAt: 'asc' }]
@@ -43,10 +38,10 @@ export async function GET(
 
         return { current: currentItem, next: nextItem };
       },
-      [`overlay-data-${normalizedUsername}`], // Chave única do cache
+      [`overlay-data-${normalizedUsername}`], 
       {
-        revalidate: 86400, // Cache válido por 24 horas (só atualiza se nós mandarmos)
-        tags: [`overlay-${normalizedUsername}`] // A "Etiqueta" mágica para limpar o cache
+        revalidate: 86400, 
+        tags: [`overlay-${normalizedUsername}`] 
       }
     );
 

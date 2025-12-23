@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { PlayCircle, ListVideo } from 'lucide-react';
 import UserListsClient from '@/app/components/UserListsClient';
 import NextImage from "next/image";
+import { unstable_cache } from "next/cache"; // 👈 1. Importação do Cache
 
 export const revalidate = 60; 
 
@@ -13,46 +14,57 @@ export const metadata: Metadata = {
   description: 'Confira o que estamos assistindo, o que já vimos e o que vem por aí.',
 };
 
-async function getCreatorData() {
-  // 1. Busca o criador E as configurações de visibilidade dele
-  const creator = await prisma.user.findFirst({
-    where: { role: UserRole.CREATOR },
-    select: { 
-      id: true, 
-      username: true,
-      // 👇 IMPORTANTE: Buscamos as colunas de configuração do banco
-      showToWatchList: true,
-      showWatchingList: true,
-      showWatchedList: true,
-      showDroppedList: true
-    }
-  });
+// 2. Função Otimizada com Cache (Zero Scale)
+const getCachedCreatorData = unstable_cache(
+  async () => {
+    // Busca o criador E as configurações de visibilidade dele
+    const creator = await prisma.user.findFirst({
+      where: { role: UserRole.CREATOR },
+      select: { 
+        id: true, 
+        username: true,
+        // Configurações de visibilidade
+        showToWatchList: true,
+        showWatchingList: true,
+        showWatchedList: true,
+        showDroppedList: true
+      }
+    });
 
-  if (!creator) return null;
+    if (!creator) return null;
 
-  const counts = await prisma.mediaStatus.groupBy({
-    by: ['status'],
-    where: { userId: creator.id },
-    _count: { status: true },
-  });
+    // Busca as contagens (Count)
+    const counts = await prisma.mediaStatus.groupBy({
+      by: ['status'],
+      where: { userId: creator.id },
+      _count: { status: true },
+    });
 
-  const listCounts = { TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 };
-  counts.forEach((c) => {
-    if (c.status in listCounts) listCounts[c.status as keyof typeof listCounts] = c._count.status;
-  });
+    // Organiza as contagens
+    const listCounts = { TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 };
+    counts.forEach((c) => {
+      if (c.status in listCounts) listCounts[c.status as keyof typeof listCounts] = c._count.status;
+    });
 
-  return { creator, listCounts };
-}
+    return { creator, listCounts };
+  },
+  ['history-page-data'], // Chave única do cache
+  {
+    revalidate: 3600, // 👈 Atualiza a cada 1 hora (Economiza muito banco)
+    tags: ['history-stats', 'user-profile'] // Tags para invalidar se necessário
+  }
+);
 
 export default async function HistoricoPage() {
-  const data = await getCreatorData();
+  // 3. Usa a função cacheada
+  const data = await getCachedCreatorData();
 
   if (!data) return <div className="min-h-screen flex items-center justify-center">Perfil não encontrado.</div>;
 
   const { creator, listCounts } = data;
   const VOD_CHANNEL_URL = "https://cinefy.gg/mahmoojen"; 
 
-  // Calcula o total de itens (somente das listas que estão visíveis ou com itens)
+  // Calcula o total de itens
   const totalItems = listCounts.TO_WATCH + listCounts.WATCHING + listCounts.WATCHED + listCounts.DROPPED;
 
   return (
@@ -86,8 +98,7 @@ export default async function HistoricoPage() {
               username={creator.username}
               isOwner={false}
               counts={listCounts}
-              // Aqui definimos a visibilidade. 
-              // Se vier null do banco, usamos 'true' para mostrar por padrão.
+              // Se vier null do banco, usamos 'true' por padrão
               showToWatchList={creator.showToWatchList ?? true} 
               showWatchingList={creator.showWatchingList ?? true}
               showWatchedList={creator.showWatchedList ?? true} 

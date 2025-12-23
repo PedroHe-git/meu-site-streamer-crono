@@ -211,7 +211,7 @@ export default function DashboardPage() {
       setIsUpdating(false);
       setIsLoading(false); // 👇 Isso garante que o loading saia da tela
     }
-  }, [dataVersionKey]); // Dependências do useCallback
+  }, []); // Dependências do useCallback
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -220,7 +220,7 @@ export default function DashboardPage() {
         setIsLoading(false); 
         if (typeof window !== 'undefined') redirect("/auth/signin"); 
     }
-  }, [status, fetchSharedData]); // 👈 CORREÇÃO: fetchSharedData adicionado
+  }, [status, fetchSharedData, dataVersionKey]); // 👈 CORREÇÃO: fetchSharedData adicionado
 
   useEffect(() => {
     if (status === "authenticated" && dataVersionKey > 0) {

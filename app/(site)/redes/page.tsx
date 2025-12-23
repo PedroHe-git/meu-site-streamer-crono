@@ -1,18 +1,34 @@
 import { prisma } from "@/lib/prisma";
-import { getSocialItems } from "@/lib/data";
+import { getSocialItems } from "@/lib/data"; // Supondo que isso busca no banco
 import SocialCarousel from "@/app/components/SocialCarousel";
+import { unstable_cache } from "next/cache"; // 👈 Importar cache
 
 export const revalidate = 60; 
 
+// Função cacheada que busca TUDO de uma vez e segura por 1 hora
+const getCachedSocialPageData = unstable_cache(
+  async () => {
+    // Busca tudo em paralelo para ser mais rápido
+    const [rawYtItems, rawInstaItems, creator] = await Promise.all([
+      getSocialItems("YOUTUBE"),
+      getSocialItems("INSTAGRAM"),
+      prisma.user.findFirst({ where: { role: "CREATOR" } })
+    ]);
+
+    return { rawYtItems, rawInstaItems, creator };
+  },
+  ['social-page-full-data'], // Chave única
+  {
+    revalidate: 3600, // 👈 Cache de 1 hora. O banco dorme o resto do tempo.
+    tags: ['social', 'user-profile'] // Tags para invalidar se postar algo novo
+  }
+);
+
 export default async function SocialPage() {
-  // 1. Busca os itens de mídia
-  const rawYtItems = await getSocialItems("YOUTUBE");
-  const rawInstaItems = await getSocialItems("INSTAGRAM");
+  // Usa a versão cacheada
+  const { rawYtItems, rawInstaItems, creator } = await getCachedSocialPageData();
 
-  // 2. Busca o Criador para pegar os links dos canais
-  const creator = await prisma.user.findFirst({ where: { role: "CREATOR" } });
-
-  // 3. Formata os dados
+  // 3. Formata os dados (processamento leve, pode ficar fora do cache)
   const ytItems = rawYtItems.map((item: any) => ({
     id: item.id,
     title: item.title || "Sem título",
@@ -29,13 +45,12 @@ export default async function SocialPage() {
     subtitle: item.subtitle || "Ver no Instagram",
   }));
 
-  // 4. Prepara a lista de canais (Tipada para o componente)
   const youtubeChannels = [
     { label: "Mah", url: creator?.youtubeMainUrl, type: "MAIN" },
-    { label: "Cinemah", url: creator?.youtubeThirdUrl, type: "LIVES" },
-    { label: "Mahnimes", url: creator?.youtubeSecondUrl, type: "CLIPS" },
+    { label: "Cinemah", url: creator?.youtubeSecondUrl, type: "LIVES" },
+    { label: "Mahnimes", url: creator?.youtubeThirdUrl, type: "CLIPS" },
     { label: "Mah Cortes", url: creator?.youtubeFourthUrl, type: "EXTRAS" },
-  ].filter(c => c.url) as any[]; // Remove os nulos
+  ].filter(c => c.url) as any[];
 
   return (
     <main className="min-h-screen bg-[#050505] text-white pt-24 pb-10 flex flex-col relative overflow-hidden">
@@ -54,7 +69,6 @@ export default async function SocialPage() {
           </p>
         </div>
 
-        {/* Componente Dividido */}
         <SocialCarousel 
           ytItems={ytItems} 
           instaItems={instaItems} 
