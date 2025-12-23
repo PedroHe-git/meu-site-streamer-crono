@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility, MediaType } from "@prisma/client";
-import Image from "next/image"; // 👈 Importado
+import Image from "next/image"; 
 import { Input } from "@/components/ui/input";
 
 import ReactCrop, {
@@ -147,6 +147,38 @@ export default function DashboardPage() {
   const [statMedia, setStatMedia] = useState("");
   const [statRegion, setStatRegion] = useState("");
 
+  // --- MODO HIBERNAÇÃO (ZERO SCALE) ---
+  const [isHibernating, setIsHibernating] = useState(false);
+  const hibernationTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // 10 minutos de inatividade = Hibernação
+    const HIBERNATION_TIME = 10 * 60 * 1000; 
+
+    const resetHibernationTimer = () => {
+      if (isHibernating) return; // Se já dormiu, só acorda com clique
+
+      if (hibernationTimer.current) clearTimeout(hibernationTimer.current);
+
+      hibernationTimer.current = setTimeout(() => {
+        console.log("Inatividade detectada. Entrando em hibernação...");
+        setIsHibernating(true);
+      }, HIBERNATION_TIME);
+    };
+
+    const events = ["mousedown", "keydown", "scroll", "mousemove", "touchstart"];
+    
+    events.forEach(event => window.addEventListener(event, resetHibernationTimer));
+    
+    // Inicia o timer
+    resetHibernationTimer();
+
+    return () => {
+      if (hibernationTimer.current) clearTimeout(hibernationTimer.current);
+      events.forEach(event => window.removeEventListener(event, resetHibernationTimer));
+    };
+  }, [isHibernating]);
+
   // Carregar dados da Sessão
   useEffect(() => {
     if (session?.user) {
@@ -177,10 +209,11 @@ export default function DashboardPage() {
     }
   }, [session?.user, selectedFile, selectedBannerFile]);
 
+  // Função Principal de Dados (Blindada com Hibernação e Cache)
   const fetchSharedData = useCallback(async () => {
-    // 👇 REMOVIDO A LINHA QUE TRAVAVA O LOADING
-    // if (isLoading && dataVersionKey === 0) return; 
-    
+    // 🛑 SE TIVER HIBERNANDO, NÃO FAZ NADA (ZERO SCALE)
+    if (isHibernating) return;
+
     setIsUpdating(true);
     try {
       const [resWatching, resSchedule] = await Promise.all([
@@ -209,10 +242,11 @@ export default function DashboardPage() {
       setInitialScheduleItems([]);
     } finally {
       setIsUpdating(false);
-      setIsLoading(false); // 👇 Isso garante que o loading saia da tela
+      setIsLoading(false);
     }
-  }, []); // Dependências do useCallback
+  }, [isHibernating]); // 👈 AVISO CORRIGIDO: Dependência apenas do isHibernating
 
+  // Efeito para disparar a busca (Monitora Auth e DataVersion)
   useEffect(() => {
     if (status === "authenticated") {
         fetchSharedData();
@@ -220,13 +254,7 @@ export default function DashboardPage() {
         setIsLoading(false); 
         if (typeof window !== 'undefined') redirect("/auth/signin"); 
     }
-  }, [status, fetchSharedData, dataVersionKey]); // 👈 CORREÇÃO: fetchSharedData adicionado
-
-  useEffect(() => {
-    if (status === "authenticated" && dataVersionKey > 0) {
-        fetchSharedData();
-    }
-  }, [dataVersionKey, status, fetchSharedData]); // 👈 CORREÇÃO: fetchSharedData adicionado
+  }, [status, fetchSharedData, dataVersionKey]); // 👈 dataVersionKey fica AQUI para disparar o refresh
 
   // --- FUNÇÕES DE MAPEAMENTO ---
   const mapDataToMediaItems = (dataItems: MediaStatusWithMedia[]): MappedMediaItem[] => {
@@ -254,7 +282,9 @@ export default function DashboardPage() {
 
   const mediaItems = useMemo(() => mapDataToMediaItems(initialMediaItems), [initialMediaItems]);
   const scheduleItems = useMemo(() => mapDataToScheduleItems(initialScheduleItems), [initialScheduleItems]);
+  
   const handleDataChanged = useCallback(() => { setDataVersionKey(prevKey => prevKey + 1); }, []);
+  
   const handleAddSchedule = (newSchedule: MappedScheduleItem) => { setInitialScheduleItems((prev) => [...prev, newSchedule]); handleDataChanged(); };
   const handleRemoveSchedule = (id: string) => { setInitialScheduleItems((prev) => prev.filter((item) => item.id !== id)); handleDataChanged(); };
   const handleCompleteSchedule = (id: string) => { setInitialScheduleItems((prev) => prev.map((item) => (item.id === id ? { ...item, isCompleted: true } : item))); handleDataChanged(); };
@@ -321,6 +351,28 @@ export default function DashboardPage() {
   const firstName = (displayName || session?.user?.name)?.split(' ')[0] || session?.user?.username || "";
   const fallbackLetter = (session?.user?.name || session?.user?.username || "U").charAt(0).toUpperCase();
 
+  // Se estiver hibernando, mostra a tela preta e BLOQUEIA a UI normal
+  if (isHibernating) {
+    return (
+      <div 
+        className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center text-white cursor-pointer"
+        onClick={() => {
+          setIsHibernating(false); // Acorda ao clicar
+          fetchSharedData(); // Atualiza os dados imediatamente
+        }}
+      >
+        <div className="text-center space-y-4 animate-pulse">
+          <div className="w-24 h-24 bg-purple-900/50 rounded-full flex items-center justify-center mx-auto border-4 border-purple-500">
+            <span className="text-4xl">💤</span>
+          </div>
+          <h1 className="text-3xl font-bold">Modo de Economia Ativo</h1>
+          <p className="text-gray-400">O painel está dormindo para economizar o Banco de Dados.</p>
+          <p className="text-sm bg-white/10 py-2 px-4 rounded-full inline-block">Clique em qualquer lugar para acordar</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading || (status === "authenticated" && isLoading)) {
     return (<div className="flex justify-center items-center min-h-[calc(100vh-80px)]"> <Loader2 className="h-12 w-12 animate-spin text-primary" /> </div>);
   }
@@ -336,7 +388,6 @@ export default function DashboardPage() {
           <DialogHeader><DialogTitle>Cortar Avatar (1:1)</DialogTitle></DialogHeader> 
           {imageSrc && (
             <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(c) => setCompletedCrop(c)} aspect={avatarAspect} circularCrop > 
-               {/* 👇 Substituído <img> por <Image> unoptimized */}
                <Image 
                  ref={imgRef} 
                  alt="Cortar" 
@@ -345,7 +396,7 @@ export default function DashboardPage() {
                  height={500}
                  onLoad={onImageLoad} 
                  style={{ maxHeight: '70vh', width: 'auto', height: 'auto' }} 
-                 unoptimized={true}
+                 unoptimized={true} // 👈 Proteção Vercel
                /> 
             </ReactCrop>
           )} 
@@ -358,7 +409,6 @@ export default function DashboardPage() {
           <DialogHeader><DialogTitle>Cortar Banner (16:9)</DialogTitle></DialogHeader> 
           {bannerImageSrc && (
             <ReactCrop crop={bannerCrop} onChange={(_, percentCrop) => setBannerCrop(percentCrop)} onComplete={(c) => setCompletedBannerCrop(c)} aspect={bannerAspect} > 
-               {/* 👇 Substituído <img> por <Image> unoptimized */}
                <Image 
                  ref={bannerImgRef} 
                  alt="Cortar" 
@@ -367,7 +417,7 @@ export default function DashboardPage() {
                  height={450}
                  onLoad={onBannerImageLoad} 
                  style={{ maxHeight: '70vh', width: '100%', height: 'auto' }} 
-                 unoptimized={true}
+                 unoptimized={true} // 👈 Proteção Vercel
                /> 
             </ReactCrop>
           )} 
