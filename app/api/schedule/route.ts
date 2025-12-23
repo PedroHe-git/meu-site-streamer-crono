@@ -9,38 +9,52 @@ export const runtime = 'nodejs';
 
 // GET: Permite que o usuário veja a PRÓPRIA agenda (Seguro, pois filtra por userId)
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return new NextResponse("Não autorizado", { status: 401 });
-
   const { searchParams } = new URL(request.url);
-  const listType = searchParams.get("list"); // 'pending' ou 'completed'
-  const userId = session.user.id;
+  const listType = searchParams.get("list"); // 'pending' ou 'history'
 
   try {
+    // ⚡ CACHE DA AGENDA
     const getCachedSchedule = unstable_cache(
-        async () => {
-            return await prisma.scheduleItem.findMany({
-                where: {
-                  userId: userId,
-                  ...(listType === 'pending' ? { isCompleted: false } : {}),
-                  ...(listType === 'completed' ? { isCompleted: true } : {}),
-                },
-                include: { media: true },
-                orderBy: { scheduledAt: 'asc' },
-              });
-        },
-        [`schedule-${userId}-${listType || 'all'}`],
-        {
-            revalidate: 3600,
-            tags: [`dashboard-schedule-${userId}`] 
+      async () => {
+        // Define "hoje" (zerando horas para consistência do cache)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let whereClause: any = {};
+
+        if (listType === 'pending') {
+          whereClause = {
+            scheduledAt: { gte: today }, // 👈 O culpado do log "scheduledAt >= $1"
+            isCompleted: false
+          };
+        } else if (listType === 'history') {
+          whereClause = {
+             // Lógica de histórico...
+          };
+        } else {
+           // Padrão: Próximos itens
+           whereClause = { scheduledAt: { gte: today } };
         }
+
+        return await prisma.scheduleItem.findMany({
+          where: whereClause,
+          include: { media: true },
+          orderBy: { scheduledAt: 'asc' },
+          take: 20
+        });
+      },
+      [`schedule-${listType || 'default'}`], // Chave única
+      {
+        revalidate: 3600, // 1 hora. Suficiente para agenda.
+        tags: ['schedule'] // Use revalidateTag('schedule') quando adicionar itens novos
+      }
     );
 
-    const scheduleItems = await getCachedSchedule();
-    return NextResponse.json(scheduleItems);
+    const schedule = await getCachedSchedule();
+    return NextResponse.json(schedule);
+
   } catch (error) {
-    console.error("Erro ao buscar agendamentos:", error);
-    return new NextResponse("Erro Interno", { status: 500 });
+    return new NextResponse("Erro na Agenda", { status: 500 });
   }
 }
 

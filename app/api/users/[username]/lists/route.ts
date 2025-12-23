@@ -1,80 +1,63 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { unstable_cache } from "next/cache";
 
 export async function GET(
   request: Request,
   { params }: { params: { username: string } }
 ) {
   const { searchParams } = new URL(request.url);
-  
-  // Parâmetros da URL
   const status = searchParams.get("status");
   const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "12");
-  const search = searchParams.get("search") || ""; // <--- NOVO: Captura a busca
+  const pageSize = 12; // Mesmo tamanho da paginação do front
 
-  // Validação básica
-  if (!status || !["TO_WATCH", "WATCHING", "WATCHED", "DROPPED"].includes(status)) {
-    return NextResponse.json({ error: "Status inválido" }, { status: 400 });
-  }
+  const username = params.username;
+  if (!username) return new NextResponse("Username missing", { status: 400 });
 
   try {
-    // 1. Achar o ID do usuário pelo username
-    const user = await prisma.user.findFirst({
-      where: { 
-        username: {
-          equals: params.username,
-          mode: 'insensitive'
-        }
+    const getCachedList = unstable_cache(
+      async () => {
+        const user = await prisma.user.findFirst({
+          where: { username: { equals: username, mode: 'insensitive' } },
+          select: { id: true }
+        });
+
+        if (!user) return null;
+
+        // Se status for "ALL" ou vazio, pegamos tudo (ou filtre conforme sua lógica)
+        const whereClause = {
+            userId: user.id,
+            ...(status && status !== "ALL" ? { status: status as any } : {})
+        };
+
+        const [items, total] = await Promise.all([
+          prisma.mediaStatus.findMany({
+            where: whereClause,
+            include: { media: true },
+            orderBy: { updatedAt: "desc" }, // Ou watchedAt
+            take: pageSize,
+            skip: (page - 1) * pageSize,
+          }),
+          prisma.mediaStatus.count({ where: whereClause })
+        ]);
+
+        return { items, total, totalPages: Math.ceil(total / pageSize) };
       },
-    });
+      [`lists-${username}-${status}-${page}`], // Chave única por página/status
+      {
+        revalidate: 3600, // Cache de 1 hora
+        tags: [`list-${username}`]
+      }
+    );
 
-    if (!user) {
-      return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
-    }
+    const data = await getCachedList();
 
-    // 2. Montar o filtro (Where)
-    const whereCondition = {
-      userId: user.id,
-      status: status as any,
-      // Se tiver busca, filtra pelo título da mídia
-      ...(search ? {
-        media: {
-          title: {
-            contains: search,
-            mode: 'insensitive' as const, // Ignora maiúsculas/minúsculas
-          }
-        }
-      } : {})
-    };
+    if (!data) return new NextResponse("User not found", { status: 404 });
 
-    // 3. Contar total de itens (para paginação)
-    const totalItems = await prisma.mediaStatus.count({
-      where: whereCondition
-    });
-
-    // 4. Buscar os itens paginados
-    const items = await prisma.mediaStatus.findMany({
-      where: whereCondition,
-      include: {
-        media: true, // Inclui dados do filme/jogo
-      },
-      orderBy: {
-        // Ordena por data de conclusão (se tiver) ou atualização
-        watchedAt: 'desc', 
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
-
-    return NextResponse.json({
-      items,
-      totalPages: Math.ceil(totalItems / limit),
-      currentPage: page,
-    });
+    return NextResponse.json(data);
 
   } catch (error) {
     console.error("Erro na API de listas:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return new NextResponse("Erro Interno", { status: 500 });
   }
 }

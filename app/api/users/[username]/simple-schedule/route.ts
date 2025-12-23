@@ -1,49 +1,61 @@
-// app/api/users/[username]/simple-schedule/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 
 export const runtime = 'nodejs';
-export const revalidate = 0;
+// REMOVIDO: export const revalidate = 0; (Isso matava o banco)
 
-// Esta API é pública, não precisa de sessão
 export async function GET(
   request: Request,
   { params }: { params: { username: string } }
 ) {
   const { username } = params;
+  // Normalizar para garantir que o cache funcione independente de maiúsculas/minúsculas
+  const normalizedUsername = decodeURIComponent(username).toLowerCase();
 
   try {
-    const user = await prisma.user.findFirst({
-      where: { 
-        username: { 
-          equals: decodeURIComponent(username), 
-          mode: 'insensitive' 
-        } 
-      },
-      select: { id: true } // Apenas precisamos do ID
-    });
+    // ⚡ CACHE NESTA FUNÇÃO
+    const getCachedSimpleSchedule = unstable_cache(
+      async () => {
+        // 1. Busca o ID do usuário
+        const user = await prisma.user.findFirst({
+          where: { 
+            username: { 
+              equals: normalizedUsername, 
+              mode: 'insensitive' 
+            } 
+          },
+          select: { id: true } 
+        });
 
-    if (!user) {
+        if (!user) return null;
+
+        // 2. Busca os itens (Lógica mantida)
+        return await prisma.scheduleItem.findMany({
+          where: {
+            userId: user.id,
+          },
+          include: {
+            media: true, 
+          },
+          orderBy: {
+            scheduledAt: 'asc', 
+          },
+          take: 25, 
+        });
+      },
+      [`simple-schedule-${normalizedUsername}`], // Chave única
+      {
+        revalidate: 3600, // 1 Hora de cache
+        tags: [`schedule-${normalizedUsername}`, 'schedule'] // Tags para invalidar
+      }
+    );
+
+    const scheduleItems = await getCachedSimpleSchedule();
+
+    if (!scheduleItems) {
       return new NextResponse("Utilizador não encontrado", { status: 404 });
     }
-
-    // --- [INÍCIO DA CORREÇÃO] ---
-    // 1. Removemos o filtro de data (gte: new Date()) para mostrar todos
-    // 2. Adicionamos 'include: { media: true }'
-    const scheduleItems = await prisma.scheduleItem.findMany({
-      where: {
-        userId: user.id,
-      },
-      include: {
-        media: true, // Inclui os dados da mídia (title, posterPath, etc.)
-      },
-      orderBy: {
-        scheduledAt: 'asc', // Ordena por data (mais antigos primeiro)
-      },
-      take: 25, // Limitamos aos 25 mais recentes para não sobrecarregar
-    });
-    // --- [FIM DA CORREÇÃO] ---
 
     return NextResponse.json(scheduleItems);
 

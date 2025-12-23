@@ -207,66 +207,67 @@ export async function DELETE(request: Request) {
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   
+  // Se não tiver sessão, nem tenta ir ao banco (Segurança + Economia)
   if (!session?.user?.id) {
-    return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
+    return new NextResponse("Unauthorized", { status: 401 });
   }
-  
-  const userId = session.user.id;
+
   const { searchParams } = new URL(request.url);
-  
-  // Tipagem do status
   const status = searchParams.get("status");
-  const page = parseInt(searchParams.get("page") || "1", 10);
-  const pageSize = parseInt(searchParams.get("pageSize") || "10", 10); // Padrão ajustado para 10 conforme solicitado
+  const page = parseInt(searchParams.get("page") || "1");
+  const pageSize = parseInt(searchParams.get("pageSize") || "50");
   const searchTerm = searchParams.get("searchTerm") || "";
 
-  if (!status) return new NextResponse("Status não fornecido", { status: 400 });
-
   try {
-    // Chave única para o cache baseada nos filtros
-    // Se mudar a página, o status ou o termo de busca, a chave muda e busca novo dado
-    const cacheKey = `list-${userId}-${status}-${page}-${pageSize}-${searchTerm}`;
+    const userId = session.user.id;
 
-    const getCachedList = unstable_cache(
+    // ⚡ CACHE INTELIGENTE
+    const getCachedMediaStatus = unstable_cache(
       async () => {
-        // Filtro direto no banco de dados
-        const whereClause: Prisma.MediaStatusWhereInput = {
-            userId: userId,
-            status: status as any, // Cast para o enum do Prisma
-            media: {
-                title: searchTerm ? { contains: searchTerm, mode: 'insensitive' } : undefined
-            }
+        const whereClause: any = {
+          userId: userId,
         };
 
-        // Executa Contagem e Busca em paralelo para performance
-        const [totalCount, items] = await Promise.all([
-            prisma.mediaStatus.count({ where: whereClause }),
-            prisma.mediaStatus.findMany({
-                where: whereClause,
-                take: pageSize,
-                skip: (page - 1) * pageSize,
-                include: { media: true },
-                // ORDEM: Mais recentes primeiro (melhor UX para Dashboard)
-                orderBy: { updatedAt: 'desc' } 
-            })
+        if (status && status !== "ALL") {
+          whereClause.status = status;
+        }
+
+        if (searchTerm) {
+          whereClause.media = {
+            title: {
+              contains: searchTerm,
+              mode: 'insensitive', // 👈 O culpado do ILIKE nos logs
+            },
+          };
+        }
+
+        const [items, total] = await Promise.all([
+          prisma.mediaStatus.findMany({
+            where: whereClause,
+            include: { media: true },
+            orderBy: { updatedAt: "desc" },
+            take: pageSize,
+            skip: (page - 1) * pageSize,
+          }),
+          prisma.mediaStatus.count({ where: whereClause }),
         ]);
 
-        // Retorna 'total' (não 'totalCount') para bater com o frontend MyLists
-        return { items, total: totalCount, page, pageSize };
+        return { items, total, totalPages: Math.ceil(total / pageSize) };
       },
-      [cacheKey], 
+      // Chave única para cada combinação de busca
+      [`mediastatus-${userId}-${status}-${page}-${searchTerm}`], 
       {
-        revalidate: 3600, // Cache de 1 hora (mas é invalidado pelas tags acima)
-        tags: [`dashboard-lists-${userId}`] 
+        revalidate: 3600, // 1 hora de cache (O banco dorme!)
+        tags: [`mediastatus-${userId}`] // Tag para limpar cache ao editar
       }
     );
 
-    const data = await getCachedList();
-
-    return NextResponse.json(data);
+    const data = await getCachedMediaStatus();
     
+    return NextResponse.json(data);
+
   } catch (error) {
-    console.error("[MEDIASTATUS_GET]", error);
-    return new NextResponse(JSON.stringify({ error: "Erro Interno" }), { status: 500 });
+    console.error("Erro ao buscar mediastatus:", error);
+    return new NextResponse("Erro Interno", { status: 500 });
   }
 }
