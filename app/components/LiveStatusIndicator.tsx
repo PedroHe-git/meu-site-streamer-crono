@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Tv } from "lucide-react";
+// 👇 1. Importamos o contexto para saber se o site está dormindo
 import { useHibernation } from "@/app/context/HibernationContext";
 
 interface Props {
@@ -11,7 +12,9 @@ interface Props {
 }
 
 export default function LiveStatusIndicator({ twitchChannel, className }: Props) {
+  // 👇 2. Pegamos o estado de hibernação
   const { isHibernating } = useHibernation();
+  
   const [isLive, setIsLive] = useState(false);
   const [liveTitle, setLiveTitle] = useState<string | null>(null);
   const [gameName, setGameName] = useState<string | null>(null);
@@ -23,11 +26,14 @@ export default function LiveStatusIndicator({ twitchChannel, className }: Props)
   const channelUrl = `https://twitch.tv/${cleanChannel}`;
 
   useEffect(() => {
-    // 🛑 SE ESTIVER HIBERNANDO, NÃO FAZ NADA!
+    // 🛑 3. BLOQUEIO DE SEGURANÇA
+    // Se o site estiver hibernando, cancelamos tudo.
+    // O 'return' aqui impede que o fetch seja criado ou que o intervalo inicie.
     if (isHibernating) return; 
 
     const fetchStatus = async () => {
       if (!cleanChannel) return;
+
       try {
         const res = await fetch(`/api/twitch/status?channel=${cleanChannel}`);
         if (res.ok) {
@@ -39,20 +45,23 @@ export default function LiveStatusIndicator({ twitchChannel, className }: Props)
           }
         }
       } catch (error) {
-        console.error("Erro live:", error);
+        console.error("Erro ao verificar live:", error);
         setIsLive(false);
       }
     };
 
-    fetchStatus(); // Busca inicial
-    
-    // Intervalo de 15 minutos
+    // Executa a primeira vez
+    fetchStatus();
+
+    // Configura o intervalo de 15 minutos
     const interval = setInterval(fetchStatus, 1000 * 60 * 15);
     
+    // Limpa o intervalo quando o componente desmonta OU quando entra em hibernação
     return () => clearInterval(interval);
-  }, [cleanChannel, isHibernating]);
+    
+  }, [cleanChannel, isHibernating]); // 👈 4. Adicionamos isHibernating nas dependências
 
-  // Constrói o texto do Tooltip
+  // ... (O resto do return/HTML continua igual)
   const tooltipText = isLive 
     ? `AO VIVO: ${liveTitle || "Sem título"}${gameName ? ` - Jogando ${gameName}` : ""}`
     : `Canal: ${cleanChannel}`;
@@ -69,7 +78,7 @@ export default function LiveStatusIndicator({ twitchChannel, className }: Props)
           : "bg-[#9146FF] text-white hover:bg-[#772ce8] hover:shadow-[#9146FF]/50",
         className 
       )}
-      title={tooltipText} // Tooltip nativo simples
+      title={tooltipText}
     >
       {isLive ? (
         <>
@@ -79,11 +88,9 @@ export default function LiveStatusIndicator({ twitchChannel, className }: Props)
             </span>
             <span>LIVE</span>
             
-            {/* Tooltip Customizado (Opcional - aparece no hover) */}
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-black/90 text-white text-[10px] p-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none truncate hidden md:block">
                 <p className="font-bold truncate">{liveTitle}</p>
                 {gameName && <p className="text-gray-300 truncate">{gameName}</p>}
-                {/* Setinha do tooltip */}
                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black/90"></div>
             </div>
         </>
