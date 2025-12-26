@@ -47,6 +47,13 @@ const securityHeaders = [
 const nextConfig = {
   images: {
     remotePatterns: [
+
+      {
+        protocol: 'https',
+        hostname: 'static-cdn.jtvnw.net', // CDN de imagens da Twitch
+        pathname: '**',
+      },
+
       {
         protocol: "https",
         hostname: "image.tmdb.org",
@@ -115,8 +122,8 @@ const nextConfig = {
         headers: [
           {
             key: "Access-Control-Allow-Origin",
-            value: process.env.NODE_ENV === "development" 
-              ? "http://localhost:3000" 
+            value: process.env.NODE_ENV === "development"
+              ? "http://localhost:3000"
               : PROD_URL,
           },
           {
@@ -130,6 +137,14 @@ const nextConfig = {
         ],
       },
     ];
+  },
+
+  webpack: (config) => {
+    config.externals.push({
+      'utf-8-validate': 'commonjs utf-8-validate',
+      'bufferutil': 'commonjs bufferutil',
+    })
+    return config
   },
 };
 

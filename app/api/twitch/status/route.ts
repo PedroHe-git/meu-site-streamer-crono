@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
-export const dynamic = 'force-dynamic';
+// 1. OTIMIZAÇÃO CRÍTICA:
+// Define que o cache desta rota dura 60 segundos.
+// Mesmo que 1000 pessoas acessem, a Vercel só executa a função 1 vez por minuto.
 export const revalidate = 60;
 
 export async function GET(request: Request) {
@@ -20,20 +22,25 @@ export async function GET(request: Request) {
       return NextResponse.json({ isLive: false });
     }
 
-    // 1. Obter Token
+    // 2. Obter Token (Com Cache de 1 hora)
+    // Usamos 'next: { revalidate: 3600 }' para reutilizar o token e não pedir a toda hora
     const tokenRes = await fetch(
       `https://id.twitch.tv/oauth2/token?client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`,
-      { method: "POST", cache: 'no-store' }
+      {
+        method: "POST",
+        next: { revalidate: 3600 }
+      }
     );
 
     if (!tokenRes.ok) {
+      console.error("[TWITCH_API] Erro ao pegar token");
       return NextResponse.json({ isLive: false });
     }
 
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
 
-    // 2. Consultar Status
+    // 3. Consultar Status do Canal (Com Cache de 60 segundos)
     const cleanChannel = channel.trim().toLowerCase();
 
     const streamRes = await fetch(
@@ -43,7 +50,8 @@ export async function GET(request: Request) {
           "Client-ID": clientId,
           "Authorization": `Bearer ${accessToken}`,
         },
-        cache: 'no-store'
+        // Garante que o fetch da Twitch também obedeça o cache de 60s
+        next: { revalidate: 60 }
       }
     );
 
@@ -52,19 +60,34 @@ export async function GET(request: Request) {
     }
 
     const streamData = await streamRes.json();
-
-    const stream = streamData.data?.[0];
+    const stream = streamData.data?.[0]; // Pega o primeiro item do array
     const isLive = stream?.type === 'live';
     
-    // Extraímos o título da live se estiver online
-    const liveTitle = isLive ? stream.title : null;
-    // Extraímos a categoria (jogo) também, se quiser usar
-    const gameName = isLive ? stream.game_name : null;
+    // Se não estiver ao vivo, retornamos imediatamente
+    if (!isLive) {
+       return NextResponse.json({ isLive: false });
+    }
+
+    // 4. Processar Thumbnail
+    // Substitui os placeholders {width}x{height} pelo tamanho real (Full HD)
+    let thumbnailUrlBase = stream.thumbnail_url
+      ? stream.thumbnail_url.replace("{width}", "1920").replace("{height}", "1080")
+      : null;
+
+    // Adiciona timestamp para forçar o navegador a mostrar a imagem atualizada (evita cache visual antigo)
+    // Como a rota roda a cada 60s, o timestamp mudará a cada minuto, atualizando a imagem.
+    let finalThumbnailUrl = thumbnailUrlBase;
+    if (thumbnailUrlBase) {
+        const timestamp = new Date().getTime();
+        finalThumbnailUrl = `${thumbnailUrlBase}?t=${timestamp}`;
+    }
 
     return NextResponse.json({ 
-      isLive, 
-      liveTitle, 
-      gameName 
+      isLive: true, 
+      liveTitle: stream.title, 
+      gameName: stream.game_name,
+      viewerCount: stream.viewer_count,
+      thumbnailUrl: finalThumbnailUrl 
     });
 
   } catch (error) {

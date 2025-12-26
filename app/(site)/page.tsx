@@ -120,7 +120,7 @@ export default async function HomePage() {
                 
                 <div className="relative aspect-video rounded-2xl bg-black border border-white/10 shadow-2xl overflow-hidden">
                   {isLive ? (
-                    <TwitchPlayer username={TWITCH_USERNAME} isLive={true} />
+                    <TwitchPlayer channel="mahmoojen" />
                   ) : (
                     // Estado Offline
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-[url('/images/banner-offline.jpg')] bg-cover bg-center">
@@ -141,17 +141,7 @@ export default async function HomePage() {
                   )}
                 </div>
 
-                {isLive && (
-                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-[90%] bg-gray-900/90 backdrop-blur-md border border-white/10 rounded-xl p-4 flex items-center justify-between shadow-xl z-20">
-                    <div className="flex flex-col">
-                      <span className="text-xs text-purple-400 font-bold uppercase tracking-wider">{game_name || "Ao Vivo"}</span>
-                      <span className="text-sm font-medium text-white line-clamp-1">{title || `Stream da ${creator?.name || "MahMoojen"}`}</span>
-                    </div>
-                    <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/20 flex gap-2 shrink-0">
-                       <Radio className="w-3 h-3" /> {viewer_count || 0}
-                    </Badge>
-                  </div>
-                )}
+               
               </div>
             </div>
           </div>
