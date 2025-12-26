@@ -136,6 +136,7 @@ export default function ScheduleSlider({ items }: ScheduleSliderProps) {
                                   fill
                                   sizes="120px"
                                   className="object-cover"
+                                  unoptimized={true}
                                 />
                               ) : (
                                 <div className="flex items-center justify-center h-full bg-gray-800">

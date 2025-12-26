@@ -384,6 +384,7 @@ export default function MediaSearch({ onMediaAdded }: MediaSearchProps) {
                   width={80}
                   height={120}
                   className="rounded-md object-cover"
+                  unoptimized={true}
                 />
                 <div className="flex flex-col justify-between w-full">
                   <div>

@@ -166,8 +166,9 @@ export default function UserListsClient({
                       fill
                       sizes="(max-width: 768px) 50vw, 33vw"
                       className={cn("object-cover transition-transform duration-500 group-hover:scale-105", 
-                        activeTab === 'DROPPED' && "grayscale opacity-60"
+                        activeTab === 'DROPPED' && "grayscale opacity-60"  
                       )}
+                      unoptimized={true}
                     />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-800 text-gray-600 gap-2">

@@ -201,6 +201,7 @@ export default function MyLists({ onDataChanged, dataVersionKey }: MyListsProps)
                             "object-cover transition-transform duration-300 group-hover:scale-105",
                             isActionLoading === item.id && "opacity-50 grayscale"
                           )}
+                          unoptimized={true}
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
