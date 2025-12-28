@@ -12,14 +12,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { scheduleId, isCompleted } = await request.json();
+    const { scheduleId, isCompleted, isFinale } = await request.json();
     const userId = session.user.id;
 
     if (!scheduleId) {
       return new NextResponse("Schedule ID is required", { status: 400 });
     }
 
-    // 1. Atualiza o item do agendamento
+    // 1. Atualiza o card da Agenda (Sempre marca como feito ou desfeito)
     const updatedItem = await prisma.scheduleItem.update({
       where: { 
         id: scheduleId,
@@ -31,53 +31,54 @@ export async function POST(request: Request) {
 
     const mediaId = updatedItem.mediaId;
 
-    // 2. Busca se é semanal
+    // 2. Busca info da Mídia
     const mediaStatusInfo = await prisma.mediaStatus.findUnique({
-        where: {
-            userId_mediaId: { userId, mediaId }
-        },
+        where: { userId_mediaId: { userId, mediaId } },
         select: { isWeekly: true }
     });
-
     const isWeekly = mediaStatusInfo?.isWeekly || false;
 
-    // 3. Lógica Inteligente de Status
+    // 3. Lógica de Status (Sem somar episódios)
     if (isCompleted) {
-      // Conta quantos itens AINDA faltam (excluindo o atual que já está true)
-      const remainingItemsCount = await prisma.scheduleItem.count({
-        where: {
-          userId: userId,
-          mediaId: mediaId,
-          isCompleted: false,
-        }
-      });
+        let newStatus: 'WATCHED' | 'WATCHING' = 'WATCHING';
 
-      // Se NÃO for semanal e NÃO sobrar episódios -> Move para WATCHED
-      // Se for semanal, ou ainda tiver episódios -> Mantém WATCHING
-      let newStatus: 'WATCHED' | 'WATCHING' = 'WATCHING';
-      if (!isWeekly && remainingItemsCount === 0) {
-          newStatus = 'WATCHED';
-      }
-      
-      await prisma.mediaStatus.update({
-        where: { userId_mediaId: { userId, mediaId } },
-        data: { 
-            status: newStatus,
-            watchedAt: newStatus === 'WATCHED' ? new Date() : null 
+        if (isFinale === true) {
+            // Se usuário disse "SIM": Move para Concluído
+            newStatus = 'WATCHED';
+        } else if (isFinale === false) {
+            // Se usuário disse "NÃO": Mantém Assistindo (não faz mais nada)
+            newStatus = 'WATCHING';
+        } else {
+            // Fallback (se não tiver resposta do popout):
+            // Só conclui se não tiver mais nada agendado pendente
+            const remainingItemsCount = await prisma.scheduleItem.count({
+                where: { userId, mediaId, isCompleted: false }
+            });
+            if (!isWeekly && remainingItemsCount === 0) {
+                newStatus = 'WATCHED';
+            }
         }
-      });
+      
+        await prisma.mediaStatus.update({
+            where: { userId_mediaId: { userId, mediaId } },
+            data: { 
+                status: newStatus,
+                watchedAt: newStatus === 'WATCHED' ? new Date() : null,
+                updatedAt: new Date()
+            }
+        });
     } 
     else {
-        // Se desmarcou, força volta para WATCHING
+        // Se desmarcou o check: Volta para Assistindo
         await prisma.mediaStatus.update({
             where: { userId_mediaId: { userId, mediaId } },
             data: { status: 'WATCHING', watchedAt: null }
         });
     }
 
-    // --- CORREÇÃO DE CACHE (CRUCIAL) ---
-    revalidateTag(`mediastatus-${userId}`); // <--- Atualiza a lista MyLists
-    revalidateTag(`schedule-${userId}`);    // <--- Atualiza a Agenda
+    // Cache Revalidation
+    revalidateTag(`mediastatus-${userId}`);
+    revalidateTag(`schedule-${userId}`);
     revalidateTag(`schedule`); 
     
     if (session.user.username) {

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/authOptions";
 
 export const runtime = 'nodejs';
 
@@ -8,51 +10,78 @@ export async function GET(
   request: Request,
   { params }: { params: { username: string } }
 ) {
+  const session = await getServerSession(authOptions);
   const { searchParams } = new URL(request.url);
+  
   const status = searchParams.get("status");
   const page = parseInt(searchParams.get("page") || "1");
-  
-  // 👇 Permite que o frontend defina o limite (ex: 2000), com padrão 15
   const limitParam = searchParams.get("limit") || searchParams.get("pageSize");
   const pageSize = limitParam ? parseInt(limitParam) : 15;
-  
-  // 👇 Pega o termo de busca (opcional, para uso futuro ou se mudar para busca no server)
   const searchTerm = searchParams.get("search") || "";
-
   const username = params.username;
+
   if (!username) return new NextResponse("Username missing", { status: 400 });
 
   try {
     const normalizedUsername = decodeURIComponent(username).toLowerCase();
+    const isOwner = session?.user?.username?.toLowerCase() === normalizedUsername;
 
     const getCachedList = unstable_cache(
-      async () => {
+      async (checkOwner: boolean) => {
         const user = await prisma.user.findFirst({
           where: { username: { equals: normalizedUsername, mode: 'insensitive' } },
-          select: { id: true }
+          select: { 
+              id: true,
+              showWatchingList: true,
+              showToWatchList: true,
+              showWatchedList: true,
+              showDroppedList: true
+          }
         });
 
         if (!user) return null;
 
-        const whereClause: any = {
-            userId: user.id
-        };
+        // Verifica Privacidade (Só aplica se não for o dono)
+        if (!checkOwner) {
+             if (status === "WATCHING" && !user.showWatchingList) return { private: true };
+             if (status === "TO_WATCH" && !user.showToWatchList) return { private: true };
+             if (status === "WATCHED" && !user.showWatchedList) return { private: true };
+             if (status === "DROPPED" && !user.showDroppedList) return { private: true };
+        }
+
+        let whereClause: any = { userId: user.id };
         
-        if (status && status !== "ALL") {
+        // 🔥 LÓGICA HÍBRIDA: Traz 'Concluídos' reais OU 'Assistindo' com temporadas completas
+        if (status === "WATCHED") {
+            whereClause.OR = [
+                { status: 'WATCHED' },
+                { status: 'WATCHING', lastSeasonWatched: { gt: 0 } }
+            ];
+        } else if (status && status !== "ALL") {
             whereClause.status = status;
         }
 
-        // Adiciona suporte a busca no banco (caso o front passe ?search=...)
         if (searchTerm) {
-            whereClause.media = {
-                title: { contains: searchTerm, mode: 'insensitive' }
-            };
+            const searchFilter = { media: { title: { contains: searchTerm, mode: 'insensitive' } } };
+            if (whereClause.OR) {
+                whereClause.AND = [ searchFilter, { OR: whereClause.OR } ];
+                delete whereClause.OR;
+            } else {
+                whereClause.media = searchFilter.media;
+            }
         }
 
         const [items, total] = await Promise.all([
           prisma.mediaStatus.findMany({
             where: whereClause,
-            include: { media: true },
+            include: { 
+                media: {
+                    select: {
+                        id: true, title: true, posterPath: true, mediaType: true,
+                        totalSeasons: true, tmdbId: true, malId: true, igdbId: true
+                    }
+                } 
+            }, 
             orderBy: { updatedAt: "desc" },
             take: pageSize,
             skip: (page - 1) * pageSize,
@@ -62,22 +91,21 @@ export async function GET(
 
         return { items, total, totalPages: Math.ceil(total / pageSize) };
       },
-      // 👇 Chave de Cache atualizada com pageSize e searchTerm
-      [`lists-${normalizedUsername}-${status}-${page}-${pageSize}-${searchTerm}`], 
+      [`lists-v3-${normalizedUsername}-${status}-${page}-${pageSize}-${searchTerm}-${isOwner}`], 
       {
-        revalidate: 3600,
+        revalidate: 60,
         tags: [`user-profile-${normalizedUsername}`]
       }
     );
 
-    const data = await getCachedList();
+    const data = await getCachedList(isOwner);
 
     if (!data) return new NextResponse("User not found", { status: 404 });
+    if (data.private) return NextResponse.json({ items: [], total: 0, totalPages: 0, isPrivate: true });
 
     return NextResponse.json(data);
 
   } catch (error) {
-    console.error("Erro na API de listas públicas:", error);
     return new NextResponse("Erro Interno", { status: 500 });
   }
 }

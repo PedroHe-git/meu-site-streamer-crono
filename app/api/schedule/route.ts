@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getServerSession } from "next-auth/next";
+import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 import { revalidateTag, unstable_cache } from "next/cache";
-import { UserRole } from "@prisma/client";
 
 export const runtime = 'nodejs';
 
 // GET: Busca itens agendados
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
+  
+  if (!session?.user?.id) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
   
   const { searchParams } = new URL(request.url);
   const listType = searchParams.get("list"); 
@@ -19,8 +21,9 @@ export async function GET(request: Request) {
   try {
     const getCachedSchedule = unstable_cache(
       async () => {
+        // Ajuste de "Hoje": Criamos a data baseada no UTC para evitar conflito de servidor
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        today.setUTCHours(0, 0, 0, 0); 
 
         let whereClause: any = { userId };
 
@@ -35,173 +38,158 @@ export async function GET(request: Request) {
         } else if (listType === 'history') {
           whereClause = { userId, isCompleted: true };
         } else {
-           whereClause = { 
-             userId,
-             OR: [
-               { scheduledAt: { gte: today } },
-               { isCompleted: false }
-             ]
-           };
+           whereClause = { userId };
         }
 
         return await prisma.scheduleItem.findMany({
           where: whereClause,
-          include: { media: true },
-          orderBy: [
-            { scheduledAt: 'asc' },
-            { horario: 'asc' }
-          ],
-          take: 20
+          orderBy: { scheduledAt: "asc" },
+          include: {
+            media: {
+              select: {
+                id: true, title: true, posterPath: true, mediaType: true, totalSeasons: true, 
+              },
+            },
+          },
         });
       },
-      [`schedule-${userId}-${listType || 'default'}`], 
-      {
-        revalidate: 3600,
-        tags: [`schedule-${userId}`, 'schedule'] 
-      }
+      [`schedule-${userId}`, `list-${listType}`],
+      { tags: [`schedule-${userId}`, 'schedule'], revalidate: 3600 }
     );
 
-    const schedule = await getCachedSchedule();
-    return NextResponse.json(schedule);
+    const items = await getCachedSchedule();
+
+    const mediaIds = Array.from(new Set(items.map(item => item.mediaId)));
+    const mediaStatuses = await prisma.mediaStatus.findMany({ where: { userId, mediaId: { in: mediaIds } }, select: { mediaId: true, isWeekly: true } });
+    const weeklyMap = new Map(mediaStatuses.map(s => [s.mediaId, s.isWeekly]));
+    const enrichedItems = items.map(item => ({ ...item, isWeekly: weeklyMap.get(item.mediaId) || false }));
+
+    return NextResponse.json(enrichedItems);
+
   } catch (error) {
-    return new NextResponse("Erro na Agenda", { status: 500 });
+    console.error("[SCHEDULE_GET]", error);
+    return new NextResponse("Internal Error", { status: 500 });
   }
 }
 
-// POST: Cria novo item
+// POST: Cria novo agendamento
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== UserRole.CREATOR) return new NextResponse("Acesso Negado", { status: 403 });
+  if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
 
   try {
-    const body = await request.json();
-    const { mediaId, scheduledAt, horario, seasonNumber, episodeNumber, episodeNumberEnd } = body;
-    const userId = session.user.id;
+    const { mediaId, scheduledAt, horario, seasonNumber, episodeNumber, episodeNumberEnd } = await request.json();
 
     if (!mediaId || !scheduledAt) return new NextResponse("Dados inválidos", { status: 400 });
 
-    const newScheduleItem = await prisma.scheduleItem.create({
+    // 👇 AQUI ESTÁ A CORREÇÃO PARA MANAUS E BRASIL
+    const scheduledDate = new Date(scheduledAt);
+    // Forçamos 12:00 UTC.
+    // Manaus (UTC-4) verá isso como 08:00 da manhã do MESMO DIA.
+    scheduledDate.setUTCHours(12, 0, 0, 0);
+    
+    const newItem = await prisma.scheduleItem.create({
       data: {
-        userId,
-        mediaId,
-        scheduledAt: new Date(scheduledAt),
+        userId: session.user.id,
+        mediaId: mediaId,
+        scheduledAt: scheduledDate,
         horario: horario || null,
-        seasonNumber: seasonNumber ? parseInt(seasonNumber) : null,
-        episodeNumber: episodeNumber ? parseInt(episodeNumber) : null,
-        episodeNumberEnd: episodeNumberEnd ? parseInt(episodeNumberEnd) : null,
-        isCompleted: false,
-      },
-      include: { media: true }
+        seasonNumber: seasonNumber || null,
+        episodeNumber: episodeNumber || null,
+        episodeNumberEnd: episodeNumberEnd || null,
+        isCompleted: false
+      }
     });
 
-    // CACHE UPDATE
-    revalidateTag('schedule'); 
-    revalidateTag(`schedule-${userId}`);
-    revalidateTag(`mediastatus-${userId}`); // Atualiza lista caso afete status
-
+    revalidateTag('schedule');
+    revalidateTag(`schedule-${session.user.id}`);
     if (session.user.username) {
-       const userTag = session.user.username.toLowerCase();
-       revalidateTag(`user-profile-${userTag}`);
-       revalidateTag(`simple-schedule-${userTag}`);
+        const username = session.user.username.toLowerCase();
+        revalidateTag(`simple-schedule-${username}`);
+        revalidateTag(`overlay-${username}`);
     }
 
-    return NextResponse.json(newScheduleItem);
+    return NextResponse.json(newItem);
+
   } catch (error) {
-    return new NextResponse("Erro Interno", { status: 500 });
+    console.error("[SCHEDULE_POST]", error);
+    return new NextResponse("Internal Error", { status: 500 });
   }
 }
 
-// PATCH: Concluir/Editar Item (Com Lógica Inteligente)
+// PATCH: Atualiza status (Mantido igual)
 export async function PATCH(request: Request) {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== UserRole.CREATOR) return new NextResponse("Negado", { status: 403 });
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
 
-    try {
-        const { id, isCompleted, mediaId } = await request.json();
-        const userId = session.user.id;
+  try {
+    const { id, isCompleted, mediaId, isFinale } = await request.json();
+    if (!id) return new NextResponse("ID faltando", { status: 400 });
 
-        // 1. Atualiza Schedule
-        const updatedSchedule = await prisma.scheduleItem.update({
-            where: { id, userId },
-            data: { isCompleted }
+    const updatedItem = await prisma.scheduleItem.update({
+      where: { id, userId: session.user.id },
+      data: { isCompleted }
+    });
+
+    if (mediaId) {
+        const mediaStatus = await prisma.mediaStatus.findUnique({
+            where: { userId_mediaId: { userId: session.user.id, mediaId } }
         });
 
-        // 2. Atualiza MediaStatus (se necessário)
-        if (mediaId) {
-            if (isCompleted) {
-                const mediaStatus = await prisma.mediaStatus.findUnique({
-                    where: { userId_mediaId: { userId, mediaId } },
-                    select: { isWeekly: true }
-                });
-                
-                const pendingCount = await prisma.scheduleItem.count({
-                    where: { userId, mediaId, isCompleted: false }
-                });
+        if (isCompleted && updatedItem.seasonNumber && mediaStatus) {
+            const currentProgress = (mediaStatus.seasonProgress as Record<string, boolean>) || {};
+            const strSeason = updatedItem.seasonNumber.toString();
 
-                if (!mediaStatus?.isWeekly && pendingCount === 0) {
-                    await prisma.mediaStatus.update({
-                        where: { userId_mediaId: { userId, mediaId } },
-                        data: { status: 'WATCHED', watchedAt: new Date() }
-                    });
-                } else {
-                    // Garante que fique em WATCHING
-                     await prisma.mediaStatus.update({
-                        where: { userId_mediaId: { userId, mediaId } },
-                        data: { status: 'WATCHING' }
-                    });
-                }
-            } else {
-                // Voltou atrás
-                await prisma.mediaStatus.update({
-                    where: { userId_mediaId: { userId, mediaId } },
-                    data: { status: 'WATCHING', watchedAt: null }
-                });
+            if (isFinale === true) {
+                currentProgress[strSeason] = true;
+            } else if (isFinale === false) {
+                if (currentProgress[strSeason]) delete currentProgress[strSeason]; 
             }
+            
+            const watchedSeasons = Object.keys(currentProgress).map(Number);
+            const maxSeason = Math.max(...watchedSeasons, updatedItem.seasonNumber);
+
+            await prisma.mediaStatus.update({
+                where: { id: mediaStatus.id },
+                data: { seasonProgress: currentProgress, lastSeasonWatched: maxSeason }
+            });
         }
-
-        // --- CACHE UPDATE ---
-        revalidateTag('schedule');
-        revalidateTag(`schedule-${userId}`);
-        revalidateTag(`mediastatus-${userId}`); // <--- CRUCIAL
-
-        if (session.user.username) {
-            const userTag = session.user.username.toLowerCase();
-            revalidateTag(`user-profile-${userTag}`);
-            revalidateTag(`simple-schedule-${userTag}`);
-            revalidateTag(`overlay-${userTag}`);
+        // ... (resto da lógica de status mantida)
+        let newStatus: 'WATCHED' | 'WATCHING' | null = null;
+        if (isCompleted) {
+            if (isFinale === true) newStatus = 'WATCHED';
+            else if (isFinale === false) newStatus = 'WATCHING';
+            else {
+                const pendingCount = await prisma.scheduleItem.count({ where: { userId: session.user.id, mediaId, isCompleted: false } });
+                if (mediaStatus && !mediaStatus.isWeekly && pendingCount === 0) newStatus = 'WATCHED';
+            }
+        } else {
+            newStatus = 'WATCHING';
         }
-
-        return NextResponse.json(updatedSchedule);
-    } catch (error) {
-        return new NextResponse("Erro", { status: 500 });
+        if (newStatus) {
+            await prisma.mediaStatus.update({
+                where: { userId_mediaId: { userId: session.user.id, mediaId } },
+                data: { status: newStatus, watchedAt: newStatus === 'WATCHED' ? new Date() : null }
+            });
+        }
     }
+    revalidateTag('schedule'); revalidateTag(`schedule-${session.user.id}`); revalidateTag(`mediastatus-${session.user.id}`);
+    if (session.user.username) { const u = session.user.username.toLowerCase(); revalidateTag(`simple-schedule-${u}`); revalidateTag(`overlay-${u}`); }
+
+    return NextResponse.json(updatedItem);
+  } catch (error) { return new NextResponse("Internal Error", { status: 500 }); }
 }
 
 // DELETE: Apaga item
 export async function DELETE(request: Request) {
     const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== UserRole.CREATOR) return new NextResponse("Acesso Negado", { status: 403 });
-    
-    const id = new URL(request.url).searchParams.get("id");
+    if (!session?.user?.id) return new NextResponse("Acesso Negado", { status: 403 });
+    const { searchParams } = new URL(request.url); const id = searchParams.get("id");
     if (!id) return new NextResponse("ID faltando", { status: 400 });
-
     try {
-      await prisma.scheduleItem.delete({ 
-          where: { id, userId: session.user.id } 
-      });
-
-      revalidateTag('schedule');
-      revalidateTag(`schedule-${session.user.id}`);
-      revalidateTag(`mediastatus-${session.user.id}`); // Previne dados órfãos na lista
-      
-      if (session.user.username) {
-        const userTag = session.user.username.toLowerCase();
-        revalidateTag(`user-profile-${userTag}`);
-        revalidateTag(`simple-schedule-${userTag}`);
-      }
-  
+      await prisma.scheduleItem.delete({ where: { id, userId: session.user.id } });
+      revalidateTag('schedule'); revalidateTag(`schedule-${session.user.id}`); revalidateTag(`mediastatus-${session.user.id}`); 
+      if (session.user.username) { const u = session.user.username.toLowerCase(); revalidateTag(`user-profile-${u}`); revalidateTag(`simple-schedule-${u}`); revalidateTag(`overlay-${u}`); }
       return NextResponse.json({ success: true });
-    } catch (error) { 
-        return new NextResponse("Erro Interno", { status: 500 }); 
-    }
+    } catch (error) { return new NextResponse("Erro ao deletar", { status: 500 }); }
 }

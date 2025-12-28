@@ -6,7 +6,71 @@ import { revalidateTag, unstable_cache } from "next/cache";
 
 export const runtime = 'nodejs';
 
-// --- POST ---
+// --- GET OTIMIZADO ---
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
+
+  const { searchParams } = new URL(request.url);
+  const userId = session.user.id;
+  
+  const status = searchParams.get("status") || "ALL";
+  const page = parseInt(searchParams.get("page") || "1");
+  const pageSize = parseInt(searchParams.get("pageSize") || "16");
+  const searchTerm = searchParams.get("searchTerm") || ""; 
+
+  try {
+    const getCachedMediaStatus = unstable_cache(
+      async (uId, s, p, ps, st) => {
+        let whereClause: any = { userId: uId };
+        
+        // 🔥 LÓGICA HÍBRIDA RESTAURADA
+        if (s === "WATCHED") {
+            whereClause.OR = [
+                { status: 'WATCHED' },
+                { status: 'WATCHING', lastSeasonWatched: { gt: 0 } }
+            ];
+        } else if (s !== "ALL") {
+            whereClause.status = s;
+        }
+
+        if (st) {
+          const searchFilter = { media: { title: { contains: st, mode: 'insensitive' } } };
+          if (whereClause.OR) {
+              whereClause.AND = [ searchFilter, { OR: whereClause.OR } ];
+              delete whereClause.OR;
+          } else {
+              whereClause.media = searchFilter.media;
+          }
+        }
+
+        const [items, total] = await Promise.all([
+          prisma.mediaStatus.findMany({
+            where: whereClause,
+            include: { media: true },
+            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+            take: ps,
+            skip: (p - 1) * ps,
+          }),
+          prisma.mediaStatus.count({ where: whereClause }),
+        ]);
+
+        return { items, total, totalPages: Math.ceil(total / ps) };
+      },
+      [`mediastatus-${userId}-${status}-${page}-${pageSize}-${searchTerm}`], 
+      { revalidate: 3600, tags: [`mediastatus-${userId}`] }
+    );
+
+    const data = await getCachedMediaStatus(userId, status, page, pageSize, searchTerm);
+    return NextResponse.json(data);
+  } catch (error) {
+    return new NextResponse("Erro Interno", { status: 500 });
+  }
+}
+
+// --- POST, PUT e DELETE (Pode manter os mesmos que você já tem, eles estavam ok) ---
+// Vou incluir apenas o export para não quebrar o arquivo, mas o foco da mudança foi o GET acima.
+
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return new NextResponse(JSON.stringify({ error: "Não autorizado" }), { status: 401 });
@@ -56,7 +120,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // CACHE
     revalidateTag(`mediastatus-${userId}`);
     revalidateTag(`schedule-${userId}`);
     if (session.user.username) {
@@ -69,7 +132,6 @@ export async function POST(request: Request) {
   }
 }
 
-// --- PUT ---
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return new NextResponse("Não autorizado", { status: 401 });
@@ -89,7 +151,6 @@ export async function PUT(request: Request) {
       data: updateData,
     });
 
-    // CACHE
     revalidateTag(`mediastatus-${userId}`);
     revalidateTag(`schedule-${userId}`);
     if (session.user.username) {
@@ -102,7 +163,6 @@ export async function PUT(request: Request) {
   }
 }
 
-// --- DELETE ---
 export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return new NextResponse("Não autorizado", { status: 401 });
@@ -113,65 +173,12 @@ export async function DELETE(request: Request) {
 
   try {
     await prisma.mediaStatus.delete({ where: { id, userId } });
-
-    // CACHE
     revalidateTag(`mediastatus-${userId}`);
     revalidateTag(`schedule-${userId}`);
     if (session.user.username) {
         revalidateTag(`user-profile-${session.user.username.toLowerCase()}`);
     }
-
     return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    return new NextResponse("Erro Interno", { status: 500 });
-  }
-}
-
-// --- GET OTIMIZADO ---
-export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
-
-  const { searchParams } = new URL(request.url);
-  const userId = session.user.id;
-  
-  const status = searchParams.get("status") || "ALL";
-  const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = parseInt(searchParams.get("pageSize") || "16");
-  const searchTerm = searchParams.get("searchTerm") || ""; 
-
-  try {
-    const getCachedMediaStatus = unstable_cache(
-      async (uId, s, p, ps, st) => {
-        const whereClause: any = { userId: uId };
-        
-        if (s !== "ALL") whereClause.status = s;
-        if (st) {
-          whereClause.media = { title: { contains: st, mode: 'insensitive' } };
-        }
-
-        const [items, total] = await Promise.all([
-          prisma.mediaStatus.findMany({
-            where: whereClause,
-            include: { media: true },
-            orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-            take: ps,
-            skip: (p - 1) * ps,
-          }),
-          prisma.mediaStatus.count({ where: whereClause }),
-        ]);
-
-        return { items, total, totalPages: Math.ceil(total / ps) };
-      },
-      [`mediastatus-${userId}-${status}-${page}-${pageSize}-${searchTerm}`], 
-      {
-        revalidate: 3600,
-        tags: [`mediastatus-${userId}`] // A TAG MÁGICA QUE TUDO DEPENDE
-      }
-    );
-
-    const data = await getCachedMediaStatus(userId, status, page, pageSize, searchTerm);
-    return NextResponse.json(data);
   } catch (error) {
     return new NextResponse("Erro Interno", { status: 500 });
   }

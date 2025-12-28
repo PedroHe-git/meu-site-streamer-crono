@@ -1,39 +1,61 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { UserRole } from "@prisma/client";
-import { unstable_cache } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/authOptions"; // Ajuste o caminho conforme seu projeto
+import prisma from "@/lib/prisma"; // Ajuste o caminho conforme seu projeto
+
+export const dynamic = 'force-dynamic'; // Garante que a rota não seja cacheada estaticamente
 
 export async function GET() {
-  const getCachedData = unstable_cache(
-    async () => {
-      const creator = await prisma.user.findFirst({
-        where: { role: UserRole.CREATOR },
-        select: { 
-            id: true, username: true, 
-            showToWatchList: true, showWatchingList: true, 
-            showWatchedList: true, showDroppedList: true 
-        }
-      });
+  const session = await getServerSession(authOptions);
 
-      if (!creator) return null;
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-      const counts = await prisma.mediaStatus.groupBy({
-        by: ['status'],
-        where: { userId: creator.id },
-        _count: { status: true },
-      });
+  try {
+    // 1. Busca o usuário logado (que é o dono do histórico nesta página)
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: {
+        username: true,
+        showWatchingList: true,
+        showToWatchList: true,
+        showWatchedList: true,
+        showDroppedList: true,
+      },
+    });
 
-      const listCounts = { TO_WATCH: 0, WATCHING: 0, WATCHED: 0, DROPPED: 0 };
-      counts.forEach((c) => {
-        if (c.status in listCounts) listCounts[c.status as keyof typeof listCounts] = c._count.status;
-      });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
 
-      return { creator, listCounts };
-    },
-    ['history-data-api'],
-    { revalidate: 3600, tags: ['mediastatus', 'user-profile'] }
-  );
+    // 2. Busca os contadores de status
+    const statusCounts = await prisma.mediaStatus.groupBy({
+      by: ["status"],
+      where: { user: { email: session.user.email } },
+      _count: { status: true },
+    });
 
-  const data = await getCachedData();
-  return NextResponse.json(data);
+    const listCounts = {
+      WATCHING: 0,
+      TO_WATCH: 0,
+      WATCHED: 0,
+      DROPPED: 0,
+    };
+
+    statusCounts.forEach((c) => {
+      if (c.status in listCounts) {
+        listCounts[c.status as keyof typeof listCounts] = c._count.status;
+      }
+    });
+
+    return NextResponse.json({
+      creator: user,
+      listCounts,
+      isOwner: true, // Na página /historico, assume-se que é o próprio usuário vendo seu histórico
+    });
+  } catch (error) {
+    console.error("Error fetching history data:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }

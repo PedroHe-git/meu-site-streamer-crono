@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react"; 
-import { useRouter } from "next/navigation"; // 👈 IMPORTANTE: Para recarregar os dados
+import { useRouter } from "next/navigation"; 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/alert-dialog"; 
 import { useToast } from "@/hooks/use-toast";
 import { MediaType } from "@prisma/client";
+import { WeeklyDialog } from "@/app/components/WeeklyDialog"; // 👈 1. IMPORTAÇÃO DO DIALOG
 
 type MediaItem = {
   id: string; 
@@ -95,13 +96,13 @@ const formatHorario = (horario: string | null): string | null => {
 export default function ScheduleManager({
   mediaItems,
   scheduleItems,
-  onAddSchedule, // Essas props manuais ainda são úteis para updates locais otimistas
+  onAddSchedule,
   onRemoveSchedule,
   onCompleteSchedule,
   onDataChanged
 }: ScheduleManagerProps) {
   const { toast } = useToast();
-  const router = useRouter(); // 👈 Inicializa o router
+  const router = useRouter();
 
   const [selectedMedia, setSelectedMedia] = useState(""); 
   const [scheduleDate, setScheduleDate] = useState<Date | undefined>(undefined);
@@ -119,6 +120,10 @@ export default function ScheduleManager({
   const [isAnnounceDialogOpen, setIsAnnounceDialogOpen] = useState(false);
   const [isWebhookHelpOpen, setIsWebhookHelpOpen] = useState(false);
   const [isAnnouncing, setIsAnnouncing] = useState(false);
+
+  // 👈 2. ESTADOS DO POPOUT SEMANAL
+  const [showWeeklyDialog, setShowWeeklyDialog] = useState(false);
+  const [itemToComplete, setItemToComplete] = useState<ScheduleItem | null>(null);
 
   const getMediaData = (schedule: ScheduleItem) => {
      return schedule.media || mediaItems.find((m) => m.mediaId === schedule.mediaId);
@@ -231,7 +236,7 @@ export default function ScheduleManager({
       }); 
       
       if (onDataChanged) onDataChanged(); 
-      router.refresh(); // 👈 Atualiza Server Component
+      router.refresh(); 
 
       setSelectedMedia("");
       setScheduleDate(undefined);
@@ -246,9 +251,25 @@ export default function ScheduleManager({
     }
   };
 
-  const handleComplete = async (item: ScheduleItem) => {
+  // 👈 3. HANDLE COMPLETE ATUALIZADO COM LÓGICA DE INTERCEPTAÇÃO
+  const handleComplete = async (item: ScheduleItem, isFinale?: boolean) => {
+    const media = getMediaData(item);
+    
+    // Verifica se é Série ou Anime
+    const isSeriesOrAnime = media && (media.mediaType === "SERIES" || media.mediaType === "ANIME");
+
+    // SE for série/anime E não tivermos a resposta do popout ainda (isFinale undefined)
+    if (isSeriesOrAnime && isFinale === undefined) {
+        setItemToComplete(item);
+        setShowWeeklyDialog(true);
+        return; // Pausa aqui e abre o Dialog
+    }
+
+    // Se chegou aqui, já pode enviar para a API (ou não é série, ou já respondeu Sim/Não)
     const key = `complete-${item.id}`;
     setLoadingStates(prev => ({ ...prev, [key]: true }));
+    setShowWeeklyDialog(false); 
+
     try {
       const res = await fetch('/api/schedule', {
           method: 'PATCH',
@@ -256,21 +277,23 @@ export default function ScheduleManager({
           body: JSON.stringify({ 
             id: item.id, 
             isCompleted: true,
-            mediaId: item.mediaId
+            mediaId: item.mediaId,
+            isFinale: isFinale // Envia a resposta do usuário
           }), 
       });
       if (!res.ok) throw new Error('Falha ao completar');
       
       toast({ title: "Concluído!", description: "Item movido para Concluídos." });
       
-      onCompleteSchedule(item.id); // Atualiza visual localmente rápido
+      onCompleteSchedule(item.id); 
       if (onDataChanged) onDataChanged(); 
-      router.refresh(); // 👈 Busca a verdade do servidor
+      router.refresh(); 
       
     } catch (error: any) {
       toast({ title: "Erro", variant: "destructive" });
     } finally {
       setLoadingStates(prev => ({ ...prev, [key]: false }));
+      setItemToComplete(null);
     }
   };
 
@@ -291,9 +314,8 @@ export default function ScheduleManager({
       
       toast({ title: "Desfeito!", description: "Item voltou para a agenda." });
       
-      // Aqui não temos "onUndoSchedule", então confiamos no router.refresh
       if (onDataChanged) onDataChanged(); 
-      router.refresh(); // 👈 Essencial para reaparecer na lista de cima
+      router.refresh(); 
       
     } catch (error: any) {
       toast({ title: "Erro", variant: "destructive" });
@@ -311,7 +333,7 @@ export default function ScheduleManager({
 
       onRemoveSchedule(id);
       if (onDataChanged) onDataChanged(); 
-      router.refresh(); // 👈 Garante sincronia
+      router.refresh(); 
 
     } catch (error: any) {
       console.error(error.message);
@@ -351,7 +373,7 @@ export default function ScheduleManager({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       
-      {/* Coluna 1: Formulário e Lista de Disponíveis */}
+      {/* Coluna 1: Formulário e Lista */}
       <div className="lg:col-span-1 space-y-6">
         
         <Card className="shadow-lg border-2">
@@ -765,6 +787,19 @@ export default function ScheduleManager({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 👈 4. RENDERIZAÇÃO DO POPOUT */}
+      {itemToComplete && (
+        <WeeklyDialog 
+            isOpen={showWeeklyDialog}
+            onClose={() => {
+                setShowWeeklyDialog(false);
+                setItemToComplete(null);
+            }}
+            onConfirm={(isFinale) => handleComplete(itemToComplete, isFinale)}
+            title={getMediaData(itemToComplete)?.title || "Mídia"}
+        />
+      )}
 
     </div>
   );
