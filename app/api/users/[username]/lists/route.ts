@@ -93,7 +93,7 @@ export async function GET(
       },
       [`lists-v3-${normalizedUsername}-${status}-${page}-${pageSize}-${searchTerm}-${isOwner}`], 
       {
-        revalidate: 60,
+        revalidate: 86400,
         tags: [`user-profile-${normalizedUsername}`]
       }
     );

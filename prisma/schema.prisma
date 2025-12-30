@@ -1,8 +1,4 @@
 // prisma/schema.prisma
-// Versão CORRIGIDA e SIMPLIFICADA
-// Removemos cor(profileThemeColor) e banner(profileBannerUrl)
-// Mantemos 'bio'
-// Mantemos os @map OBRIGATÓRIOS para o Next-Auth v4 Adapter v1
 
 generator client {
   provider = "prisma-client-js"
@@ -15,7 +11,7 @@ datasource db {
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
-// --- ENUMS (Nível Superior) ---
+// --- ENUMS ---
 enum MovieStatusType {
   TO_WATCH
   WATCHING
@@ -23,7 +19,6 @@ enum MovieStatusType {
   DROPPED
 }
 
-// --- ENUMS (Nível Superior) ---
 enum ProfileVisibility {
   PUBLIC
   FOLLOWERS_ONLY
@@ -42,48 +37,45 @@ enum UserRole {
   VISITOR
 }
 
-// --- FIM ENUMS ---
+// --- MODELOS ---
 
-// --- MODELO USER (Simplificado + @map) ---
 model User {
   id             String    @id @default(cuid())
   name           String?
   email          String?   @unique
-  emailVerified  DateTime? @map("email_verified") // Mapeado
-  image          String? // Campo do Avatar (ainda presente)
+  emailVerified  DateTime? @map("email_verified")
+  image          String?
   hashedPassword String?
   username       String    @unique
   role           UserRole  @default(VISITOR)
   aiSummary      String?   @db.Text
 
   socialItems SocialItem[]
-  sponsors       Sponsor[]
+  sponsors    Sponsor[]
 
-  youtubeMainUrl   String? 
-  youtubeSecondUrl String?
-  youtubeThirdUrl  String? 
-  youtubeFourthUrl String? 
+  youtubeMainUrl    String? 
+  youtubeSecondUrl  String?
+  youtubeThirdUrl   String? 
+  youtubeFourthUrl  String? 
 
-  statFollowers    String?  
-  statMedia        String?  
-  statRegion       String?  
+  statFollowers     String?  
+  statMedia         String?
+  statRegion        String?  
 
   amazonWishlistUrl String?
-
-  // --- Campos de Personalização ---
-  bio              String? @db.Text // Mantido
-  profileBannerUrl String?
+  
+  bio               String? @db.Text
+  profileBannerUrl  String?
 
   profileVisibility ProfileVisibility @default(PUBLIC)
   twitchUsername    String?           @unique
-
-  discordWebhookUrl String? @map("discord_webhook_url")
+  discordWebhookUrl String?           @map("discord_webhook_url")
 
   // Relações
-  accounts      Account[]
-  sessions      Session[]
-  mediaStatuses MediaStatus[]
-  scheduleItems ScheduleItem[]
+  accounts        Account[]
+  sessions        Session[]
+  mediaStatuses   MediaStatus[]
+  scheduleItems   ScheduleItem[]
 
   showToWatchList  Boolean @default(true)
   showWatchingList Boolean @default(true)
@@ -96,9 +88,6 @@ model User {
   @@map("users")
 }
 
-// --- FIM USER ---
-
-// --- SEUS MODELOS (Sem mudanças) ---
 model Media {
   id            String         @id @default(cuid())
   mediaType     MediaType
@@ -116,6 +105,7 @@ model Media {
   @@unique([mediaType, tmdbId])
   @@unique([mediaType, malId])
   @@unique([mediaType, igdbId])
+  @@index([title])
 }
 
 model MediaStatus {
@@ -129,16 +119,16 @@ model MediaStatus {
   lastEpisodeWatched    Int?
   lastEpisodeWatchedEnd Int?
   isWeekly              Boolean         @default(false)
-  rating                Int? // (Bônus: Se você implementar a funcionalidade de nota)
-  watchedAt             DateTime? // <-- O CAMPO-CHAVE PARA OS GRÁFICOS
-
+  rating                Int?
+  watchedAt             DateTime?
   seasonProgress        Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt @default(now())
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt @default(now())
 
   @@unique([userId, mediaId])
-  
+  // 👇 NOVO ÍNDICE: Otimiza contagens do dashboard
+  @@index([userId, status]) 
+  @@index([userId, updatedAt])
 }
 
 model ScheduleItem {
@@ -153,24 +143,23 @@ model ScheduleItem {
   mediaId          String
   media            Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   isCompleted      Boolean  @default(false)
+
+  // 👇 NOVOS ÍNDICES: Otimizam a busca da timeline e filtros
+  @@index([userId, scheduledAt])
+  @@index([userId, isCompleted])
 }
 
 model Follows {
   followerId  String
   followingId String
+  follower    User   @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User   @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
 
-  // Define a relação para o "seguidor" (quem segue)
-  follower User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
-
-  // Define a relação para o "seguido" (quem é seguido)
-  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
-
-  // Garante que um utilizador não pode seguir o mesmo criador duas vezes
   @@id([followerId, followingId])
   @@map("follows")
 }
 
-// --- MODELOS NEXT-AUTH V4 (Com @map) ---
+// --- MODELOS NEXT-AUTH ---
 model Account {
   id                String  @id @default(cuid())
   userId            String  @map("user_id")
@@ -209,30 +198,23 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// --- FIM MODELOS NEXT-AUTH V4 ---
-
 model PasswordResetToken {
-  // Usamos o token como o ID para buscas rápidas e garantia de unicidade
   token   String   @id @unique
-  email   String // O email do usuário que solicitou o reset
-  expires DateTime // A data/hora que o token expira
+  email   String
+  expires DateTime
 
   @@map("password_reset_tokens")
 }
 
 model SocialItem {
-  id       String @id @default(cuid())
-  platform String // Vamos usar "YOUTUBE" ou "INSTAGRAM"
-
-  imageUrl String // Link da Imagem de Capa/Thumbnail
-  linkUrl  String // Link para onde vai ao clicar (Vídeo ou Post)
-
-  title    String? // Título do vídeo ou Legenda do post
-  subtitle String? // Ex: "10k views" ou "❤️ Curtiu"
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  id        String   @id @default(cuid())
+  platform  String 
+  imageUrl  String
+  linkUrl   String
+  title     String?
+  subtitle  String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@map("social_items")
@@ -241,14 +223,12 @@ model SocialItem {
 model Sponsor {
   id          String   @id @default(cuid())
   name        String
-  category    String?  // Ex: "Hardware", "Energético"
-  imageUrl    String   // Link da Logo
-  linkUrl     String?  // Link para o site do patrocinador
-  description String?  // Frase de efeito ou cupom
-  
+  category    String?
+  imageUrl    String
+  linkUrl     String?
+  description String?
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   createdAt   DateTime @default(now())
 
   @@map("sponsors")

@@ -1,9 +1,11 @@
+// app/api/history-data/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/authOptions"; // Ajuste o caminho conforme seu projeto
-import prisma from "@/lib/prisma"; // Ajuste o caminho conforme seu projeto
+import { authOptions } from "@/lib/authOptions";
+import prisma from "@/lib/prisma";
+import { unstable_cache } from "next/cache";
 
-export const dynamic = 'force-dynamic'; // Garante que a rota não seja cacheada estaticamente
+export const runtime = 'nodejs';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -12,11 +14,14 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userEmail = session.user.email;
+
   try {
-    // 1. Busca o usuário logado (que é o dono do histórico nesta página)
+    // 1. Busca o usuário (sem cache, pois é leve e crítico para segurança)
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: userEmail },
       select: {
+        id: true, // Precisamos do ID para a tag de cache
         username: true,
         showWatchingList: true,
         showToWatchList: true,
@@ -29,12 +34,24 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // 2. Busca os contadores de status
-    const statusCounts = await prisma.mediaStatus.groupBy({
-      by: ["status"],
-      where: { user: { email: session.user.email } },
-      _count: { status: true },
-    });
+    // 2. Função cacheada para buscar contadores
+    // Isso evita bater no banco toda vez que o usuário entra na página
+    const getCachedStats = unstable_cache(
+      async (userId: string) => {
+        return await prisma.mediaStatus.groupBy({
+          by: ["status"],
+          where: { userId: userId },
+          _count: { status: true },
+        });
+      },
+      [`history-stats-${user.id}`], // Chave única do cache
+      {
+        tags: [`mediastatus-${user.id}`], // Tag para invalidar quando houver updates
+        revalidate: 3600 // Revalida a cada 1 hora no máximo
+      }
+    );
+
+    const statusCounts = await getCachedStats(user.id);
 
     const listCounts = {
       WATCHING: 0,
@@ -52,8 +69,9 @@ export async function GET() {
     return NextResponse.json({
       creator: user,
       listCounts,
-      isOwner: true, // Na página /historico, assume-se que é o próprio usuário vendo seu histórico
+      isOwner: true,
     });
+
   } catch (error) {
     console.error("Error fetching history data:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
