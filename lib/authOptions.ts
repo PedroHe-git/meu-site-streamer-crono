@@ -89,7 +89,7 @@ export const authOptions: NextAuthOptions = {
         token.youtubeThirdUrl = u.youtubeThirdUrl;
         token.youtubeFourthUrl = u.youtubeFourthUrl;
         
-        token.statFollowers = u.statFollowers;
+        
         token.statMedia = u.statMedia;
         token.statRegion = u.statRegion;
         token.amazonWishlistUrl = u.amazonWishlistUrl;
@@ -115,7 +115,6 @@ export const authOptions: NextAuthOptions = {
         if (userPayload.youtubeThirdUrl !== undefined) token.youtubeThirdUrl = userPayload.youtubeThirdUrl;
         if (userPayload.youtubeFourthUrl !== undefined) token.youtubeFourthUrl = userPayload.youtubeFourthUrl;
 
-        if (userPayload.statFollowers !== undefined) token.statFollowers = userPayload.statFollowers;
         if (userPayload.statMedia !== undefined) token.statMedia = userPayload.statMedia;
         if (userPayload.statRegion !== undefined) token.statRegion = userPayload.statRegion;
 
@@ -156,7 +155,6 @@ export const authOptions: NextAuthOptions = {
         session.user.youtubeThirdUrl = token.youtubeThirdUrl as string | null;
         session.user.youtubeFourthUrl = token.youtubeFourthUrl as string | null;
 
-        session.user.statFollowers = token.statFollowers as string | null;
         session.user.statMedia = token.statMedia as string | null;
         session.user.statRegion = token.statRegion as string | null;
 

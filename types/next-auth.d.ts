@@ -1,6 +1,6 @@
 import NextAuth, { DefaultSession, DefaultUser } from "next-auth";
 import { JWT, DefaultJWT } from "next-auth/jwt"; 
-import { UserRole, ProfileVisibility } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 
 declare module "next-auth" {
   interface User extends DefaultUser {
@@ -8,7 +8,7 @@ declare module "next-auth" {
     role: UserRole;
     username: string;
     bio: string | null;
-    profileVisibility: ProfileVisibility;
+    profileVisibility: 'PUBLIC' | 'PRIVATE';
     twitchUsername: string | null;
     showToWatchList: boolean;
     showWatchingList: boolean;
@@ -23,7 +23,6 @@ declare module "next-auth" {
     youtubeThirdUrl: string | null;
     youtubeFourthUrl: string | null;
     
-    statFollowers: string | null;
     statMedia: string | null;
     statRegion: string | null;
     amazonWishlistUrl: string | null;
@@ -40,7 +39,7 @@ declare module "next-auth/jwt" {
     role: UserRole;
     username: string;
     bio: string | null;
-    profileVisibility: ProfileVisibility;
+    profileVisibility: 'PUBLIC' | 'PRIVATE';
     twitchUsername: string | null;
     showToWatchList: boolean;
     showWatchingList: boolean;
@@ -55,7 +54,6 @@ declare module "next-auth/jwt" {
     youtubeThirdUrl: string | null;
     youtubeFourthUrl: string | null;
 
-    statFollowers: string | null;
     statMedia: string | null;
     statRegion: string | null;
     amazonWishlistUrl: string | null;

@@ -24,6 +24,7 @@ export async function GET(
 
   try {
     const normalizedUsername = decodeURIComponent(username).toLowerCase();
+    // Verifica se quem está vendo é o dono
     const isOwner = session?.user?.username?.toLowerCase() === normalizedUsername;
 
     const getCachedList = unstable_cache(
@@ -32,6 +33,7 @@ export async function GET(
           where: { username: { equals: normalizedUsername, mode: 'insensitive' } },
           select: { 
               id: true,
+              profileVisibility: true, // 👈 Importante trazer a visibilidade
               showWatchingList: true,
               showToWatchList: true,
               showWatchedList: true,
@@ -41,7 +43,12 @@ export async function GET(
 
         if (!user) return null;
 
-        // Verifica Privacidade (Só aplica se não for o dono)
+        // 👇 BLOQUEIO GERAL: Se for PRIVADO e não for o dono, bloqueia tudo.
+        if (user.profileVisibility === 'PRIVATE' && !checkOwner) {
+            return { private: true };
+        }
+
+        // Verifica Privacidade por Lista (Só aplica se não for o dono)
         if (!checkOwner) {
              if (status === "WATCHING" && !user.showWatchingList) return { private: true };
              if (status === "TO_WATCH" && !user.showToWatchList) return { private: true };
@@ -51,7 +58,6 @@ export async function GET(
 
         let whereClause: any = { userId: user.id };
         
-        // 🔥 LÓGICA HÍBRIDA: Traz 'Concluídos' reais OU 'Assistindo' com temporadas completas
         if (status === "WATCHED") {
             whereClause.OR = [
                 { status: 'WATCHED' },
@@ -91,9 +97,10 @@ export async function GET(
 
         return { items, total, totalPages: Math.ceil(total / pageSize) };
       },
-      [`lists-v3-${normalizedUsername}-${status}-${page}-${pageSize}-${searchTerm}-${isOwner}`], 
+      // Atualizamos a chave do cache
+      [`lists-v4-${normalizedUsername}-${status}-${page}-${pageSize}-${searchTerm}-${isOwner}`], 
       {
-        revalidate: 86400,
+        revalidate: 3600,
         tags: [`user-profile-${normalizedUsername}`]
       }
     );
@@ -101,6 +108,8 @@ export async function GET(
     const data = await getCachedList(isOwner);
 
     if (!data) return new NextResponse("User not found", { status: 404 });
+    
+    // Retorna array vazio se for privado
     if (data.private) return NextResponse.json({ items: [], total: 0, totalPages: 0, isPrivate: true });
 
     return NextResponse.json(data);

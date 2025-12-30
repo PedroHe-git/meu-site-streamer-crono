@@ -21,7 +21,7 @@ enum MovieStatusType {
 
 enum ProfileVisibility {
   PUBLIC
-  FOLLOWERS_ONLY
+  PRIVATE
 }
 
 enum MediaType {
@@ -81,9 +81,6 @@ model User {
   showWatchingList Boolean @default(true)
   showWatchedList  Boolean @default(true)
   showDroppedList  Boolean @default(true)
-
-  following Follows[] @relation("Following")
-  followers Follows[] @relation("Followers")
 
   @@map("users")
 }
@@ -149,15 +146,7 @@ model ScheduleItem {
   @@index([userId, isCompleted])
 }
 
-model Follows {
-  followerId  String
-  followingId String
-  follower    User   @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
-  following   User   @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
 
-  @@id([followerId, followingId])
-  @@map("follows")
-}
 
 // --- MODELOS NEXT-AUTH ---
 model Account {

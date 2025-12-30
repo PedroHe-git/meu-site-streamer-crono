@@ -3,7 +3,6 @@ import { Pool, neonConfig } from '@neondatabase/serverless'
 import { PrismaNeon } from '@prisma/adapter-neon'
 import ws from 'ws'
 
-// Configura o WebSocket para funcionar no ambiente Node.js
 neonConfig.webSocketConstructor = ws
 
 const connectionString = `${process.env.DATABASE_URL}`
@@ -12,21 +11,24 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-const prismaClientSingleton = () => {
-  // Cria o Pool de conexões do Neon
-  const pool = new Pool({ connectionString })
+const createPrismaClient = () => {
+  // 👇 A MÁGICA ESTÁ AQUI: idleTimeoutMillis
+  const pool = new Pool({ 
+    connectionString,
+    max: 1, // Limita a 1 conexão por container para não saturar
+    idleTimeoutMillis: 1000, // Fecha conexão após 1s sem uso (Isso permite o banco dormir)
+    connectionTimeoutMillis: 5000, 
+  })
   
-  // Cria o adaptador do Prisma para Neon
   const adapter = new PrismaNeon(pool)
   
-  // Instancia o PrismaClient usando o adaptador
   return new PrismaClient({ 
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   })
 }
 
-export const prisma = globalForPrisma.prisma ?? prismaClientSingleton()
+export const prisma = globalForPrisma.prisma ?? createPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 

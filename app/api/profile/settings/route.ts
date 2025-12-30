@@ -22,13 +22,18 @@ export async function PUT(req: Request) {
       profileVisibility, showToWatchList, showWatchingList, showWatchedList, showDroppedList
     } = body;
 
+    let validVisibility = undefined;
+    if (profileVisibility === 'PUBLIC' || profileVisibility === 'PRIVATE') {
+        validVisibility = profileVisibility;
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: {
         name, bio, username, twitchUsername, discordWebhookUrl, profileBannerUrl,
         youtubeMainUrl, youtubeSecondUrl, youtubeThirdUrl, youtubeFourthUrl,
         amazonWishlistUrl, statFollowers, statMedia, statRegion,
-        profileVisibility, showToWatchList, showWatchingList, showWatchedList, showDroppedList
+        profileVisibility: validVisibility, showToWatchList, showWatchingList, showWatchedList, showDroppedList
       },
     });
 
