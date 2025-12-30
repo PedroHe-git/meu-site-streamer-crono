@@ -5,12 +5,30 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image"; 
+import { unstable_cache } from "next/cache"; // 👈 Importar Cache
 
-export const revalidate = 60;
+export const revalidate = 3600; // Atualiza a cada 1 hora
+
+// 👇 1. Criamos a função cacheada (Igual fizemos na página Redes)
+const getCachedYoutubeData = unstable_cache(
+  async () => {
+    const [creator, rawVideos] = await Promise.all([
+      prisma.user.findFirst({ where: { role: "CREATOR" } }),
+      getSocialItems("YOUTUBE")
+    ]);
+
+    return { creator, rawVideos };
+  },
+  ['youtube-page-data'], // Chave única
+  { 
+    revalidate: 3600, 
+    tags: ['social', 'user-profile'] 
+  }
+);
 
 export default async function YoutubePage() {
-  const creator = await prisma.user.findFirst({ where: { role: "CREATOR" } });
-  const rawVideos = await getSocialItems("YOUTUBE");
+  // 👇 2. Usamos a função cacheada
+  const { creator, rawVideos } = await getCachedYoutubeData();
 
   const videos = rawVideos.map((item: any) => ({
     id: item.id,
@@ -20,6 +38,7 @@ export default async function YoutubePage() {
     subtitle: item.subtitle || "Assista agora",
   }));
 
+  // ... O resto do seu código (mainChannel, subChannels, return) continua EXATAMENTE igual ...
   const mainChannel = {
     url: creator?.youtubeMainUrl,
     label: "Mah",
@@ -175,7 +194,7 @@ export default async function YoutubePage() {
                     
                     <CardContent className="p-5 relative">
                       <div className="absolute top-0 right-0 -mt-3 mr-4">
-                         <Badge className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-lg">New</Badge>
+                          <Badge className="bg-red-600 hover:bg-red-700 text-white border-0 shadow-lg">New</Badge>
                       </div>
                       <h3 className="font-bold text-white text-lg line-clamp-2 mb-2 group-hover:text-red-400 transition-colors">
                         {video.title}

@@ -12,8 +12,21 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { unstable_cache } from "next/cache";
 
 export const revalidate = 60;
+
+const getCachedWishlistUrl = unstable_cache(
+  async () => {
+    const creator = await prisma.user.findFirst({ 
+      where: { role: "CREATOR" },
+      select: { amazonWishlistUrl: true } // Otimização: Selecionar só o campo necessário
+    });
+    return creator?.amazonWishlistUrl || "#";
+  },
+  ['wishlist-url-data'], 
+  { revalidate: 86400, tags: ['user-profile'] } // 24 Horas de Cache
+);
 
 export default async function WishlistPage() {
   const creator = await prisma.user.findFirst({ where: { role: "CREATOR" } });
