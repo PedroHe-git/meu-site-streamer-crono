@@ -216,6 +216,7 @@ model Sponsor {
   imageUrl    String
   linkUrl     String?
   description String?
+  isActive    Boolean  @default(true)
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())

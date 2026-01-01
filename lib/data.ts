@@ -2,18 +2,23 @@ import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
 
 // --- BUSCAR PATROCINADORES (Cacheado) ---
-export const getSponsors = unstable_cache(
-  async () => {
-    return await prisma.sponsor.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-  },
-  ['sponsors-list'], // Chave única do cache
-  { 
-    revalidate: 3600, // (Backup) Atualiza a cada 1 hora mesmo se ninguém mexer
-    tags: ['sponsors'] // Etiqueta para limparmos o cache manualmente
-  } 
-);
+export const getSponsors = async (isActive: boolean = true) => {
+  const fetchFn = unstable_cache(
+    async () => {
+      return await prisma.sponsor.findMany({
+        where: { isActive }, // 👈 Filtra pelo status
+        orderBy: { createdAt: 'desc' }
+      });
+    },
+    ['sponsors-list', isActive ? 'active' : 'inactive'], // 👈 Chave de cache diferente para cada lista
+    { 
+      revalidate: 3600, 
+      tags: ['sponsors'] 
+    } 
+  );
+
+  return fetchFn();
+};
 
 // --- BUSCAR REDES SOCIAIS (Cacheado) ---
 export const getSocialItems = unstable_cache(

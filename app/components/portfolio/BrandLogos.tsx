@@ -12,7 +12,9 @@ type Sponsor = {
 };
 
 export default async function BrandLogos() {
-  const partners = await getSponsors();
+  const partners = await getSponsors(true);
+
+  if (!partners || partners.length === 0) return null;
 
   return (
     <section className="py-24 bg-[#050505] relative overflow-hidden">
@@ -60,7 +62,7 @@ export default async function BrandLogos() {
                      fill 
                      unoptimized={true} // 👈 FIX
                      sizes="96px"
-                     className="object-contain filter grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500 relative z-10" 
+                     className="object-contain opacity-80 group-hover:opacity-100 transition-all duration-500 relative z-10 scale-95 group-hover:scale-100"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-white/5 rounded-full text-xl font-bold text-gray-500 relative z-10">

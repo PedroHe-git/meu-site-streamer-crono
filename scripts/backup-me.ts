@@ -31,6 +31,9 @@ async function main() {
           media: true
         }
       },
+      
+      socialItems: true,
+      sponsors: true,
 
       // Se tiver sessões ativas (opcional)
       sessions: true,

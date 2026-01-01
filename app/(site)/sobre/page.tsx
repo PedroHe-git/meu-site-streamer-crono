@@ -3,6 +3,7 @@ import BrandLogos from "@/app/components/portfolio/BrandLogos";
 import prisma from "@/lib/prisma"; // 👈 Corrigido: Importação default (sem chaves)
 import { UserRole } from "@prisma/client";
 import { Metadata } from "next";
+import PastPartners from "@/app/components/portfolio/PastPartners";
 
 export const metadata: Metadata = {
   title: "Sobre Mim",
@@ -29,7 +30,8 @@ export default async function SobrePage() {
   return (
     <main className="min-h-screen pt-20 bg-gray-950">
       <AboutSection user={user} />
-      <BrandLogos></BrandLogos>
+      <BrandLogos/>
+      <PastPartners/>
     </main>
   );
 }

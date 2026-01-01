@@ -13,74 +13,100 @@ async function main() {
     process.exit(1);
   }
 
-  const userData = JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
-  console.log(`🔄 Iniciando restauração para: ${userData.email}`);
+  const data = JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
+  console.log(`🚀 Iniciando restauração TURBO para: ${data.email}`);
 
-  // 1. Criar o Usuário
-  const { mediaStatuses, scheduleItems, accounts, sessions, ...userProps } = userData;
+  // 1. Restaurar Usuário
+  // Removemos as relações aninhadas para criar o usuário limpo
+  const { mediaStatuses, scheduleItems, accounts, sessions, socialItems, sponsors, ...userProps } = data;
 
   const user = await prisma.user.upsert({
     where: { email: userProps.email },
     update: userProps,
     create: userProps,
   });
+  console.log(`✅ Usuário restaurado: ${user.name}`);
 
-  console.log(`👤 Usuário restaurado: ${user.name}`);
-
-  // 2. Restaurar Contas
-  if (accounts && accounts.length > 0) {
-    for (const account of accounts) {
-      await prisma.account.create({
-        data: { ...account, userId: user.id }
-      }).catch(() => {});
-    }
-    console.log(`🔑 Contas restauradas.`);
-  }
-
-  // 3. Restaurar Mídias Únicas
-  const allMedias = [
+  // 2. Restaurar Mídias (Filmes/Séries)
+  // Extrai todas as mídias das listas e cronogramas
+  const allMediasRaw = [
     ...(mediaStatuses || []).map((s: any) => s.media),
     ...(scheduleItems || []).map((s: any) => s.media)
-  ].filter((v, i, a) => v && a.findIndex(t => (t.id === v.id)) === i);
+  ].filter(m => m !== null && m !== undefined);
 
-  console.log(`🎬 Restaurando ${allMedias.length} filmes/jogos...`);
-  
-  for (const media of allMedias) {
-    if(!media) continue;
-    await prisma.media.upsert({
-      where: { id: media.id },
-      update: media,
-      create: media,
+  // Remove duplicadas baseado no ID
+  const uniqueMedias = Array.from(new Map(allMediasRaw.map((m: any) => [m.id, m])).values());
+
+  if (uniqueMedias.length > 0) {
+    console.log(`🎬 Restaurando ${uniqueMedias.length} mídias...`);
+    // createMany com skipDuplicates é muito mais rápido que loop for
+    await prisma.media.createMany({
+      data: uniqueMedias,
+      skipDuplicates: true,
     });
   }
 
-  // 4. Restaurar Listas e Cronograma
-  console.log(`📝 Restaurando listas e cronograma...`);
-  
-  if (mediaStatuses) {
-    for (const status of mediaStatuses) {
-      const { media, ...statusData } = status;
-      await prisma.mediaStatus.create({
-        data: { ...statusData, userId: user.id, mediaId: media.id }
-      }).catch(() => {});
-    }
+  // 3. Restaurar Contas Vinculadas
+  if (accounts && accounts.length > 0) {
+    console.log(`key: Restaurando ${accounts.length} contas...`);
+    await prisma.account.createMany({
+      data: accounts.map((a: any) => ({ ...a, userId: user.id })),
+      skipDuplicates: true,
+    });
   }
 
-  if (scheduleItems) {
-    for (const item of scheduleItems) {
-      const { media, ...itemData } = item;
-      await prisma.scheduleItem.create({
-        data: { ...itemData, userId: user.id, mediaId: media.id }
-      }).catch(() => {});
-    }
+  // 4. Restaurar Status (Listas)
+  if (mediaStatuses && mediaStatuses.length > 0) {
+    console.log(`📝 Restaurando ${mediaStatuses.length} itens da lista...`);
+    const statusPayload = mediaStatuses.map((item: any) => {
+      const { media, ...rest } = item; // Remove o objeto media aninhado
+      return { ...rest, userId: user.id, mediaId: media.id };
+    });
+    
+    await prisma.mediaStatus.createMany({
+      data: statusPayload,
+      skipDuplicates: true,
+    });
   }
 
-  console.log("✅ Restauração Completa!");
+  // 5. Restaurar Cronograma
+  if (scheduleItems && scheduleItems.length > 0) {
+    console.log(`📅 Restaurando ${scheduleItems.length} itens do cronograma...`);
+    const schedulePayload = scheduleItems.map((item: any) => {
+      const { media, ...rest } = item; // Remove o objeto media aninhado
+      return { ...rest, userId: user.id, mediaId: media.id };
+    });
+
+    await prisma.scheduleItem.createMany({
+      data: schedulePayload,
+      skipDuplicates: true,
+    });
+  }
+
+  // 6. Restaurar Redes Sociais (NOVO)
+  if (socialItems && socialItems.length > 0) {
+    console.log(`📲 Restaurando ${socialItems.length} redes sociais...`);
+    await prisma.socialItem.createMany({
+      data: socialItems.map((s: any) => ({ ...s, userId: user.id })),
+      skipDuplicates: true,
+    });
+  }
+
+  // 7. Restaurar Patrocinadores (NOVO)
+  if (sponsors && sponsors.length > 0) {
+    console.log(`🤝 Restaurando ${sponsors.length} patrocinadores...`);
+    await prisma.sponsor.createMany({
+      data: sponsors.map((s: any) => ({ ...s, userId: user.id })),
+      skipDuplicates: true,
+    });
+  }
+
+  console.log("🏁 Restauração Completa com Sucesso!");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("❌ Erro na restauração:", e);
     process.exit(1);
   })
   .finally(async () => {
