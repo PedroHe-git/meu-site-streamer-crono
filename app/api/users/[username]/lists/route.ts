@@ -98,7 +98,7 @@ export async function GET(
         return { items, total, totalPages: Math.ceil(total / pageSize) };
       },
       // Atualizamos a chave do cache
-      [`lists-v4-${normalizedUsername}-${status}-${page}-${pageSize}-${searchTerm}-${isOwner}`], 
+      [`lists-v5-${normalizedUsername}-${status}-${page}-${pageSize}-${searchTerm}-${isOwner}`], 
       {
         revalidate: 3600,
         tags: [`user-profile-${normalizedUsername}`]
