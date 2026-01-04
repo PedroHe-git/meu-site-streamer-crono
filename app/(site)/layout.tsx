@@ -9,7 +9,7 @@ import AuthContext from '@/app/context/AuthContext';
 import AutoLogout from '@/app/components/AutoLogout';
 import { HibernationProvider } from "@/app/context/HibernationContext"; 
 // 👇 Importação correta (ajuste o caminho se necessário)
-import PageTracker from '@/app/components/analytics/PageTracker'; 
+import PageViewTracker from '@/app/components/analytics/PageViewTracker'; 
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -35,7 +35,8 @@ export default function RootLayout({
             
             {/* Componentes de lógica invisíveis ficam aqui 👇 */}
             <AutoLogout />
-            <PageTracker /> {/* 👈 Ele fica aqui, fechado, sem abraçar nada */}
+            
+            <PageViewTracker /> {/* 👈 Ele fica aqui, fechado, sem abraçar nada */}
 
             <Header />
             

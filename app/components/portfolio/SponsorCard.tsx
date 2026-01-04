@@ -1,9 +1,8 @@
-"use client"; // 👈 Isso habilita o onClick
+"use client";
 
 import { ExternalLink } from "lucide-react";
 import Image from "next/image";
 
-// Definimos o tipo aqui para garantir
 type Sponsor = {
   id: string;
   name: string;
@@ -16,24 +15,35 @@ type Sponsor = {
 export default function SponsorCard({ partner }: { partner: Sponsor }) {
   
   const handleTrackClick = () => {
-    // 🔥 Envia o evento para o seu Analytics
+    // Pegamos o path atual ou "/"
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : "/";
+
+    // Debug: Mostra no console do navegador que o clique foi tentado
+    console.log("Enviando clique:", { event: "CLICK", details: partner.name });
+
     fetch("/api/analytics/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
-        type: "LINK_CLICK", 
-        label: partner.name // Ex: "Growth Supplements"
+        // 👇 AQUI ESTAVA O PROBLEMA: Usando os nomes exatos da sua API
+        event: "CLICK",           // Sua API espera 'event'
+        details: partner.name,    // Sua API espera 'details'
+        path: currentPath         // Sua API espera 'path'
       }),
-    }).catch(err => console.error("Erro tracking", err));
+      keepalive: true 
+    }).catch(err => console.error("Erro no tracking:", err));
   };
 
   return (
     <a 
       href={partner.linkUrl || "#"}
       target={partner.linkUrl ? "_blank" : "_self"}
-      onClick={handleTrackClick} // 👈 Rastreador adicionado
+      rel="noopener noreferrer"
+      onClick={handleTrackClick} 
       className="group relative flex flex-col items-center text-center p-8 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_0_30px_-5px_rgba(168,85,247,0.2)]"
     >
+      {/* ... (O restante do layout e imagens continua igual) ... */}
+      
       {partner.category && (
         <span className="absolute top-4 right-4 text-[10px] font-mono text-gray-500 bg-black/40 px-2 py-1 rounded border border-white/5 group-hover:text-white group-hover:border-purple-500/30 transition-colors">
             {partner.category}
@@ -50,7 +60,6 @@ export default function SponsorCard({ partner }: { partner: Sponsor }) {
              fill 
              unoptimized={true}
              sizes="96px"
-             // Mantendo seu estilo colorido/opaco
              className="object-contain opacity-80 group-hover:opacity-100 transition-all duration-500 relative z-10 scale-95 group-hover:scale-100"
           />
         ) : (
@@ -66,7 +75,7 @@ export default function SponsorCard({ partner }: { partner: Sponsor }) {
            {partner.linkUrl && <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0" />}
         </h4>
         <p className="text-sm text-gray-500 group-hover:text-gray-300 transition-colors leading-relaxed line-clamp-2">
-          {partner.description || "Parceiro oficial do canal."}
+          {partner.description || "Parceiro oficial."}
         </p>
       </div>
 

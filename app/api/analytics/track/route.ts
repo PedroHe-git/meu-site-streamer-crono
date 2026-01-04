@@ -4,25 +4,34 @@ import { prisma } from "@/lib/prisma";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { type, label } = body;
+    const { event, path, details } = body; 
 
-    // Validação básica
-    if (!type || !label) {
-      return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+    // 🔥 DEBUG: Vai aparecer no terminal do VS Code quando você clicar
+    console.log("📥 API Analytics Recebeu:", { event, details, path });
+
+    if (event === "PAGE_VIEW" && path) {
+        await prisma.pageView.upsert({
+            where: { path: path },
+            create: { path: path, count: 1 },
+            update: { count: { increment: 1 } },
+        });
     }
 
-    // Salva no banco (Fire and forget)
-    await prisma.analyticsEvent.create({
-      data: {
-        type,
-        label,
-      }
-    });
+    if (event && event !== "PAGE_VIEW") {
+        const novoRegistro = await prisma.analytics.create({
+            data: {
+                event: event,       
+                details: details,  
+                path: path || "/",
+            }
+        });
+        // 🔥 DEBUG: Confirma que o Prisma salvou
+        console.log("✅ Salvo no banco com ID:", novoRegistro.id);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    // Não queremos que o analytics quebre o site, então apenas logamos o erro
-    console.error("Erro analytics:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    console.error("❌ Analytics Error:", error);
+    return NextResponse.json({ success: false }, { status: 500 });
   }
 }

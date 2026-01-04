@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
@@ -58,13 +56,12 @@ model User {
   youtubeThirdUrl   String? 
   youtubeFourthUrl  String? 
 
-  statFollowers     String?  
+  statFollowers     String?
   statMedia         String?
-  statRegion        String?  
-
+  statRegion        String?
   amazonWishlistUrl String?
   
-  bio               String? @db.Text
+  bio               String?   @db.Text
   profileBannerUrl  String?
 
   profileVisibility ProfileVisibility @default(PUBLIC)
@@ -76,6 +73,7 @@ model User {
   sessions        Session[]
   mediaStatuses   MediaStatus[]
   scheduleItems   ScheduleItem[]
+  youtubeChannels YoutubeChannel[] // Relação com canais do YouTube
 
   showToWatchList  Boolean @default(true)
   showWatchingList Boolean @default(true)
@@ -83,17 +81,15 @@ model User {
   showDroppedList  Boolean @default(true)
 
   youtubeSubsCount      Int       @default(0)
-  youtubeViewsCount     BigInt    @default(0) // BigInt pois visualizações podem passar de 2 bilhões
+  youtubeViewsCount     BigInt    @default(0) 
   youtubeVideoCount     Int       @default(0)
 
   twitchFollowersCount  Int       @default(0)
   twitchTotalViews      Int       @default(0)
 
-  instagramFollowersCount Int @default(0)
+  instagramFollowersCount Int     @default(0)
 
   lastStatsUpdate       DateTime?
-
-  youtubeChannels YoutubeChannel[]
 
   @@map("users")
 }
@@ -109,7 +105,6 @@ model Media {
   releaseYear   Int?
   mediaStatuses MediaStatus[]
   scheduleItems ScheduleItem[]
-
   totalSeasons  Int?
 
   @@unique([mediaType, tmdbId])
@@ -136,7 +131,6 @@ model MediaStatus {
   updatedAt             DateTime        @updatedAt @default(now())
 
   @@unique([userId, mediaId])
-  // 👇 NOVO ÍNDICE: Otimiza contagens do dashboard
   @@index([userId, status]) 
   @@index([userId, updatedAt])
 }
@@ -154,12 +148,9 @@ model ScheduleItem {
   media            Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   isCompleted      Boolean  @default(false)
 
-  // 👇 NOVOS ÍNDICES: Otimizam a busca da timeline e filtros
   @@index([userId, scheduledAt])
   @@index([userId, isCompleted])
 }
-
-
 
 // --- MODELOS NEXT-AUTH ---
 model Account {
@@ -237,17 +228,31 @@ model Sponsor {
   @@map("sponsors")
 }
 
-model AnalyticsEvent {
+// 👇 TABELA DE ANALYTICS ATUALIZADA
+// Renomeada de AnalyticsEvent para Analytics para bater com o código
+model Analytics {
   id        String   @id @default(cuid())
-  type      String   // Ex: "PAGE_VIEW", "LINK_CLICK"
-  label     String   // Ex: "/cronograma", "Growth Banner", "Instagram"
-  meta      String?  // Info extra (ex: User Agent ou Referrer, opcional)
+  event     String   // Ex: "PAGE_VIEW", "CLICK_SOCIAL" (Antigo 'type')
+  details   String?  // Ex: "Instagram" (Antigo 'label')
+  path      String?  // Ex: "/cronograma"
+  userAgent String?  // Navegador do usuário
+  referer   String?  // Origem do acesso
   createdAt DateTime @default(now())
 
-  @@index([type, label]) // Para buscar rápido
-  @@index([createdAt])   // Para filtrar por data
+  @@index([event, details])
+  @@index([createdAt])
+  @@map("analytics") // Nome da tabela no banco
 }
 
+model PageView {
+  path      String   @id  // Ex: "/" ou "/cronograma"
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+  
+  @@map("page_views")
+}
+
+// 👇 TABELA DE CANAIS DO YOUTUBE
 model YoutubeChannel {
   id          String   @id @default(cuid())
   channelId   String   @unique // O ID "UC..."
