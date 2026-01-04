@@ -1,6 +1,6 @@
 import { getSponsors } from "@/lib/data";
 import { Handshake } from "lucide-react";
-import SponsorCard from "./SponsorCard"; // 👈 Importe o novo componente
+import SponsorCard from "./SponsorCard";
 
 export default async function BrandLogos() {
   const partners = await getSponsors(true);
@@ -29,12 +29,9 @@ export default async function BrandLogos() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
-          
           {partners.map((partner) => (
-            // 👇 Renderizamos o Card Cliente aqui
             <SponsorCard key={partner.id} partner={partner} />
           ))}
-          
         </div>
       </div>
     </section>

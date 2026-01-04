@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { 
   BarChart3, Eye, Youtube, Twitch, Instagram, MapPin, 
-  ArrowUpRight, RefreshCw, MousePointerClick, Video, Users 
+  RefreshCw, Video 
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
@@ -19,28 +19,10 @@ export default async function AnalyticsPage() {
   // 1. Busca Usuário + Canais do YouTube
   const user = await prisma.user.findUnique({ 
     where: { email: session.user.email },
-    include: { youtubeChannels: true } // 👈 Importante: Traz os canais individuais
+    include: { youtubeChannels: true } 
   });
 
   if (!user || user.role !== "CREATOR") redirect("/");
-
-  // 2. Busca PageViews (Trafego do Site)
-  const pageViews = await prisma.pageView.findMany({
-    orderBy: { count: 'desc' },
-    take: 20
-  });
-
-  // 3. Busca Cliques em Links (Sponsors/Social)
-  const clicks = await prisma.analytics.groupBy({
-    by: ['details'],
-    where: { event: "CLICK" },
-    _count: { details: true },
-    orderBy: { _count: { details: 'desc' } }
-  });
-
-  // Cálculos Gerais
-  const totalSiteViews = pageViews.reduce((acc, curr) => acc + curr.count, 0);
-  const totalClicks = clicks.reduce((acc, curr) => acc + curr._count.details, 0);
 
   // Formatador Numérico (Ex: 1.5M ou 1.500)
   const format = (n: number | bigint | null) => {
@@ -56,22 +38,18 @@ export default async function AnalyticsPage() {
         <div>
             <h1 className="text-3xl font-bold flex items-center gap-3 text-white">
               <BarChart3 className="text-purple-500 w-8 h-8" /> 
-              Dashboard & Analytics
+              Métricas Sociais
             </h1>
             <p className="text-gray-400 text-sm mt-1">
-                Monitoramento em tempo real de todas as suas plataformas.
+                Acompanhamento consolidado das suas redes (YouTube, Twitch, Instagram).
             </p>
         </div>
 
         <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end mr-4">
-                <span className="text-xs text-gray-500 uppercase font-bold">Acessos Totais</span>
-                <span className="text-2xl font-mono font-bold text-white">{format(totalSiteViews)}</span>
-            </div>
-            
+            {/* Botão de Sincronização Mantido (Essencial para atualizar o YouTube/Twitch) */}
             <Button variant="outline" asChild className="border-purple-500/30 hover:bg-purple-500/20 text-purple-300">
                 <Link href={`/api/cron/stats?key=${process.env.CRON_SECRET}`} target="_blank">
-                    <RefreshCw className="mr-2 h-4 w-4" /> Sincronizar APIs
+                    <RefreshCw className="mr-2 h-4 w-4" /> Sincronizar Agora
                 </Link>
             </Button>
         </div>
@@ -110,7 +88,7 @@ export default async function AnalyticsPage() {
            </div>
            <div className="space-y-1">
              <div className="text-3xl font-black text-white">{format(user.instagramFollowersCount)}</div>
-             <p className="text-xs text-pink-300/60 uppercase font-bold tracking-wider">Seguidores</p>
+             <p className="text-xs text-pink-300/60 uppercase font-bold tracking-wider">Seguidores (manual)</p>
            </div>
            <div className="mt-4 pt-4 border-t border-pink-500/20 flex justify-between items-center">
               <span className="text-xs text-gray-400">Região Base</span>
@@ -143,7 +121,7 @@ export default async function AnalyticsPage() {
       {/* --- SEÇÃO 2: DETALHAMENTO DE CANAIS YOUTUBE --- */}
       <div>
         <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <Youtube className="text-red-500" /> Rede de Canais
+            <Youtube className="text-red-500" /> Canais Youtube
         </h2>
         
         {user.youtubeChannels.length === 0 ? (
@@ -176,91 +154,7 @@ export default async function AnalyticsPage() {
             </div>
         )}
       </div>
-
-      {/* --- SEÇÃO 3: MÉTRICAS DO SITE E SPONSORS --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* Tabela de PageViews */}
-        <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                <h3 className="font-bold flex items-center gap-2 text-white">
-                    <Eye className="w-4 h-4 text-blue-400" /> Páginas Mais Vistas
-                </h3>
-            </div>
-            <div className="overflow-auto max-h-[400px]">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-white/5 text-gray-400 uppercase text-xs sticky top-0 backdrop-blur-md">
-                        <tr>
-                            <th className="px-6 py-3">Caminho</th>
-                            <th className="px-6 py-3 text-right">Views</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {pageViews.length === 0 ? (
-                            <tr><td colSpan={2} className="p-6 text-center text-gray-500">Sem dados.</td></tr>
-                        ) : (
-                            pageViews.map((page) => (
-                                <tr key={page.path} className="hover:bg-white/5 transition-colors">
-                                    <td className="px-6 py-3 text-gray-300 truncate max-w-[200px]">
-                                        <a href={page.path} target="_blank" className="hover:text-blue-400 flex items-center gap-1">
-                                            {page.path === '/' ? '/ (Home)' : page.path}
-                                        </a>
-                                    </td>
-                                    <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">
-                                        {format(page.count)}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        {/* Tabela de Cliques em Sponsors */}
-        <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                <h3 className="font-bold flex items-center gap-2 text-white">
-                    <MousePointerClick className="w-4 h-4 text-green-400" /> Performance de Sponsors
-                </h3>
-                <span className="text-xs text-green-400 font-bold bg-green-950/30 px-2 py-1 rounded border border-green-900/50">
-                    {totalClicks} Cliques Totais
-                </span>
-            </div>
-            <div className="overflow-auto max-h-[400px]">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-white/5 text-gray-400 uppercase text-xs sticky top-0 backdrop-blur-md">
-                        <tr>
-                            <th className="px-6 py-3">Link / Parceiro</th>
-                            <th className="px-6 py-3 text-right">Cliques</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {clicks.length === 0 ? (
-                            <tr>
-                                <td colSpan={2} className="p-8 text-center text-gray-500 flex flex-col items-center gap-2">
-                                    <MousePointerClick className="opacity-20" size={32} />
-                                    Nenhum clique registrado ainda.
-                                </td>
-                            </tr>
-                        ) : (
-                            clicks.map((item) => (
-                                <tr key={item.details} className="hover:bg-white/5 transition-colors group">
-                                    <td className="px-6 py-3 font-medium text-white group-hover:text-green-300 transition-colors">
-                                        {item.details ? item.details.replace('Sponsor: ', '') : "Desconhecido"}
-                                    </td>
-                                    <td className="px-6 py-3 text-right font-mono text-green-400 font-bold text-base">
-                                        {item._count.details}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-      </div>
+      
     </div>
   );
 }
