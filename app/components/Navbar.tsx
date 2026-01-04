@@ -51,7 +51,7 @@ export default function Navbar() {
       className={cn(
         "fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b",
         shouldShowBackground
-          ? "bg-gray-950/90 backdrop-blur-md border-gray-800 py-3 shadow-md"
+          ? "bg-gray-950/90 backdrop-blur-md border-gray-800 py-0 shadow-md"
           : "bg-transparent border-transparent py-5"
       )}
     >

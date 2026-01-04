@@ -9,6 +9,7 @@ import Footer from "@/app/components/portfolio/Footer";
 import { getTwitchStatus } from "@/lib/twitch";
 import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache"; // 👈 1. Importar o cache
+import LiveStats from "@/app/components/home/LiveStats";
 
 // Mantemos o revalidate baixo para o Status da Twitch atualizar rápido
 export const revalidate = 60;
@@ -16,14 +17,23 @@ export const revalidate = 60;
 // 2. Criamos uma função cacheada para buscar o Criador sem acordar o banco toda hora
 const getCachedCreator = unstable_cache(
   async () => {
-    return await prisma.user.findFirst({
+    const user = await prisma.user.findFirst({
       where: { role: "CREATOR" }
     });
+
+    if (!user) return null;
+
+    // 👇 A CORREÇÃO MÁGICA:
+    // Convertemos o BigInt para String para o Cache não quebrar
+    return {
+      ...user,
+      youtubeViewsCount: user.youtubeViewsCount.toString(),
+    };
   },
-  ['creator-profile-home'], // Chave única do cache
+  ['creator-profile-home'], 
   {
-    revalidate: 86400, // 👈 Cache de 24 HORAS. O banco só acorda 1 vez por dia para isso.
-    tags: ['user-profile'] // Tag para invalidar manualmente se você editar o perfil
+    revalidate: 86400, 
+    tags: ['user-profile'] 
   }
 );
 
@@ -71,15 +81,11 @@ export default async function HomePage() {
               </div>
 
               <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[1.1]">
-                BEM VINDO AO <br />
+                BEM VINDO AO CANAL <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 animate-gradient-x">
                   {creator?.name?.toUpperCase() || "MAHMOOJEN"}
                 </span>
               </h1>
-
-              <p className="text-lg md:text-xl text-gray-400 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                {creator?.bio || "Gameplay de alta qualidade, resenha e momentos épicos. Junte-se à comunidade mais caótica e divertida da Twitch."}
-              </p>
 
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-4">
                 <Button asChild size="lg" className="h-14 px-8 text-lg bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-900/20 rounded-xl transition-all hover:scale-105">
@@ -96,18 +102,7 @@ export default async function HomePage() {
 
               {/* Stats Rápidos (DADOS DO BANCO - Agora cacheados) */}
               <div className="flex items-center justify-center lg:justify-start gap-8 pt-8 border-t border-white/5">
-                <div>
-                  <p className="text-2xl font-bold text-white">{creator?.statFollowers || "0"}</p>
-                  <p className="text-xs text-gray-500 uppercase tracking-widest">Seguidores</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">{creator?.statMedia || "0"}</p>
-                  <p className="text-xs text-gray-500 uppercase tracking-widest">Mídias Assistidas</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">{creator?.statRegion || "BR"}</p>
-                  <p className="text-xs text-gray-500 uppercase tracking-widest">Região</p>
-                </div>
+                <LiveStats />
               </div>
             </div>
 
@@ -120,7 +115,7 @@ export default async function HomePage() {
                 
                 <div className="relative aspect-video rounded-2xl bg-black border border-white/10 shadow-2xl overflow-hidden">
                   {isLive ? (
-                    <TwitchPlayer channel="mahmoojen" />
+                    <TwitchPlayer channel={TWITCH_USERNAME} />
                   ) : (
                     // Estado Offline
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-[url('/images/banner-offline.jpg')] bg-cover bg-center">

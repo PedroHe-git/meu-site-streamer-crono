@@ -1,34 +1,41 @@
 import { prisma } from "@/lib/prisma";
-import { getSocialItems } from "@/lib/data"; // Supondo que isso busca no banco
+import { getSocialItems } from "@/lib/data";
 import SocialCarousel from "@/app/components/SocialCarousel";
-import { unstable_cache } from "next/cache"; // 👈 Importar cache
+import { unstable_cache } from "next/cache";
 
 export const revalidate = 60; 
 
 // Função cacheada que busca TUDO de uma vez e segura por 1 hora
 const getCachedSocialPageData = unstable_cache(
   async () => {
-    // Busca tudo em paralelo para ser mais rápido
-    const [rawYtItems, rawInstaItems, creator] = await Promise.all([
+    // Busca tudo em paralelo
+    const [rawYtItems, rawInstaItems, rawCreator] = await Promise.all([
       getSocialItems("YOUTUBE"),
       getSocialItems("INSTAGRAM"),
       prisma.user.findFirst({ where: { role: "CREATOR" } })
     ]);
 
+    // 👇 A CORREÇÃO ESTÁ AQUI:
+    // Precisamos converter o BigInt para String antes de retornar para o cache
+    const creator = rawCreator ? {
+        ...rawCreator,
+        youtubeViewsCount: rawCreator.youtubeViewsCount.toString() // Converte BigInt para texto
+    } : null;
+
     return { rawYtItems, rawInstaItems, creator };
   },
   ['social-page-full-data'], // Chave única
   {
-    revalidate: 3600, // 👈 Cache de 1 hora. O banco dorme o resto do tempo.
-    tags: ['social', 'user-profile'] // Tags para invalidar se postar algo novo
+    revalidate: 3600, 
+    tags: ['social', 'user-profile'] 
   }
 );
 
 export default async function SocialPage() {
-  // Usa a versão cacheada
+  // Usa a versão cacheada (agora segura com string)
   const { rawYtItems, rawInstaItems, creator } = await getCachedSocialPageData();
 
-  // 3. Formata os dados (processamento leve, pode ficar fora do cache)
+  // 3. Formata os dados
   const ytItems = rawYtItems.map((item: any) => ({
     id: item.id,
     title: item.title || "Sem título",

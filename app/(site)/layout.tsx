@@ -7,8 +7,9 @@ import '@/app/globals.css';
 import Header from '@/app/components/portfolio/Header'; 
 import AuthContext from '@/app/context/AuthContext';
 import AutoLogout from '@/app/components/AutoLogout';
-// 👇 Importamos o Provider de Hibernação aqui
 import { HibernationProvider } from "@/app/context/HibernationContext"; 
+// 👇 Importação correta (ajuste o caminho se necessário)
+import PageTracker from '@/app/components/analytics/PageTracker'; 
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -25,14 +26,16 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className="dark">
       <body className={`${inter.className} bg-gray-950 text-gray-100`}>
-        {/* 1. Contexto de Autenticação (Com economia de Banco ativa) */}
+
+        {/* 1. Contexto de Autenticação */}
         <AuthContext>
           
-          {/* 2. Contexto de Hibernação (Controle Global) */}
+          {/* 2. Contexto de Hibernação */}
           <HibernationProvider>
             
-            {/* Componente que vigia a inatividade */}
+            {/* Componentes de lógica invisíveis ficam aqui 👇 */}
             <AutoLogout />
+            <PageTracker /> {/* 👈 Ele fica aqui, fechado, sem abraçar nada */}
 
             <Header />
             
@@ -45,6 +48,7 @@ export default function RootLayout({
           </HibernationProvider>
           
         </AuthContext>
+
       </body>
     </html>
   );

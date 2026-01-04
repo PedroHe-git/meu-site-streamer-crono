@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Media, MediaStatus, ScheduleItem, UserRole, ProfileVisibility, MediaType } from "@prisma/client";
-import Image from "next/image"; 
+import Image from "next/image";
 import { Input } from "@/components/ui/input";
 
 
@@ -32,7 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Pen, Settings, List, CalendarDays, Calendar, Loader2, Check, BarChart, Share2, Tv, Upload, Eye, Handshake, Gift } from "lucide-react";
+import { Pen, Settings, List, CalendarDays, Calendar, Loader2, Check, BarChart, Share2, Tv, Upload, Eye, Handshake, Gift, Presentation } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -144,8 +144,7 @@ export default function DashboardPage() {
   const bannerAspect = 16 / 9;
 
   // Stats
-  const [statFollowers, setStatFollowers] = useState("");
-  const [statMedia, setStatMedia] = useState("");
+  const [instagramCount, setInstagramCount] = useState("");
   const [statRegion, setStatRegion] = useState("");
 
   // --- MODO HIBERNAÇÃO (ZERO SCALE) ---
@@ -154,7 +153,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // 10 minutos de inatividade = Hibernação
-    const HIBERNATION_TIME = 10 * 60 * 1000; 
+    const HIBERNATION_TIME = 10 * 60 * 1000;
 
     const resetHibernationTimer = () => {
       if (isHibernating) return; // Se já dormiu, só acorda com clique
@@ -168,9 +167,9 @@ export default function DashboardPage() {
     };
 
     const events = ["mousedown", "keydown", "scroll", "mousemove", "touchstart"];
-    
+
     events.forEach(event => window.addEventListener(event, resetHibernationTimer));
-    
+
     // Inicia o timer
     resetHibernationTimer();
 
@@ -188,20 +187,19 @@ export default function DashboardPage() {
       setProfileVisibility(session.user.profileVisibility || "PUBLIC");
       if (!selectedFile) setPreviewImage(session.user.image || null);
       if (!selectedBannerFile) setPreviewBanner(session.user.profileBannerUrl || null);
-      
+
       setShowToWatch(session.user.showToWatchList ?? true);
       setShowWatching(session.user.showWatchingList ?? true);
       setShowWatched(session.user.showWatchedList ?? true);
       setShowDropped(session.user.showDroppedList ?? true);
-      
+
       const userAny = session.user as any;
       setDiscordWebhook(userAny.discordWebhookUrl || "");
       setTwitchLink(userAny.twitchUsername ? `https://twitch.tv/${userAny.twitchUsername}` : "");
-      
-      setStatFollowers(userAny.statFollowers || "");
-      setStatMedia(userAny.statMedia || "");
+
+      setInstagramCount(userAny.instagramFollowersCount || "");
       setStatRegion(userAny.statRegion || "");
-      
+
       setYtMain(userAny.youtubeMainUrl || "");
       setYtSecond(userAny.youtubeSecondUrl || "");
       setYtThird(userAny.youtubeThirdUrl || "");
@@ -221,7 +219,7 @@ export default function DashboardPage() {
         fetch(`/api/mediastatus?status=WATCHING&page=1&pageSize=50&searchTerm=`, { cache: 'no-store' }),
         fetch(`/api/schedule?list=pending`, { cache: 'no-store' })
       ]);
-      
+
       if (resWatching.ok) {
         const watchingData = await resWatching.json();
         setInitialMediaItems(watchingData.items || []);
@@ -250,10 +248,10 @@ export default function DashboardPage() {
   // Efeito para disparar a busca (Monitora Auth e DataVersion)
   useEffect(() => {
     if (status === "authenticated") {
-        fetchSharedData();
-    } else if (status === "unauthenticated") { 
-        setIsLoading(false); 
-        if (typeof window !== 'undefined') redirect("/auth/signin"); 
+      fetchSharedData();
+    } else if (status === "unauthenticated") {
+      setIsLoading(false);
+      if (typeof window !== 'undefined') redirect("/auth/signin");
     }
   }, [status, fetchSharedData, dataVersionKey]); // 👈 dataVersionKey fica AQUI para disparar o refresh
 
@@ -283,9 +281,9 @@ export default function DashboardPage() {
 
   const mediaItems = useMemo(() => mapDataToMediaItems(initialMediaItems), [initialMediaItems]);
   const scheduleItems = useMemo(() => mapDataToScheduleItems(initialScheduleItems), [initialScheduleItems]);
-  
+
   const handleDataChanged = useCallback(() => { setDataVersionKey(prevKey => prevKey + 1); }, []);
-  
+
   const handleAddSchedule = (newSchedule: MappedScheduleItem) => { setInitialScheduleItems((prev) => [...prev, newSchedule]); handleDataChanged(); };
   const handleRemoveSchedule = (id: string) => { setInitialScheduleItems((prev) => prev.filter((item) => item.id !== id)); handleDataChanged(); };
   const handleCompleteSchedule = (id: string) => { setInitialScheduleItems((prev) => prev.map((item) => (item.id === id ? { ...item, isCompleted: true } : item))); handleDataChanged(); };
@@ -310,42 +308,44 @@ export default function DashboardPage() {
     try {
       if (selectedFile) { newImageUrl = await handleAvatarUpload(); }
       if (selectedBannerFile) { newBannerUrl = await handleBannerUpload(); }
-      const payload = { 
-        name: displayName, bio: bio, profileVisibility: profileVisibility, 
-        showToWatchList: showToWatch, showWatchingList: showWatching, showWatchedList: showWatched, showDroppedList: showDropped, 
-        image: newImageUrl, profileBannerUrl: newBannerUrl, discordWebhookUrl: discordWebhook, twitchUrl: twitchLink, 
-        statFollowers, statMedia, statRegion, 
-        youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth, 
-        amazonWishlistUrl: amazonLink, 
+      const payload = {
+        name: displayName, bio: bio, profileVisibility: profileVisibility,
+        showToWatchList: showToWatch, showWatchingList: showWatching, showWatchedList: showWatched, showDroppedList: showDropped,
+        image: newImageUrl, profileBannerUrl: newBannerUrl, discordWebhookUrl: discordWebhook, twitchUrl: twitchLink,
+        instagramFollowersCount: parseInt(instagramCount.toString()) || 0,
+        statRegion,
+        youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth,
+        amazonWishlistUrl: amazonLink,
       };
       const res = await fetch('/api/profile/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Falha ao guardar definições.'); }
       const newSettings = await res.json();
-      if (updateSession) { 
-        await updateSession({ 
-          ...session, 
-          user: { 
-            ...session?.user, 
-            name: newSettings.name, image: newSettings.image, bio: newSettings.bio, 
-            profileVisibility: newSettings.profileVisibility, 
-            showToWatchList: newSettings.showToWatchList, showWatchingList: newSettings.showWatchingList, showWatchedList: newSettings.showWatchedList, showDroppedList: newSettings.showDroppedList, 
-            profileBannerUrl: newSettings.profileBannerUrl, twitchUsername: newSettings.twitchUsername, 
-            youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth, 
-            statFollowers: statFollowers, statMedia: statMedia, statRegion: statRegion, 
-            amazonWishlistUrl: amazonLink, 
-          } 
-        }); 
+      if (updateSession) {
+        await updateSession({
+          ...session,
+          user: {
+            ...session?.user,
+            name: newSettings.name, image: newSettings.image, bio: newSettings.bio,
+            profileVisibility: newSettings.profileVisibility,
+            showToWatchList: newSettings.showToWatchList, showWatchingList: newSettings.showWatchingList, showWatchedList: newSettings.showWatchedList, showDroppedList: newSettings.showDroppedList,
+            profileBannerUrl: newSettings.profileBannerUrl, twitchUsername: newSettings.twitchUsername,
+            youtubeMainUrl: ytMain, youtubeSecondUrl: ytSecond, youtubeThirdUrl: ytThird, youtubeFourthUrl: ytFourth,
+            instagramFollowersCount: parseInt(instagramCount.toString()) || 0,
+            statRegion: statRegion,
+            amazonWishlistUrl: amazonLink,
+          }
+        });
       }
       toast({ title: "Perfil Atualizado!", description: "As suas alterações foram guardadas com sucesso.", className: "bg-green-600 text-white border-none", });
       setSelectedFile(null); setSelectedBannerFile(null); setIsProfileModalOpen(false);
-    } catch (error: any) { 
-      console.error("Erro ao guardar definições:", error); 
-      setActionError(`Erro: ${error.message}`); 
-      toast({ variant: "destructive", title: "Erro ao salvar", description: error.message }); 
-    } finally { 
-      setIsSavingSettings(false); 
-      if (fileInputRef.current) fileInputRef.current.value = ""; 
-      if (bannerFileInputRef.current) bannerFileInputRef.current.value = ""; 
+    } catch (error: any) {
+      console.error("Erro ao guardar definições:", error);
+      setActionError(`Erro: ${error.message}`);
+      toast({ variant: "destructive", title: "Erro ao salvar", description: error.message });
+    } finally {
+      setIsSavingSettings(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (bannerFileInputRef.current) bannerFileInputRef.current.value = "";
     }
   };
 
@@ -355,7 +355,7 @@ export default function DashboardPage() {
   // Se estiver hibernando, mostra a tela preta e BLOQUEIA a UI normal
   if (isHibernating) {
     return (
-      <div 
+      <div
         className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center text-white cursor-pointer"
         onClick={() => {
           setIsHibernating(false); // Acorda ao clicar
@@ -384,46 +384,46 @@ export default function DashboardPage() {
       <canvas ref={canvasRef} style={{ display: 'none', objectFit: 'contain' }} />
 
       {/* Diálogos Crop Avatar/Banner COM IMAGE OTIMIZADA */}
-      <Dialog open={isCropperOpen} onOpenChange={setIsCropperOpen}> 
-        <DialogContent className="max-w-md"> 
-          <DialogHeader><DialogTitle>Cortar Avatar (1:1)</DialogTitle></DialogHeader> 
+      <Dialog open={isCropperOpen} onOpenChange={setIsCropperOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Cortar Avatar (1:1)</DialogTitle></DialogHeader>
           {imageSrc && (
-            <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(c) => setCompletedCrop(c)} aspect={avatarAspect} circularCrop > 
-               <Image 
-                 ref={imgRef} 
-                 alt="Cortar" 
-                 src={imageSrc} 
-                 width={500}
-                 height={500}
-                 onLoad={onImageLoad} 
-                 style={{ maxHeight: '70vh', width: 'auto', height: 'auto' }} 
-                 unoptimized={true} // 👈 Proteção Vercel
-               /> 
+            <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(c) => setCompletedCrop(c)} aspect={avatarAspect} circularCrop >
+              <Image
+                ref={imgRef}
+                alt="Cortar"
+                src={imageSrc}
+                width={500}
+                height={500}
+                onLoad={onImageLoad}
+                style={{ maxHeight: '70vh', width: 'auto', height: 'auto' }}
+                unoptimized={true} // 👈 Proteção Vercel
+              />
             </ReactCrop>
-          )} 
-          <DialogFooter> <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose> <Button onClick={handleCropConfirm}>Confirmar</Button> </DialogFooter> 
-        </DialogContent> 
+          )}
+          <DialogFooter> <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose> <Button onClick={handleCropConfirm}>Confirmar</Button> </DialogFooter>
+        </DialogContent>
       </Dialog>
 
-      <Dialog open={isBannerCropperOpen} onOpenChange={setIsBannerCropperOpen}> 
-        <DialogContent className="max-w-2xl"> 
-          <DialogHeader><DialogTitle>Cortar Banner (16:9)</DialogTitle></DialogHeader> 
+      <Dialog open={isBannerCropperOpen} onOpenChange={setIsBannerCropperOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Cortar Banner (16:9)</DialogTitle></DialogHeader>
           {bannerImageSrc && (
-            <ReactCrop crop={bannerCrop} onChange={(_, percentCrop) => setBannerCrop(percentCrop)} onComplete={(c) => setCompletedBannerCrop(c)} aspect={bannerAspect} > 
-               <Image 
-                 ref={bannerImgRef} 
-                 alt="Cortar" 
-                 src={bannerImageSrc} 
-                 width={800}
-                 height={450}
-                 onLoad={onBannerImageLoad} 
-                 style={{ maxHeight: '70vh', width: '100%', height: 'auto' }} 
-                 unoptimized={true} // 👈 Proteção Vercel
-               /> 
+            <ReactCrop crop={bannerCrop} onChange={(_, percentCrop) => setBannerCrop(percentCrop)} onComplete={(c) => setCompletedBannerCrop(c)} aspect={bannerAspect} >
+              <Image
+                ref={bannerImgRef}
+                alt="Cortar"
+                src={bannerImageSrc}
+                width={800}
+                height={450}
+                onLoad={onBannerImageLoad}
+                style={{ maxHeight: '70vh', width: '100%', height: 'auto' }}
+                unoptimized={true} // 👈 Proteção Vercel
+              />
             </ReactCrop>
-          )} 
-          <DialogFooter> <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose> <Button onClick={handleBannerCropConfirm}>Confirmar</Button> </DialogFooter> 
-        </DialogContent> 
+          )}
+          <DialogFooter> <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose> <Button onClick={handleBannerCropConfirm}>Confirmar</Button> </DialogFooter>
+        </DialogContent>
       </Dialog>
 
       {/* Modal de Configurações */}
@@ -454,7 +454,7 @@ export default function DashboardPage() {
                   <input type="file" ref={bannerFileInputRef} onChange={handleBannerFileChange} accept="image/png, image/jpeg, image/gif" className="hidden" />
                   <div className="relative w-full h-24 bg-muted rounded-md overflow-hidden group cursor-pointer border" onClick={handleBannerClick}>
                     {previewBanner ? (
-                        <Image src={previewBanner} alt="Banner" fill className="object-cover" unoptimized={true} />
+                      <Image src={previewBanner} alt="Banner" fill className="object-cover" unoptimized={true} />
                     ) : (<div className="flex items-center justify-center h-full text-muted-foreground text-xs">Sem banner</div>)}
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"> <span className="text-white text-sm font-medium flex items-center gap-2"><Upload className="h-4 w-4" /> Alterar</span> </div>
                   </div>
@@ -511,33 +511,46 @@ export default function DashboardPage() {
             {/* Stats */}
             <div className="space-y-4">
               <h3 className="text-lg font-medium flex items-center gap-2 border-b pb-2 mt-4">
-                <BarChart className="h-5 w-5" /> Stats da Home
+                <BarChart className="h-5 w-5" /> Configuração de Números
               </h3>
-              <div className="grid grid-cols-3 gap-4">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Campo de Região (Manual) */}
                 <div className="space-y-2">
-                  <Label>Seguidores</Label>
+                  <Label>Sua Região</Label>
                   <Input
-                    placeholder="Ex: 65K+"
-                    value={statFollowers}
-                    onChange={(e) => setStatFollowers(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Mídias</Label>
-                  <Input
-                    placeholder="Ex: 1.2k+"
-                    value={statMedia}
-                    onChange={(e) => setStatMedia(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Região</Label>
-                  <Input
-                    placeholder="Ex: BR"
+                    placeholder="Ex: Campinas - SP"
                     value={statRegion}
                     onChange={(e) => setStatRegion(e.target.value)}
                   />
+                  <p className="text-[10px] text-muted-foreground">Exibido no topo da home.</p>
                 </div>
+
+                {/* Campo de Instagram (Manual) */}
+                <div className="space-y-2">
+                  <Label>Seguidores no Instagram</Label>
+                  <Input
+                    type="number"
+                    placeholder="Ex: 15000"
+                    value={instagramCount}
+                    onChange={(e) => setInstagramCount(e.target.value)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Digite apenas números. Será somado ao total.</p>
+                </div>
+              </div>
+
+              {/* Aviso sobre Automação */}
+              <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg flex gap-3 items-start">
+                 <div className="bg-purple-500/20 p-2 rounded text-purple-400 mt-1">
+                    <Tv size={16} />
+                 </div>
+                 <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-white">Automação Ativa</h4>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                       Não é necessário preencher seguidores da <strong>Twitch/YouTube</strong> nem a quantidade de <strong>Mídias</strong>. 
+                       O sistema agora calcula esses números automaticamente e soma com o valor do Instagram acima.
+                    </p>
+                 </div>
               </div>
             </div>
 
@@ -600,6 +613,14 @@ export default function DashboardPage() {
                   <Button variant="secondary" onClick={() => router.push('/dashboard/social')} className="gap-2 hidden md:flex hover:bg-pink-600 hover:text-white">
                     <Share2 className="h-4 w-4" /> Redes
                   </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => router.push('/dashboard/analytics')}
+                    className="gap-2 hidden md:flex hover:bg-purple-600 hover:text-white"
+                  >
+                    <Presentation className="h-4 w-4" /> Analytics
+                  </Button>
+
                   <Button
                     id="btn-editar-perfil"
                     variant="secondary"

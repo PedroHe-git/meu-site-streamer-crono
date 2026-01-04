@@ -12,4 +12,10 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
+// 👇 Adicione esta linha para o TypeScript ignorar o erro de tipagem
+// @ts-ignore: BigInt extension
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 export default prisma;

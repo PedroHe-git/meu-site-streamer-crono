@@ -82,6 +82,19 @@ model User {
   showWatchedList  Boolean @default(true)
   showDroppedList  Boolean @default(true)
 
+  youtubeSubsCount      Int       @default(0)
+  youtubeViewsCount     BigInt    @default(0) // BigInt pois visualizações podem passar de 2 bilhões
+  youtubeVideoCount     Int       @default(0)
+
+  twitchFollowersCount  Int       @default(0)
+  twitchTotalViews      Int       @default(0)
+
+  instagramFollowersCount Int @default(0)
+
+  lastStatsUpdate       DateTime?
+
+  youtubeChannels YoutubeChannel[]
+
   @@map("users")
 }
 
@@ -222,4 +235,28 @@ model Sponsor {
   createdAt   DateTime @default(now())
 
   @@map("sponsors")
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  type      String   // Ex: "PAGE_VIEW", "LINK_CLICK"
+  label     String   // Ex: "/cronograma", "Growth Banner", "Instagram"
+  meta      String?  // Info extra (ex: User Agent ou Referrer, opcional)
+  createdAt DateTime @default(now())
+
+  @@index([type, label]) // Para buscar rápido
+  @@index([createdAt])   // Para filtrar por data
+}
+
+model YoutubeChannel {
+  id          String   @id @default(cuid())
+  channelId   String   @unique // O ID "UC..."
+  title       String?  // Nome do Canal (Ex: Mahcetou)
+  subs        Int      @default(0)
+  views       BigInt   @default(0)
+  videos      Int      @default(0)
+  updatedAt   DateTime @updatedAt
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

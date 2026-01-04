@@ -1,19 +1,17 @@
+// lib/twitch.ts
 import { unstable_cache } from "next/cache";
 
-export async function getTwitchStatus() {
+// --- 1. Função Auxiliar de Autenticação (Reutilizável) ---
+export async function getAppAccessToken() {
   const CLIENT_ID = process.env.TWITCH_CLIENT_ID;
   const CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
-  // O nome do canal pode vir do .env ou estar fixo
-  const USER_LOGIN = process.env.TWITCH_CHANNEL_NAME || "MahMoojen"; 
 
-  // Se não tiver credenciais, nem tenta buscar (evita erro no log)
   if (!CLIENT_ID || !CLIENT_SECRET) {
-    console.warn("⚠️ Twitch Credentials missing inside lib/twitch.ts");
-    return { isLive: false };
+    console.warn("⚠️ Twitch Credentials missing");
+    return null;
   }
 
   try {
-    // 1. Pegar Token de Acesso (Enviando no BODY agora)
     const tokenRes = await fetch("https://id.twitch.tv/oauth2/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -22,35 +20,42 @@ export async function getTwitchStatus() {
         client_secret: CLIENT_SECRET,
         grant_type: "client_credentials",
       }),
-      next: { revalidate: 3600 },
+      next: { revalidate: 3600 }, // Cache do token por 1 hora
     });
 
-    if (!tokenRes.ok) {
-        const errorText = await tokenRes.text();
-        console.error(`❌ Erro Token Twitch (${tokenRes.status}):`, errorText);
-        throw new Error("Falha auth Twitch");
-    }
+    if (!tokenRes.ok) throw new Error("Falha auth Twitch");
     
     const tokenData = await tokenRes.json();
-    const accessToken = tokenData.access_token;
+    return tokenData.access_token;
+  } catch (error) {
+    console.error("Erro ao pegar token Twitch:", error);
+    return null;
+  }
+}
 
-    // 2. Pegar Status da Stream
+// --- 2. Status da Live (Online/Offline) ---
+export async function getTwitchStatus() {
+  const USER_LOGIN = process.env.TWITCH_CHANNEL_NAME || "MahMoojen"; 
+  const CLIENT_ID = process.env.TWITCH_CLIENT_ID;
+
+  try {
+    const accessToken = await getAppAccessToken();
+    if (!accessToken) return { isLive: false };
+
     const streamRes = await fetch(`https://api.twitch.tv/helix/streams?user_login=${USER_LOGIN}`, {
       headers: {
-        "Client-ID": CLIENT_ID,
+        "Client-ID": CLIENT_ID!,
         "Authorization": `Bearer ${accessToken}`,
       },
       next: { revalidate: 60 },
     });
 
-    if (!streamRes.ok) throw new Error("Falha ao pegar dados da stream");
+    if (!streamRes.ok) return { isLive: false };
 
     const streamData = await streamRes.json();
     const stream = streamData.data?.[0];
 
-    if (!stream) {
-      return { isLive: false };
-    }
+    if (!stream) return { isLive: false };
 
     return {
       isLive: true,
@@ -61,7 +66,47 @@ export async function getTwitchStatus() {
     };
 
   } catch (error) {
-    // Silencia o erro no log de build para não poluir, apenas retorna offline
     return { isLive: false };
+  }
+}
+
+// --- 3. Estatísticas do Canal (Media Kit) ---
+export async function getTwitchChannelStats(broadcasterId: string) {
+  const CLIENT_ID = process.env.TWITCH_CLIENT_ID;
+
+  try {
+    const accessToken = await getAppAccessToken();
+    if (!accessToken) return null;
+
+    // A. Pegar Dados do Usuário (Views Totais do Canal)
+    const userRes = await fetch(`https://api.twitch.tv/helix/users?id=${broadcasterId}`, {
+      headers: {
+        "Client-Id": CLIENT_ID!,
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      cache: "no-store"
+    });
+    
+    const userData = await userRes.json();
+    const user = userData.data?.[0];
+
+    // B. Pegar Seguidores
+    const followersRes = await fetch(`https://api.twitch.tv/helix/channels/followers?broadcaster_id=${broadcasterId}`, {
+      headers: {
+        "Client-Id": CLIENT_ID!,
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      cache: "no-store"
+    });
+    
+    const followersData = await followersRes.json();
+
+    return {
+      followers: followersData.total || 0,
+      totalViews: user?.view_count || 0
+    };
+  } catch (error) {
+    console.error("Erro Twitch Stats:", error);
+    return null;
   }
 }
